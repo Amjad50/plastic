@@ -96,62 +96,62 @@ impl<'a> CPU6502<'a> {
 
     pub fn run_instruction(&mut self, instruction: &Instruction) {
         let handler = match instruction.opcode {
-            Opcode::Adc => Self::run_instruction_adc,
-            Opcode::And => Self::run_instruction_and,
-            Opcode::Asl => Self::run_instruction_asl,
-            Opcode::Eor => Self::run_instruction_eor,
-            Opcode::Lsr => Self::run_instruction_lsr,
-            Opcode::Ora => Self::run_instruction_ora,
-            Opcode::Rol => Self::run_instruction_rol,
-            Opcode::Ror => Self::run_instruction_ror,
-            Opcode::Sbc => Self::run_instruction_sbc,
-            Opcode::Bit => Self::run_instruction_bit,
-            Opcode::Cmp => Self::run_instruction_cmp,
-            Opcode::Cpx => Self::run_instruction_cpx,
-            Opcode::Cpy => Self::run_instruction_cpy,
-            Opcode::Brk => Self::run_instruction_brk,
-            Opcode::Bcc => Self::run_instruction_bcc,
-            Opcode::Bcs => Self::run_instruction_bcs,
-            Opcode::Beq => Self::run_instruction_beq,
-            Opcode::Bmi => Self::run_instruction_bmi,
-            Opcode::Bne => Self::run_instruction_bne,
-            Opcode::Bpl => Self::run_instruction_bpl,
-            Opcode::Bvc => Self::run_instruction_bvc,
-            Opcode::Bvs => Self::run_instruction_bvs,
-            Opcode::Dec => Self::run_instruction_dec,
-            Opcode::Inc => Self::run_instruction_inc,
-            Opcode::Clc => Self::run_instruction_clc,
-            Opcode::Cld => Self::run_instruction_cld,
-            Opcode::Cli => Self::run_instruction_cli,
-            Opcode::Clv => Self::run_instruction_clv,
-            Opcode::Sec => Self::run_instruction_sec,
-            Opcode::Sed => Self::run_instruction_sed,
-            Opcode::Sei => Self::run_instruction_sei,
-            Opcode::Jmp => Self::run_instruction_jmp,
-            Opcode::Jsr => Self::run_instruction_jsr,
-            Opcode::Rti => Self::run_instruction_rti,
-            Opcode::Rts => Self::run_instruction_rts,
-            Opcode::Lda => Self::run_instruction_lda,
-            Opcode::Ldx => Self::run_instruction_ldx,
-            Opcode::Ldy => Self::run_instruction_ldy,
-            Opcode::Nop => Self::run_instruction_nop,
-            Opcode::Dex => Self::run_instruction_dex,
-            Opcode::Dey => Self::run_instruction_dey,
-            Opcode::Inx => Self::run_instruction_inx,
-            Opcode::Iny => Self::run_instruction_iny,
-            Opcode::Tax => Self::run_instruction_tax,
-            Opcode::Tay => Self::run_instruction_tay,
-            Opcode::Txa => Self::run_instruction_txa,
-            Opcode::Tya => Self::run_instruction_tya,
-            Opcode::Pha => Self::run_instruction_pha,
-            Opcode::Php => Self::run_instruction_php,
-            Opcode::Pla => Self::run_instruction_pla,
-            Opcode::Plp => Self::run_instruction_plp,
-            Opcode::Sta => Self::run_instruction_sta,
-            Opcode::Stx => Self::run_instruction_stx,
-            Opcode::Sty => Self::run_instruction_sty,
-            Opcode::Tsx => Self::run_instruction_tsx,
-            Opcode::Txs => Self::run_instruction_txs,
+            Opcode::Adc => Self::adc,
+            Opcode::And => Self::and,
+            Opcode::Asl => Self::asl,
+            Opcode::Eor => Self::eor,
+            Opcode::Lsr => Self::lsr,
+            Opcode::Ora => Self::ora,
+            Opcode::Rol => Self::rol,
+            Opcode::Ror => Self::ror,
+            Opcode::Sbc => Self::sbc,
+            Opcode::Bit => Self::bit,
+            Opcode::Cmp => Self::cmp,
+            Opcode::Cpx => Self::cpx,
+            Opcode::Cpy => Self::cpy,
+            Opcode::Brk => Self::brk,
+            Opcode::Bcc => Self::bcc,
+            Opcode::Bcs => Self::bcs,
+            Opcode::Beq => Self::beq,
+            Opcode::Bmi => Self::bmi,
+            Opcode::Bne => Self::bne,
+            Opcode::Bpl => Self::bpl,
+            Opcode::Bvc => Self::bvc,
+            Opcode::Bvs => Self::bvs,
+            Opcode::Dec => Self::dec,
+            Opcode::Inc => Self::inc,
+            Opcode::Clc => Self::clc,
+            Opcode::Cld => Self::cld,
+            Opcode::Cli => Self::cli,
+            Opcode::Clv => Self::clv,
+            Opcode::Sec => Self::sec,
+            Opcode::Sed => Self::sed,
+            Opcode::Sei => Self::sei,
+            Opcode::Jmp => Self::jmp,
+            Opcode::Jsr => Self::jsr,
+            Opcode::Rti => Self::rti,
+            Opcode::Rts => Self::rts,
+            Opcode::Lda => Self::lda,
+            Opcode::Ldx => Self::ldx,
+            Opcode::Ldy => Self::ldy,
+            Opcode::Nop => Self::nop,
+            Opcode::Dex => Self::dex,
+            Opcode::Dey => Self::dey,
+            Opcode::Inx => Self::inx,
+            Opcode::Iny => Self::iny,
+            Opcode::Tax => Self::tax,
+            Opcode::Tay => Self::tay,
+            Opcode::Txa => Self::txa,
+            Opcode::Tya => Self::tya,
+            Opcode::Pha => Self::pha,
+            Opcode::Php => Self::php,
+            Opcode::Pla => Self::pla,
+            Opcode::Plp => Self::plp,
+            Opcode::Sta => Self::sta,
+            Opcode::Stx => Self::stx,
+            Opcode::Sty => Self::sty,
+            Opcode::Tsx => Self::tsx,
+            Opcode::Txs => Self::txs,
         };
 
         handler(
@@ -162,7 +162,7 @@ impl<'a> CPU6502<'a> {
     }
 
     // TODO: Add support for BCD mode, also handle cycles
-    fn run_instruction_adc(&mut self, operand_decoded: u16, is_operand_address: bool) {
+    fn adc(&mut self, operand_decoded: u16, is_operand_address: bool) {
         let operand = if is_operand_address {
             self.bus.read(operand_decoded)
         } else {
@@ -190,7 +190,7 @@ impl<'a> CPU6502<'a> {
         self.reg_a = result as u8;
     }
 
-    fn run_instruction_asl(&mut self, operand_decoded: u16, is_operand_address: bool) {
+    fn asl(&mut self, operand_decoded: u16, is_operand_address: bool) {
         let mut operand = if is_operand_address {
             self.bus.read(operand_decoded)
         } else {
@@ -215,7 +215,7 @@ impl<'a> CPU6502<'a> {
         }
     }
 
-    fn run_instruction_lsr(&mut self, operand_decoded: u16, is_operand_address: bool) {
+    fn lsr(&mut self, operand_decoded: u16, is_operand_address: bool) {
         let mut operand = if is_operand_address {
             self.bus.read(operand_decoded)
         } else {
@@ -240,7 +240,7 @@ impl<'a> CPU6502<'a> {
         }
     }
 
-    fn run_instruction_rol(&mut self, operand_decoded: u16, is_operand_address: bool) {
+    fn rol(&mut self, operand_decoded: u16, is_operand_address: bool) {
         let mut operand = if is_operand_address {
             self.bus.read(operand_decoded)
         } else {
@@ -272,7 +272,7 @@ impl<'a> CPU6502<'a> {
         }
     }
 
-    fn run_instruction_ror(&mut self, operand_decoded: u16, is_operand_address: bool) {
+    fn ror(&mut self, operand_decoded: u16, is_operand_address: bool) {
         let mut operand = if is_operand_address {
             self.bus.read(operand_decoded)
         } else {
@@ -322,64 +322,64 @@ impl<'a> CPU6502<'a> {
         self.reg_a = result;
     }
 
-    fn run_instruction_and(&mut self, operand_decoded: u16, is_operand_address: bool) {
+    fn and(&mut self, operand_decoded: u16, is_operand_address: bool) {
         self.run_bitwise_operation(operand_decoded, is_operand_address, |a, b| a & b);
     }
 
-    fn run_instruction_eor(&mut self, operand_decoded: u16, is_operand_address: bool) {
+    fn eor(&mut self, operand_decoded: u16, is_operand_address: bool) {
         self.run_bitwise_operation(operand_decoded, is_operand_address, |a, b| a ^ b);
     }
 
-    fn run_instruction_ora(&mut self, operand_decoded: u16, is_operand_address: bool) {
+    fn ora(&mut self, operand_decoded: u16, is_operand_address: bool) {
         self.run_bitwise_operation(operand_decoded, is_operand_address, |a, b| a | b);
     }
 
-    fn run_instruction_sbc(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_bit(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_cmp(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_cpx(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_cpy(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_brk(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_bcc(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_bcs(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_beq(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_bmi(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_bne(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_bpl(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_bvc(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_bvs(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_dec(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_inc(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_clc(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_cld(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_cli(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_clv(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_sec(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_sed(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_sei(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_jmp(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_jsr(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_rti(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_rts(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_lda(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_ldx(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_ldy(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_nop(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_dex(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_dey(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_inx(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_iny(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_tax(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_tay(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_txa(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_tya(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_pha(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_php(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_pla(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_plp(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_sta(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_stx(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_sty(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_tsx(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_txs(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn sbc(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn bit(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn cmp(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn cpx(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn cpy(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn brk(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn bcc(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn bcs(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn beq(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn bmi(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn bne(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn bpl(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn bvc(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn bvs(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn dec(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn inc(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn clc(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn cld(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn cli(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn clv(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn sec(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn sed(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn sei(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn jmp(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn jsr(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn rti(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn rts(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn lda(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn ldx(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn ldy(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn nop(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn dex(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn dey(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn inx(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn iny(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn tax(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn tay(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn txa(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn tya(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn pha(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn php(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn pla(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn plp(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn sta(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn stx(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn sty(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn tsx(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    fn txs(&mut self, operand_decoded: u16, is_operand_address: bool) {}
 }
