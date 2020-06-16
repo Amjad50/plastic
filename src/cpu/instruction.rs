@@ -6,7 +6,45 @@ struct Instruction {
 
 impl Instruction {
     pub fn get_instruction_len(&self) -> usize {
+        // the length of the instruction depend on the type of its addressing mode
         self.addressing_mode.get_instruction_len()
+    }
+
+    // TODO: should we move this to do it manually for each instruction
+    pub fn get_base_cycle_time(&self) -> u8 {
+        match self.addressing_mode {
+            AddressingMode::Immediate => 2,
+            AddressingMode::ZeroPage => 3, // or 5 for memory change
+            AddressingMode::ZeroPageIndexX => 4, // or 6 for memory change
+            AddressingMode::ZeroPageIndexY => 4,
+            AddressingMode::Indirect => 5,
+            AddressingMode::XIndirect => 6,
+            AddressingMode::IndirectY => {
+                if self.opcode == Opcode::Sta {
+                    6
+                } else {
+                    5 // might be 6 in case of page cross
+                }
+            }
+            AddressingMode::Absolute => 4, // 3 for JMP, 6 for memory change and JSR
+            AddressingMode::AbsoluteX => {
+                if self.opcode == Opcode::Sta {
+                    5
+                } else {
+                    4 // might be 5 in case of page cross and 7 in case of memory change
+                }
+            }
+            AddressingMode::AbsoluteY => {
+                if self.opcode == Opcode::Sta {
+                    5
+                } else {
+                    4 // might be 5 in case of page cross
+                }
+            }
+            AddressingMode::Accumulator => 2,
+            AddressingMode::Relative => 2,
+            AddressingMode::Implied => 2, // should be overridden by instructions execution
+        }
     }
 }
 
@@ -86,7 +124,7 @@ enum AddressingMode {
     ZeroPageIndexX, // $aa, X
     ZeroPageIndexY, // $aa, Y
     Indirect,       // ($aabb)
-    IndirectX,      // ($aa, X)
+    XIndirect,      // ($aa, X)
     IndirectY,      // ($aa), Y
     Absolute,       // $aabb
     AbsoluteX,      // $aabb, X
@@ -104,7 +142,7 @@ impl AddressingMode {
             Self::ZeroPageIndexX => 2,
             Self::ZeroPageIndexY => 2,
             Self::Indirect => 3,
-            Self::IndirectX => 2,
+            Self::XIndirect => 2,
             Self::IndirectY => 2,
             Self::Absolute => 3,
             Self::AbsoluteX => 3,
@@ -136,10 +174,10 @@ impl Instruction {
                     0b101 => Opcode::Lda,
                     0b110 => Opcode::Cmp,
                     0b111 => Opcode::Sbc,
-                    _ => panic!(invalid_instruction_message),
+                    _ => unreachable!(),
                 };
                 let addressing_mode = match addressing_mode_bbb {
-                    0b000 => AddressingMode::IndirectX,
+                    0b000 => AddressingMode::XIndirect,
                     0b001 => AddressingMode::ZeroPage,
                     0b010 => AddressingMode::Immediate,
                     0b011 => AddressingMode::Absolute,
@@ -147,7 +185,7 @@ impl Instruction {
                     0b101 => AddressingMode::ZeroPageIndexX,
                     0b110 => AddressingMode::AbsoluteY,
                     0b111 => AddressingMode::AbsoluteX,
-                    _ => panic!(invalid_instruction_message),
+                    _ => unreachable!(),
                 };
 
                 // This instruction does not exists (STA with immediate)
