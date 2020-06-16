@@ -3,7 +3,7 @@ extern crate cpu6502;
 use cpu6502::instruction::Instruction;
 
 // These instructions are not supported at the moment
-const does_not_exist: [u8; 105] = [
+const DOES_NOT_EXIST: [u8; 105] = [
     0x80, 0x02, 0x12, 0x22, 0x32, 0x42, 0x52, 0x62, 0x72, 0x82, 0x92, 0xB2, 0xC2, 0xD2, 0xE2, 0xF2,
     0x03, 0x13, 0x23, 0x33, 0x43, 0x53, 0x63, 0x73, 0x83, 0x93, 0xA3, 0xB3, 0xC3, 0xD3, 0xE3, 0xF3,
     0x04, 0x14, 0x34, 0x44, 0x54, 0x64, 0x74, 0xD4, 0xF4, 0x07, 0x17, 0x27, 0x37, 0x47, 0x57, 0x67,
@@ -16,16 +16,15 @@ const does_not_exist: [u8; 105] = [
 // TODO: create tests for instructions and cpu
 #[test]
 fn existing_instructions() {
-    let mut exists = [0xFF; 256 - does_not_exist.len()];
+    let mut exists = [0xFF; 256 - DOES_NOT_EXIST.len()];
     let mut i = 0;
-    // build the inverse of `does_not_exist`
+    // build the inverse of `DOES_NOT_EXIST`
     for byte in 0..=255 {
-        if !does_not_exist.contains(&byte) {
+        if !DOES_NOT_EXIST.contains(&byte) {
             exists[i] = byte;
             i += 1;
         }
     }
-
 
     for &byte in exists.iter() {
         Instruction::from_byte(byte);
@@ -34,7 +33,7 @@ fn existing_instructions() {
 
 #[test]
 fn nonexisting_instructions() {
-    for &byte in does_not_exist.iter() {
+    for &byte in DOES_NOT_EXIST.iter() {
         let result = std::panic::catch_unwind(|| Instruction::from_byte(byte));
         assert!(result.is_err());
     }

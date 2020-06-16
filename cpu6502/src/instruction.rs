@@ -1,5 +1,6 @@
 pub struct Instruction {
-    bytes: [u8; 3],
+    opcode_byte: u8,
+    operand: u16,
     opcode: Opcode,
     addressing_mode: AddressingMode,
 }
@@ -265,7 +266,8 @@ impl Instruction {
 
         // TODO: fill bytes and len appropriately
         Instruction {
-            bytes: [0; 3],
+            opcode_byte: byte,
+            operand: 0,
             opcode: opcode,
             addressing_mode: addressing_mode,
         }
