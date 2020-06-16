@@ -1,8 +1,13 @@
 struct Instruction {
     bytes: [u8; 3],
-    len: usize,
     opcode: Opcode,
     addressing_mode: AddressingMode,
+}
+
+impl Instruction {
+    pub fn get_instruction_len(&self) -> usize {
+        self.addressing_mode.get_instruction_len()
+    }
 }
 
 #[derive(PartialEq, Eq)]
@@ -87,7 +92,28 @@ enum AddressingMode {
     AbsoluteX,      // $aabb, X
     AbsoluteY,      // $aabb, Y
     Accumulator,    // A
-    None,           // Single byte instruction
+    Relative,       // $aa (relative to current PC)
+    Implied,        // Single byte instruction
+}
+
+impl AddressingMode {
+    pub fn get_instruction_len(&self) -> usize {
+        match self {
+            Self::Immediate => 2,
+            Self::ZeroPage => 2,
+            Self::ZeroPageIndexX => 2,
+            Self::ZeroPageIndexY => 2,
+            Self::Indirect => 3,
+            Self::IndirectX => 2,
+            Self::IndirectY => 2,
+            Self::Absolute => 3,
+            Self::AbsoluteX => 3,
+            Self::AbsoluteY => 3,
+            Self::Accumulator => 1,
+            Self::Relative => 2,
+            Self::Implied => 1,
+        }
+    }
 }
 
 impl Instruction {
@@ -200,44 +226,44 @@ impl Instruction {
                 0xE4 => (Opcode::Cpx, AddressingMode::ZeroPage),
                 0xEC => (Opcode::Cpx, AddressingMode::Absolute),
 
-                0x10 => (Opcode::Bpl, AddressingMode::Absolute),
-                0x30 => (Opcode::Bmi, AddressingMode::Absolute),
-                0x50 => (Opcode::Bvc, AddressingMode::Absolute),
-                0x70 => (Opcode::Bvs, AddressingMode::Absolute),
-                0x90 => (Opcode::Bcc, AddressingMode::Absolute),
-                0xB0 => (Opcode::Bcs, AddressingMode::Absolute),
-                0xD0 => (Opcode::Bne, AddressingMode::Absolute),
-                0xF0 => (Opcode::Beq, AddressingMode::Absolute),
+                0x10 => (Opcode::Bpl, AddressingMode::Relative),
+                0x30 => (Opcode::Bmi, AddressingMode::Relative),
+                0x50 => (Opcode::Bvc, AddressingMode::Relative),
+                0x70 => (Opcode::Bvs, AddressingMode::Relative),
+                0x90 => (Opcode::Bcc, AddressingMode::Relative),
+                0xB0 => (Opcode::Bcs, AddressingMode::Relative),
+                0xD0 => (Opcode::Bne, AddressingMode::Relative),
+                0xF0 => (Opcode::Beq, AddressingMode::Relative),
 
-                0x00 => (Opcode::Brk, AddressingMode::None),
+                0x00 => (Opcode::Brk, AddressingMode::Implied),
                 0x20 => (Opcode::Jsr, AddressingMode::Absolute),
-                0x40 => (Opcode::Rti, AddressingMode::None),
-                0x60 => (Opcode::Rts, AddressingMode::None),
+                0x40 => (Opcode::Rti, AddressingMode::Implied),
+                0x60 => (Opcode::Rts, AddressingMode::Implied),
 
-                0x08 => (Opcode::Php, AddressingMode::None),
-                0x28 => (Opcode::Plp, AddressingMode::None),
-                0x48 => (Opcode::Pha, AddressingMode::None),
-                0x68 => (Opcode::Pla, AddressingMode::None),
-                0x88 => (Opcode::Dey, AddressingMode::None),
-                0xA8 => (Opcode::Tay, AddressingMode::None),
-                0xC8 => (Opcode::Iny, AddressingMode::None),
-                0xE8 => (Opcode::Inx, AddressingMode::None),
+                0x08 => (Opcode::Php, AddressingMode::Implied),
+                0x28 => (Opcode::Plp, AddressingMode::Implied),
+                0x48 => (Opcode::Pha, AddressingMode::Implied),
+                0x68 => (Opcode::Pla, AddressingMode::Implied),
+                0x88 => (Opcode::Dey, AddressingMode::Implied),
+                0xA8 => (Opcode::Tay, AddressingMode::Implied),
+                0xC8 => (Opcode::Iny, AddressingMode::Implied),
+                0xE8 => (Opcode::Inx, AddressingMode::Implied),
 
-                0x18 => (Opcode::Clc, AddressingMode::None),
-                0x38 => (Opcode::Sec, AddressingMode::None),
-                0x58 => (Opcode::Cli, AddressingMode::None),
-                0x78 => (Opcode::Sei, AddressingMode::None),
-                0x98 => (Opcode::Tya, AddressingMode::None),
-                0xB8 => (Opcode::Clv, AddressingMode::None),
-                0xD8 => (Opcode::Cld, AddressingMode::None),
-                0xF8 => (Opcode::Sed, AddressingMode::None),
+                0x18 => (Opcode::Clc, AddressingMode::Implied),
+                0x38 => (Opcode::Sec, AddressingMode::Implied),
+                0x58 => (Opcode::Cli, AddressingMode::Implied),
+                0x78 => (Opcode::Sei, AddressingMode::Implied),
+                0x98 => (Opcode::Tya, AddressingMode::Implied),
+                0xB8 => (Opcode::Clv, AddressingMode::Implied),
+                0xD8 => (Opcode::Cld, AddressingMode::Implied),
+                0xF8 => (Opcode::Sed, AddressingMode::Implied),
 
-                0x8A => (Opcode::Txa, AddressingMode::None),
-                0x9A => (Opcode::Txs, AddressingMode::None),
-                0xAA => (Opcode::Tax, AddressingMode::None),
-                0xBA => (Opcode::Tsx, AddressingMode::None),
-                0xCA => (Opcode::Dex, AddressingMode::None),
-                0xEA => (Opcode::Nop, AddressingMode::None),
+                0x8A => (Opcode::Txa, AddressingMode::Implied),
+                0x9A => (Opcode::Txs, AddressingMode::Implied),
+                0xAA => (Opcode::Tax, AddressingMode::Implied),
+                0xBA => (Opcode::Tsx, AddressingMode::Implied),
+                0xCA => (Opcode::Dex, AddressingMode::Implied),
+                0xEA => (Opcode::Nop, AddressingMode::Implied),
 
                 _ => panic!(invalid_instruction_message),
             },
@@ -246,7 +272,6 @@ impl Instruction {
         // TODO: fill bytes and len appropriately
         Instruction {
             bytes: [0; 3],
-            len: 0,
             opcode: opcode,
             addressing_mode: addressing_mode,
         }
