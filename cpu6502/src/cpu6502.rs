@@ -37,6 +37,22 @@ impl<'a> CPU6502<'a> {
         }
     }
 
+    fn set_flag(&mut self, flag: StatusFlag) {
+        self.reg_status |= flag as u8;
+    }
+
+    fn unset_flag(&mut self, flag: StatusFlag) {
+        self.reg_status &= !(flag as u8);
+    }
+
+    fn set_flag_status(&mut self, flag: StatusFlag, status: bool) {
+        if status {
+            self.set_flag(flag)
+        } else {
+            self.unset_flag(flag)
+        }
+    }
+
     fn decode_operand(&self, instruction: &Instruction) -> u16 {
         if instruction.is_operand_address() {
             match instruction.addressing_mode {
@@ -145,15 +161,179 @@ impl<'a> CPU6502<'a> {
         );
     }
 
-    // TODO: fill instructions code
-    fn run_instruction_adc(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_asl(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_and(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_eor(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_lsr(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_ora(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_rol(&mut self, operand_decoded: u16, is_operand_address: bool) {}
-    fn run_instruction_ror(&mut self, operand_decoded: u16, is_operand_address: bool) {}
+    // TODO: Add support for BCD mode, also handle cycles
+    fn run_instruction_adc(&mut self, operand_decoded: u16, is_operand_address: bool) {
+        let operand = if is_operand_address {
+            self.bus.read(operand_decoded)
+        } else {
+            operand_decoded as u8
+        };
+        let carry = if self.reg_status & (StatusFlag::Carry as u8) == 0 {
+            0
+        } else {
+            1
+        };
+
+        let result = self.reg_a as u16 + operand as u16 + carry;
+
+        // overflow = result is negative ^ (reg_A is negative | operand is negative)
+        // meaning, that if the operands are positive but the result is negative, then something
+        // is not right, and the same way vise versa
+        self.set_flag_status(
+            StatusFlag::Overflow,
+            (result as u8 & 0x80) ^ ((self.reg_a & 0x80) | (operand & 0x80)) != 0,
+        );
+        self.set_flag_status(StatusFlag::Carry, result & 0xff00 != 0);
+        self.set_flag_status(StatusFlag::Zero, result == 0);
+        self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+
+        self.reg_a = result as u8;
+    }
+
+    fn run_instruction_asl(&mut self, operand_decoded: u16, is_operand_address: bool) {
+        let mut operand = if is_operand_address {
+            self.bus.read(operand_decoded)
+        } else {
+            // if its not address, then its Accumulator for this instruction
+            self.reg_a
+        };
+
+        // There is a bit at the leftmost position, it will be moved to the carry
+        self.set_flag_status(StatusFlag::Carry, operand & 0x80 != 0);
+
+        // modify the value
+        operand <<= 1;
+
+        self.set_flag_status(StatusFlag::Zero, operand == 0);
+        self.set_flag_status(StatusFlag::Negative, operand & 0x80 != 0);
+
+        if is_operand_address {
+            // save back
+            self.bus.write(operand_decoded, operand);
+        } else {
+            self.reg_a = operand;
+        }
+    }
+
+    fn run_instruction_lsr(&mut self, operand_decoded: u16, is_operand_address: bool) {
+        let mut operand = if is_operand_address {
+            self.bus.read(operand_decoded)
+        } else {
+            // if its not address, then its Accumulator for this instruction
+            self.reg_a
+        };
+
+        // There is a bit at the leftmost position, it will be moved to the carry
+        self.set_flag_status(StatusFlag::Carry, operand & 0x01 != 0);
+
+        // modify the value
+        operand >>= 1;
+
+        self.set_flag_status(StatusFlag::Zero, operand == 0);
+        self.set_flag_status(StatusFlag::Negative, false);
+
+        if is_operand_address {
+            // save back
+            self.bus.write(operand_decoded, operand);
+        } else {
+            self.reg_a = operand;
+        }
+    }
+
+    fn run_instruction_rol(&mut self, operand_decoded: u16, is_operand_address: bool) {
+        let mut operand = if is_operand_address {
+            self.bus.read(operand_decoded)
+        } else {
+            // if its not address, then its Accumulator for this instruction
+            self.reg_a
+        };
+
+        let old_carry = if self.reg_status & (StatusFlag::Carry as u8) == 0 {
+            0
+        } else {
+            1
+        };
+
+        // There is a bit at the leftmost position, it will be moved to the carry
+        self.set_flag_status(StatusFlag::Carry, operand & 0x01 != 0);
+
+        // modify the value
+        operand <<= 1;
+        operand |= old_carry;
+
+        self.set_flag_status(StatusFlag::Zero, operand == 0);
+        self.set_flag_status(StatusFlag::Negative, false);
+
+        if is_operand_address {
+            // save back
+            self.bus.write(operand_decoded, operand);
+        } else {
+            self.reg_a = operand;
+        }
+    }
+
+    fn run_instruction_ror(&mut self, operand_decoded: u16, is_operand_address: bool) {
+        let mut operand = if is_operand_address {
+            self.bus.read(operand_decoded)
+        } else {
+            // if its not address, then its Accumulator for this instruction
+            self.reg_a
+        };
+
+        let old_carry = if self.reg_status & (StatusFlag::Carry as u8) == 0 {
+            0
+        } else {
+            1
+        };
+
+        // There is a bit at the leftmost position, it will be moved to the carry
+        self.set_flag_status(StatusFlag::Carry, operand & 0x01 != 0);
+
+        // modify the value
+        operand >>= 1;
+        operand |= old_carry << 7;
+
+        self.set_flag_status(StatusFlag::Zero, operand == 0);
+        self.set_flag_status(StatusFlag::Negative, false);
+
+        if is_operand_address {
+            // save back
+            self.bus.write(operand_decoded, operand);
+        } else {
+            self.reg_a = operand;
+        }
+    }
+
+    fn run_bitwise_operation<F>(&mut self, operand_decoded: u16, is_operand_address: bool, f: F)
+    where
+        F: Fn(u8, u8) -> u8,
+    {
+        let operand = if is_operand_address {
+            self.bus.read(operand_decoded)
+        } else {
+            operand_decoded as u8
+        };
+
+        let result = f(operand, self.reg_a);
+
+        self.set_flag_status(StatusFlag::Zero, result == 0);
+        self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+
+        self.reg_a = result;
+    }
+
+    fn run_instruction_and(&mut self, operand_decoded: u16, is_operand_address: bool) {
+        self.run_bitwise_operation(operand_decoded, is_operand_address, |a, b| a & b);
+    }
+
+    fn run_instruction_eor(&mut self, operand_decoded: u16, is_operand_address: bool) {
+        self.run_bitwise_operation(operand_decoded, is_operand_address, |a, b| a ^ b);
+    }
+
+    fn run_instruction_ora(&mut self, operand_decoded: u16, is_operand_address: bool) {
+        self.run_bitwise_operation(operand_decoded, is_operand_address, |a, b| a | b);
+    }
+
     fn run_instruction_sbc(&mut self, operand_decoded: u16, is_operand_address: bool) {}
     fn run_instruction_bit(&mut self, operand_decoded: u16, is_operand_address: bool) {}
     fn run_instruction_cmp(&mut self, operand_decoded: u16, is_operand_address: bool) {}
