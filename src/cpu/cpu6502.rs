@@ -11,7 +11,7 @@ enum StatusFlag {
 
 pub struct CPU6502 {
     reg_pc: u16,
-    reg_sp: u16,
+    reg_sp: u8,     // stack is in 0x0100 - 0x01FF only
     reg_a: u8,
     reg_x: u8,
     reg_y: u8,
