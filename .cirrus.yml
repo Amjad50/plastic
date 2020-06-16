@@ -1,12 +1,9 @@
 container:
   image: rust:latest
 
-test_task:
+cpu_test_task:
   env:
     RUST_BACKTRACE: 1
-  cargo_cache:
-    folder: $CARGO_HOME/registry
-    fingerprint_script: cat Cargo.lock
-  build_script: cargo build
-  test_script: cargo test
+  build_script: cd cpu6502 && cargo build
+  test_script: cd cpu6502 && cargo test
   before_cache_script: rm -rf $CARGO_HOME/registry/index
