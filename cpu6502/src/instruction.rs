@@ -1,8 +1,8 @@
 pub struct Instruction {
-    opcode_byte: u8,
-    operand: u16,
-    opcode: Opcode,
-    addressing_mode: AddressingMode,
+    pub opcode_byte: u8,
+    pub operand: u16,
+    pub opcode: Opcode,
+    pub addressing_mode: AddressingMode,
 }
 
 #[derive(PartialEq, Eq)]
@@ -108,6 +108,13 @@ impl AddressingMode {
             Self::Relative => 2,
             Self::Implied => 1,
         }
+    }
+
+    pub fn is_operand_address(&self) -> bool {
+        // these do not have address as operand
+        !(self == &AddressingMode::Accumulator
+            || self == &AddressingMode::Implied
+            || self == &AddressingMode::Immediate)
     }
 }
 
@@ -313,5 +320,9 @@ impl Instruction {
             AddressingMode::Relative => 2,
             AddressingMode::Implied => 2, // should be overridden by instructions execution
         }
+    }
+
+    pub fn is_operand_address(&self) -> bool {
+        self.addressing_mode.is_operand_address()
     }
 }
