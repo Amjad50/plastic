@@ -1,5 +1,5 @@
 [package]
-name = "NES_emulator"
+name = "cpu6502"
 version = "0.1.0"
 authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 edition = "2018"
