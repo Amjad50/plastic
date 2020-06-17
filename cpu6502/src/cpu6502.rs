@@ -1,6 +1,11 @@
 use super::instruction::{AddressingMode, Instruction, Opcode};
 use super::Bus;
 
+// helper function
+fn is_on_same_page(address1: u16, address2: u16) -> bool {
+    address1 & 0xff00 == address2 & 0xff00
+}
+
 // flags: [N, V, _, B, D, I, Z, C]
 enum StatusFlag {
     Carry = 1 << 0,
@@ -58,10 +63,6 @@ impl<'a> CPU6502<'a> {
     }
 
     fn decode_operand(&self, instruction: &Instruction) -> (u16, u8) {
-        fn is_on_same_page(address1: u16, address2: u16) -> bool {
-            address1 & 0xff00 == address2 & 0xff00
-        }
-
         if instruction.is_operand_address() {
             match instruction.addressing_mode {
                 AddressingMode::ZeroPage => (
@@ -80,7 +81,14 @@ impl<'a> CPU6502<'a> {
 
                 AddressingMode::Indirect => {
                     let low = self.bus.read(instruction.operand) as u16;
-                    let high = self.bus.read(instruction.operand + 1) as u16;
+                    // if the indirect vector is at the last of the page (0xff) then
+                    // wrap around on the same page
+                    let high = self.bus.read(if instruction.operand & 0xff == 0xff {
+                        instruction.operand & 0xff00
+                    } else {
+                        instruction.operand + 1
+                    }) as u16;
+
                     (high << 8 | low, instruction.get_base_cycle_time())
                 }
                 AddressingMode::XIndirect => {
@@ -175,6 +183,33 @@ impl<'a> CPU6502<'a> {
         self.set_flag_status(StatusFlag::Carry, result & 0xff00 == 0);
     }
 
+    fn run_branch_condition(&mut self, decoded_operand: u16, condition: bool) -> u8 {
+        let mut cycle_time = 0;
+        if condition {
+            cycle_time = if is_on_same_page(self.reg_pc, decoded_operand) {
+                1
+            } else {
+                2
+            };
+
+            self.reg_pc = decoded_operand;
+        }
+        cycle_time
+    }
+
+    fn load(&mut self, decoded_operand: u16, is_operand_address: bool) -> u8 {
+        let operand = if is_operand_address {
+            self.bus.read(decoded_operand)
+        } else {
+            decoded_operand as u8
+        };
+
+        self.set_flag_status(StatusFlag::Zero, operand == 0);
+        self.set_flag_status(StatusFlag::Negative, operand & 0x80 != 0);
+
+        operand
+    }
+
     pub fn run_instruction(&mut self, instruction: &Instruction) {
         let (decoded_operand, cycle_time) = self.decode_operand(instruction);
         let mut cycle_time = cycle_time;
@@ -207,7 +242,6 @@ impl<'a> CPU6502<'a> {
                 self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
                 self.reg_a = result as u8;
             }
-
             Opcode::Asl => {
                 let mut operand = if is_operand_address {
                     self.bus.read(decoded_operand)
@@ -390,48 +424,236 @@ impl<'a> CPU6502<'a> {
             Opcode::Brk => {
                 // TODO: implement later, don't know what is this
             }
-            Opcode::Bcc => {}
-            Opcode::Bcs => {}
-            Opcode::Beq => {}
-            Opcode::Bmi => {}
-            Opcode::Bne => {}
-            Opcode::Bpl => {}
-            Opcode::Bvc => {}
-            Opcode::Bvs => {}
-            Opcode::Dec => {}
-            Opcode::Inc => {}
-            Opcode::Clc => {}
-            Opcode::Cld => {}
-            Opcode::Cli => {}
-            Opcode::Clv => {}
-            Opcode::Sec => {}
-            Opcode::Sed => {}
-            Opcode::Sei => {}
-            Opcode::Jmp => {}
-            Opcode::Jsr => {}
-            Opcode::Rti => {}
-            Opcode::Rts => {}
-            Opcode::Lda => {}
-            Opcode::Ldx => {}
-            Opcode::Ldy => {}
-            Opcode::Nop => {}
-            Opcode::Dex => {}
-            Opcode::Dey => {}
-            Opcode::Inx => {}
-            Opcode::Iny => {}
-            Opcode::Tax => {}
-            Opcode::Tay => {}
-            Opcode::Txa => {}
-            Opcode::Tya => {}
-            Opcode::Pha => {}
-            Opcode::Php => {}
-            Opcode::Pla => {}
-            Opcode::Plp => {}
-            Opcode::Sta => {}
-            Opcode::Stx => {}
-            Opcode::Sty => {}
-            Opcode::Tsx => {}
-            Opcode::Txs => {}
+            Opcode::Bcc => {
+                cycle_time += self.run_branch_condition(
+                    decoded_operand,
+                    self.reg_status & (StatusFlag::Carry as u8) == 0,
+                );
+            }
+            Opcode::Bcs => {
+                cycle_time += self.run_branch_condition(
+                    decoded_operand,
+                    self.reg_status & (StatusFlag::Carry as u8) != 0,
+                );
+            }
+            Opcode::Beq => {
+                cycle_time += self.run_branch_condition(
+                    decoded_operand,
+                    self.reg_status & (StatusFlag::Zero as u8) != 0,
+                );
+            }
+            Opcode::Bmi => {
+                cycle_time += self.run_branch_condition(
+                    decoded_operand,
+                    self.reg_status & (StatusFlag::Negative as u8) != 0,
+                );
+            }
+            Opcode::Bne => {
+                cycle_time += self.run_branch_condition(
+                    decoded_operand,
+                    self.reg_status & (StatusFlag::Zero as u8) == 0,
+                );
+            }
+            Opcode::Bpl => {
+                cycle_time += self.run_branch_condition(
+                    decoded_operand,
+                    self.reg_status & (StatusFlag::Negative as u8) == 0,
+                );
+            }
+            Opcode::Bvc => {
+                cycle_time += self.run_branch_condition(
+                    decoded_operand,
+                    self.reg_status & (StatusFlag::Overflow as u8) == 0,
+                );
+            }
+            Opcode::Bvs => {
+                cycle_time += self.run_branch_condition(
+                    decoded_operand,
+                    self.reg_status & (StatusFlag::Overflow as u8) != 0,
+                );
+            }
+            Opcode::Dec => {
+                assert!(is_operand_address);
+
+                let result = self.bus.read(decoded_operand).wrapping_sub(1);
+
+                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+
+                // put back
+                self.bus.write(decoded_operand, result);
+
+                cycle_time += if instruction.addressing_mode == AddressingMode::AbsoluteX {
+                    3
+                } else {
+                    2
+                };
+            }
+            Opcode::Inc => {
+                assert!(is_operand_address);
+
+                let result = self.bus.read(decoded_operand).wrapping_add(1);
+
+                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+
+                // put back
+                self.bus.write(decoded_operand, result);
+
+                cycle_time += if instruction.addressing_mode == AddressingMode::AbsoluteX {
+                    3
+                } else {
+                    2
+                };
+            }
+            Opcode::Clc => {
+                self.unset_flag(StatusFlag::Carry);
+            }
+            Opcode::Cld => {
+                self.unset_flag(StatusFlag::DecimalMode);
+            }
+            Opcode::Cli => {
+                self.unset_flag(StatusFlag::InterruptDisable);
+            }
+            Opcode::Clv => {
+                self.unset_flag(StatusFlag::Overflow);
+            }
+            Opcode::Sec => {
+                self.set_flag(StatusFlag::Carry);
+            }
+            Opcode::Sed => {
+                self.set_flag(StatusFlag::DecimalMode);
+            }
+            Opcode::Sei => {
+                self.set_flag(StatusFlag::InterruptDisable);
+            }
+            Opcode::Jmp => {
+                assert!(is_operand_address);
+                self.reg_pc = decoded_operand;
+
+                cycle_time -= 1;
+            }
+            Opcode::Jsr => {
+                // TODO: implement later
+            }
+            Opcode::Rti => {
+                // TODO: implement later
+            }
+            Opcode::Rts => {
+                // TODO: implement later
+            }
+            Opcode::Lda => {
+                self.reg_a = self.load(decoded_operand, is_operand_address);
+            }
+            Opcode::Ldx => {
+                self.reg_x = self.load(decoded_operand, is_operand_address);
+            }
+            Opcode::Ldy => {
+                self.reg_y = self.load(decoded_operand, is_operand_address);
+            }
+            Opcode::Nop => {
+                // NOTHING
+            }
+            Opcode::Dex => {
+                let result = self.reg_x.wrapping_sub(1);
+
+                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+
+                self.reg_x = result;
+            }
+            Opcode::Dey => {
+                let result = self.reg_y.wrapping_sub(1);
+
+                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+
+                self.reg_y = result;
+            }
+            Opcode::Inx => {
+                let result = self.reg_x.wrapping_add(1);
+
+                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+
+                self.reg_x = result;
+            }
+            Opcode::Iny => {
+                let result = self.reg_y.wrapping_add(1);
+
+                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+
+                self.reg_x = result;
+            }
+            Opcode::Tax => {
+                let result = self.reg_a;
+
+                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+
+                self.reg_x = result;
+            }
+            Opcode::Tay => {
+                let result = self.reg_a;
+
+                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+
+                self.reg_y = result;
+            }
+            Opcode::Txa => {
+                let result = self.reg_x;
+
+                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+
+                self.reg_a = result;
+            }
+            Opcode::Tya => {
+                let result = self.reg_y;
+
+                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+
+                self.reg_a = result;
+            }
+            Opcode::Pha => {
+                // TODO: implement later
+            }
+            Opcode::Php => {
+                // TODO: implement later
+            }
+            Opcode::Pla => {
+                // TODO: implement later
+            }
+            Opcode::Plp => {
+                // TODO: implement later
+            }
+            Opcode::Sta => {
+                assert!(is_operand_address);
+                self.bus.write(decoded_operand, self.reg_a);
+            }
+            Opcode::Stx => {
+                assert!(is_operand_address);
+                self.bus.write(decoded_operand, self.reg_x);
+            }
+            Opcode::Sty => {
+                assert!(is_operand_address);
+                self.bus.write(decoded_operand, self.reg_y);
+            }
+            Opcode::Tsx => {
+                let result = self.reg_sp;
+
+                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+
+                self.reg_x = result;
+            }
+            Opcode::Txs => {
+                // no need to set flags
+                self.reg_sp = self.reg_x;
+            }
         };
 
         self.cycles_to_wait = cycle_time;
