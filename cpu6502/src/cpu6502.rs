@@ -34,7 +34,7 @@ impl<'a> CPU6502<'a> {
     pub fn new(bus: &'a mut dyn Bus) -> Self {
         CPU6502 {
             reg_pc: 0,
-            reg_sp: 0,
+            reg_sp: 0xFD, // FIXME: not 100% about this
             reg_a: 0,
             reg_x: 0,
             reg_y: 0,
@@ -208,6 +208,16 @@ impl<'a> CPU6502<'a> {
         self.set_flag_status(StatusFlag::Negative, operand & 0x80 != 0);
 
         operand
+    }
+
+    fn push_stack(&mut self, data: u8) {
+        self.bus.write(0x0100 | self.reg_sp as u16, data);
+        self.reg_sp = self.reg_sp.wrapping_add(1);
+    }
+
+    fn pull_stack(&mut self) -> u8 {
+        self.reg_sp = self.reg_sp.wrapping_sub(1);
+        self.bus.read(0x0100 | self.reg_sp as u16)
     }
 
     pub fn run_instruction(&mut self, instruction: &Instruction) {
@@ -534,13 +544,36 @@ impl<'a> CPU6502<'a> {
                 cycle_time -= 1;
             }
             Opcode::Jsr => {
-                // TODO: implement later
+                assert!(is_operand_address);
+
+                let pc = self.reg_pc - 1;
+                let low = pc as u8;
+                let high = (pc >> 8) as u8;
+
+                self.push_stack(high);
+                self.push_stack(low);
+
+                self.reg_pc = decoded_operand;
             }
             Opcode::Rti => {
-                // TODO: implement later
+                self.reg_status = self.pull_stack();
+
+                let low = self.pull_stack() as u16;
+                let high = self.pull_stack() as u16;
+
+                let address = high << 8 | low;
+
+                // unlike RTS, this is the actual address
+                self.reg_pc = address;
             }
             Opcode::Rts => {
-                // TODO: implement later
+                let low = self.pull_stack() as u16;
+                let high = self.pull_stack() as u16;
+
+                let address = high << 8 | low;
+
+                // go to address + 1
+                self.reg_pc = address + 1;
             }
             Opcode::Lda => {
                 self.reg_a = self.load(decoded_operand, is_operand_address);
@@ -619,16 +652,22 @@ impl<'a> CPU6502<'a> {
                 self.reg_a = result;
             }
             Opcode::Pha => {
-                // TODO: implement later
+                self.push_stack(self.reg_a);
             }
             Opcode::Php => {
-                // TODO: implement later
+                self.push_stack(self.reg_status);
             }
             Opcode::Pla => {
-                // TODO: implement later
+                let result = self.pull_stack();
+
+                // update flags
+                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+
+                self.reg_a = result;
             }
             Opcode::Plp => {
-                // TODO: implement later
+                self.reg_status = self.pull_stack();
             }
             Opcode::Sta => {
                 assert!(is_operand_address);
