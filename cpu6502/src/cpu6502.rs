@@ -161,6 +161,20 @@ impl<'a> CPU6502<'a> {
         self.reg_a = result;
     }
 
+    fn run_cmp_operation(&mut self, decoded_operand: u16, is_operand_address: bool, register: u8) {
+        let operand = if is_operand_address {
+            self.bus.read(decoded_operand)
+        } else {
+            decoded_operand as u8
+        };
+
+        let result = (register as u16).wrapping_sub(operand as u16);
+
+        self.set_flag_status(StatusFlag::Zero, result == 0);
+        self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+        self.set_flag_status(StatusFlag::Carry, result & 0xff00 == 0);
+    }
+
     pub fn run_instruction(&mut self, instruction: &Instruction) {
         let (decoded_operand, cycle_time) = self.decode_operand(instruction);
         let mut cycle_time = cycle_time;
@@ -321,12 +335,61 @@ impl<'a> CPU6502<'a> {
             Opcode::Ora => {
                 self.run_bitwise_operation(decoded_operand, is_operand_address, |a, b| a | b);
             }
-            Opcode::Sbc => {}
-            Opcode::Bit => {}
-            Opcode::Cmp => {}
-            Opcode::Cpx => {}
-            Opcode::Cpy => {}
-            Opcode::Brk => {}
+            // TODO: Add support for BCD mode
+            Opcode::Sbc => {
+                let operand = if is_operand_address {
+                    self.bus.read(decoded_operand)
+                } else {
+                    decoded_operand as u8
+                };
+                // inverse the carry
+                let carry = if !(self.reg_status & (StatusFlag::Carry as u8) == 0) {
+                    0
+                } else {
+                    1
+                };
+                let result = (self.reg_a as u16)
+                    .wrapping_sub(operand as u16)
+                    .wrapping_sub(carry);
+                // overflow = (result's sign) & (2nd operand's sign) & !(1st operand's sign)
+                // this was obtained from binary table
+                self.set_flag_status(
+                    StatusFlag::Overflow,
+                    (result as u8 & 0x80) & (operand & 0x80) & !(self.reg_a & 0x80) != 0,
+                );
+                self.set_flag_status(StatusFlag::Carry, result & 0xff00 == 0);
+                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+                self.reg_a = result as u8;
+            }
+            Opcode::Bit => {
+                // only Absolute and Zero page
+                assert!(is_operand_address);
+                let operand = self.bus.read(decoded_operand);
+                // move the negative and overflow flags to the status register
+                self.set_flag_status(
+                    StatusFlag::Negative,
+                    operand & StatusFlag::Negative as u8 != 0,
+                );
+                self.set_flag_status(
+                    StatusFlag::Overflow,
+                    operand & StatusFlag::Overflow as u8 != 0,
+                );
+
+                self.set_flag_status(StatusFlag::Zero, operand & self.reg_a != 0);
+            }
+            Opcode::Cmp => {
+                self.run_cmp_operation(decoded_operand, is_operand_address, self.reg_a);
+            }
+            Opcode::Cpx => {
+                self.run_cmp_operation(decoded_operand, is_operand_address, self.reg_x);
+            }
+            Opcode::Cpy => {
+                self.run_cmp_operation(decoded_operand, is_operand_address, self.reg_y);
+            }
+            Opcode::Brk => {
+                // TODO: implement later, don't know what is this
+            }
             Opcode::Bcc => {}
             Opcode::Bcs => {}
             Opcode::Beq => {}
