@@ -18,8 +18,8 @@ enum StatusFlag {
 }
 
 pub struct CPU6502<'a> {
-    reg_pc: u16,
-    reg_sp: u8, // stack is in 0x0100 - 0x01FF only
+    pub reg_pc: u16, // FIXME: find better way to modify the PC for tests
+    reg_sp: u8,      // stack is in 0x0100 - 0x01FF only
     reg_a: u8,
     reg_x: u8,
     reg_y: u8,
@@ -220,7 +220,56 @@ impl<'a> CPU6502<'a> {
         self.bus.read(0x0100 | self.reg_sp as u16)
     }
 
-    pub fn run_instruction(&mut self, instruction: &Instruction) {
+    pub fn run(&mut self) {
+        // used to find infinite loops
+        let mut last_pc = self.reg_pc;
+
+        // loop until crash..
+        loop {
+            // for debugging
+            print!("{:04X}: ", self.reg_pc);
+            // fetch
+            let instruction = self.fetch_next_instruction();
+            println!(
+                "{:02X} {:04X}",
+                instruction.opcode_byte, instruction.operand
+            );
+
+            // decode and execute
+            self.run_instruction(&instruction);
+            
+            // if we stuck in a loop, PANIC
+            if self.reg_pc == last_pc {
+                panic!()
+            } else {
+                last_pc = self.reg_pc;
+            }
+        }
+    }
+
+    fn fetch_next_instruction(&mut self) -> Instruction {
+        let opcode = self.bus.read(self.reg_pc);
+        self.reg_pc += 1;
+
+        let mut instruction = Instruction::from_byte(opcode);
+        let mut operand = 0;
+        // low
+        if instruction.get_instruction_len() > 1 {
+            operand |= self.bus.read(self.reg_pc) as u16;
+            self.reg_pc += 1;
+        }
+        // high
+        if instruction.get_instruction_len() > 2 {
+            operand |= (self.bus.read(self.reg_pc) as u16) << 8;
+            self.reg_pc += 1;
+        }
+
+        instruction.operand = operand;
+
+        instruction
+    }
+
+    fn run_instruction(&mut self, instruction: &Instruction) {
         let (decoded_operand, cycle_time) = self.decode_operand(instruction);
         let mut cycle_time = cycle_time;
 
