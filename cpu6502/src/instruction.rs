@@ -216,9 +216,9 @@ impl Instruction {
 
                 0xA0 => (Opcode::Ldy, AddressingMode::Immediate),
                 0xA4 => (Opcode::Ldy, AddressingMode::ZeroPage),
-                0xB4 => (Opcode::Ldy, AddressingMode::ZeroPageIndexY),
+                0xB4 => (Opcode::Ldy, AddressingMode::ZeroPageIndexX),
                 0xAC => (Opcode::Ldy, AddressingMode::Absolute),
-                0xBC => (Opcode::Ldy, AddressingMode::AbsoluteY),
+                0xBC => (Opcode::Ldy, AddressingMode::AbsoluteX),
 
                 0xC0 => (Opcode::Cpy, AddressingMode::Immediate),
                 0xC4 => (Opcode::Cpy, AddressingMode::ZeroPage),

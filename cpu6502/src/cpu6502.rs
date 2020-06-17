@@ -136,10 +136,18 @@ impl<'a> CPU6502<'a> {
 
                     (result, instruction.get_base_cycle_time() + page_cross)
                 }
-                AddressingMode::Relative => (
-                    self.reg_pc + instruction.operand & 0xff,
-                    instruction.get_base_cycle_time(),
-                ),
+                AddressingMode::Relative => {
+                    let sign_extended_operand = instruction.operand
+                        | if instruction.operand & 0x80 != 0 {
+                            0xFF00
+                        } else {
+                            0x0000
+                        };
+                    (
+                        self.reg_pc.wrapping_add(sign_extended_operand),
+                        instruction.get_base_cycle_time(),
+                    )
+                }
                 AddressingMode::Immediate
                 | AddressingMode::Accumulator
                 | AddressingMode::Implied => {
@@ -212,11 +220,11 @@ impl<'a> CPU6502<'a> {
 
     fn push_stack(&mut self, data: u8) {
         self.bus.write(0x0100 | self.reg_sp as u16, data);
-        self.reg_sp = self.reg_sp.wrapping_add(1);
+        self.reg_sp = self.reg_sp.wrapping_sub(1);
     }
 
     fn pull_stack(&mut self) -> u8 {
-        self.reg_sp = self.reg_sp.wrapping_sub(1);
+        self.reg_sp = self.reg_sp.wrapping_add(1);
         self.bus.read(0x0100 | self.reg_sp as u16)
     }
 
@@ -666,7 +674,7 @@ impl<'a> CPU6502<'a> {
                 self.set_flag_status(StatusFlag::Zero, result == 0);
                 self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
 
-                self.reg_x = result;
+                self.reg_y = result;
             }
             Opcode::Tax => {
                 let result = self.reg_a;
@@ -743,6 +751,11 @@ impl<'a> CPU6502<'a> {
                 self.reg_sp = self.reg_x;
             }
         };
+
+        // after finishing running the instruction
+        // make sure the unused flag and B flag are always set
+        // TODO: maybe there is a better way to do it?
+        self.reg_status |= 0x30;
 
         self.cycles_to_wait = cycle_time;
     }
