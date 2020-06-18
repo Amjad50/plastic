@@ -710,7 +710,9 @@ impl<'a> CPU6502<'a> {
                 self.push_stack(self.reg_a);
             }
             Opcode::Php => {
-                self.push_stack(self.reg_status);
+                // bit 4 and 5 must be set
+                let status = self.reg_status | 0x30;
+                self.push_stack(status);
             }
             Opcode::Pla => {
                 let result = self.pull_stack();
@@ -749,11 +751,6 @@ impl<'a> CPU6502<'a> {
                 self.reg_sp = self.reg_x;
             }
         };
-
-        // after finishing running the instruction
-        // make sure the unused flag and B flag are always set
-        // TODO: maybe there is a better way to do it?
-        self.reg_status |= 0x30;
 
         self.cycles_to_wait = cycle_time;
     }
