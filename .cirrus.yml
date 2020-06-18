@@ -4,6 +4,6 @@ container:
 cpu_test_task:
   env:
     RUST_BACKTRACE: 1
-  build_script: cd cpu6502 && cargo build
-  test_script: cd cpu6502 && cargo test
+  build_script: cargo build
+  test_script: cargo test
   before_cache_script: rm -rf $CARGO_HOME/registry/index
