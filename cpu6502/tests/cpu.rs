@@ -30,7 +30,7 @@ fn functionality_test() {
     let mut data = [0; 0x10000];
     data[0xa..file_data.len() + 0xa].clone_from_slice(file_data);
 
-    const SUCCUSS_ADDRESS: u16 = 0x3381;
+    const SUCCUSS_ADDRESS: u16 = 0x336d;
 
     let mut bus = DummyBus::new(data);
     let mut cpu = CPU6502::new(&mut bus);

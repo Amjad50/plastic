@@ -85,7 +85,7 @@
 ;ROM_vectors writable (0=no, 1=yes)
 ;if ROM vectors can not be used interrupts will not be trapped
 ;as a consequence BRK can not be tested but will be emulated to test RTI
-ROM_vectors = 0
+ROM_vectors = 1
 
 ;load_data_direct (0=move from code segment, 1=load directly)
 ;loading directly is preferred but may not be supported by your platform

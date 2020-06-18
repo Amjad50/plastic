@@ -1,6 +1,11 @@
 use super::instruction::{AddressingMode, Instruction, Opcode};
 use super::Bus;
 
+const NMI_VECTOR_ADDRESS: u16 = 0xFFFA;
+// FIXME: implement reset
+const RESET_VECTOR_ADDRESS: u16 = 0xFFFC;
+const IRQ_VECTOR_ADDRESS: u16 = 0xFFFE;
+
 // helper function
 fn is_on_same_page(address1: u16, address2: u16) -> bool {
     address1 & 0xff00 == address2 & 0xff00
@@ -25,6 +30,9 @@ pub struct CPU6502<'a> {
     reg_y: u8,
     reg_status: u8,
 
+    nmi_pin_status: bool,
+    irq_pin_status: bool,
+
     cycles_to_wait: u8,
 
     bus: &'a mut dyn Bus,
@@ -39,6 +47,9 @@ impl<'a> CPU6502<'a> {
             reg_x: 0,
             reg_y: 0,
             reg_status: 0,
+
+            nmi_pin_status: false,
+            irq_pin_status: false,
 
             cycles_to_wait: 0,
 
@@ -247,10 +258,49 @@ impl<'a> CPU6502<'a> {
         }
     }
 
+    // is_soft should be only from BRK
+    fn execute_interrupt(&mut self, is_soft: bool, is_nmi: bool) {
+        let pc = self.reg_pc;
+
+        let low = pc as u8;
+        let high = (pc >> 8) as u8;
+
+        self.push_stack(high);
+        self.push_stack(low);
+
+        self.set_flag_status(StatusFlag::BreakCommand, is_soft);
+
+        self.push_stack(self.reg_status);
+
+        let jump_vector_address = if is_nmi {
+            NMI_VECTOR_ADDRESS
+        } else {
+            IRQ_VECTOR_ADDRESS
+        };
+
+        self.set_flag(StatusFlag::InterruptDisable);
+
+        let low = self.bus.read(jump_vector_address) as u16;
+        let high = self.bus.read(jump_vector_address + 1) as u16;
+
+        let pc = high << 8 | low;
+        self.reg_pc = pc;
+    }
+
     // return true if an instruction executed
     // false if it was waiting for remaining cycles
     pub fn run_next(&mut self) -> bool {
         if self.cycles_to_wait == 0 {
+            // interrupts waiting
+            if self.nmi_pin_status
+                || (self.irq_pin_status
+                    && !(self.reg_status & (StatusFlag::InterruptDisable as u8) != 0))
+            {
+                // hardware side interrupt
+                self.execute_interrupt(false, self.nmi_pin_status);
+                return true;
+            }
+
             // fetch
             let instruction = self.fetch_next_instruction();
 
@@ -501,7 +551,10 @@ impl<'a> CPU6502<'a> {
                 self.run_cmp_operation(decoded_operand, is_operand_address, self.reg_y);
             }
             Opcode::Brk => {
-                // TODO: implement later, don't know what is this
+                // increment the PC for saving
+                self.reg_pc += 1;
+                self.execute_interrupt(true, self.nmi_pin_status);
+                cycle_time = 7;
             }
             Opcode::Bcc => {
                 cycle_time += self.run_branch_condition(
@@ -625,7 +678,8 @@ impl<'a> CPU6502<'a> {
                 self.reg_pc = decoded_operand;
             }
             Opcode::Rti => {
-                self.reg_status = self.pull_stack();
+                let old_status = self.reg_status & 0x30;
+                self.reg_status = self.pull_stack() | old_status;
 
                 let low = self.pull_stack() as u16;
                 let high = self.pull_stack() as u16;
@@ -738,7 +792,9 @@ impl<'a> CPU6502<'a> {
                 self.reg_a = result;
             }
             Opcode::Plp => {
-                self.reg_status = self.pull_stack();
+                // Bits 4 and 5 should not be edited
+                let old_status = self.reg_status & 0x30;
+                self.reg_status = self.pull_stack() | old_status;
             }
             Opcode::Sta => {
                 assert!(is_operand_address);
