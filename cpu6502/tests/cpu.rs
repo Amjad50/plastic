@@ -30,10 +30,18 @@ fn functionality_test() {
     let mut data = [0; 0x10000];
     data[0xa..file_data.len() + 0xa].clone_from_slice(&file_data);
 
+    const SUCCUSS_ADDRESS: u16 = 0x3381;
+
     let mut bus = DummyBus::new(data);
     let mut cpu = CPU6502::new(&mut bus);
 
     cpu.reg_pc = 0x400;
 
-    cpu.run();
+    let result = cpu.run();
+    assert!(result.is_err());
+    assert!(
+        result.err().unwrap() == SUCCUSS_ADDRESS,
+        "Test failed at {:04X}, check the `.lst` file for more info",
+        result.err().unwrap()
+    );
 }

@@ -229,27 +229,20 @@ impl<'a> CPU6502<'a> {
         self.bus.read(0x0100 | self.reg_sp as u16)
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> Result<(), u16>{
         // used to find infinite loops
         let mut last_pc = self.reg_pc;
 
         // loop until crash..
         loop {
-            // for debugging
-            print!("{:04X}: ", self.reg_pc);
-            // fetch
             let instruction = self.fetch_next_instruction();
-            println!(
-                "{:02X} {:04X}",
-                instruction.opcode_byte, instruction.operand
-            );
 
             // decode and execute
             self.run_instruction(&instruction);
-            
-            // if we stuck in a loop, PANIC
+
+            // if we stuck in a loop, return error
             if self.reg_pc == last_pc {
-                panic!()
+                return Err(self.reg_pc);
             } else {
                 last_pc = self.reg_pc;
             }
@@ -297,13 +290,16 @@ impl<'a> CPU6502<'a> {
                 } else {
                     1
                 };
-                let result = self.reg_a as u16 + operand as u16 + carry;
+                let result = (self.reg_a as u16)
+                    .wrapping_add(operand as u16)
+                    .wrapping_add(carry);
                 // overflow = result is negative ^ (reg_A is negative | operand is negative)
                 // meaning, that if the operands are positive but the result is negative, then something
                 // is not right, and the same way vise versa
                 self.set_flag_status(
                     StatusFlag::Overflow,
-                    (result as u8 & 0x80) ^ ((self.reg_a & 0x80) | (operand & 0x80)) != 0,
+                    (((result as u8 ^ self.reg_a) & 0x80) != 0)
+                        && !(((operand ^ self.reg_a) & 0x80) != 0),
                 );
                 self.set_flag_status(StatusFlag::Carry, result & 0xff00 != 0);
                 self.set_flag_status(StatusFlag::Zero, result as u8 == 0);
@@ -457,9 +453,10 @@ impl<'a> CPU6502<'a> {
                 // this was obtained from binary table
                 self.set_flag_status(
                     StatusFlag::Overflow,
-                    (result as u8 & 0x80) & (operand & 0x80) & !(self.reg_a & 0x80) != 0,
+                    ((result as u8 ^ self.reg_a) & 0x80 != 0)
+                        && ((operand ^ self.reg_a) & 0x80 != 0),
                 );
-                self.set_flag_status(StatusFlag::Carry, result & 0xff00 == 0);
+                self.set_flag_status(StatusFlag::Carry, !(result & 0xff00 != 0));
                 self.set_flag_status(StatusFlag::Zero, result as u8 == 0);
                 self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
                 self.reg_a = result as u8;
@@ -478,7 +475,7 @@ impl<'a> CPU6502<'a> {
                     operand & StatusFlag::Overflow as u8 != 0,
                 );
 
-                self.set_flag_status(StatusFlag::Zero, operand & self.reg_a != 0);
+                self.set_flag_status(StatusFlag::Zero, operand & self.reg_a == 0);
             }
             Opcode::Cmp => {
                 self.run_cmp_operation(decoded_operand, is_operand_address, self.reg_a);
