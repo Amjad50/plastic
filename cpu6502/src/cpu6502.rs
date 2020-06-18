@@ -234,23 +234,33 @@ impl<'a> CPU6502<'a> {
 
         // loop until crash..
         loop {
-            self.run_next();
+            let executed = self.run_next();
 
             // if we stuck in a loop, return error
-            if self.reg_pc == last_pc {
-                return Err(self.reg_pc);
-            } else {
-                last_pc = self.reg_pc;
+            if executed {
+                if self.reg_pc == last_pc {
+                    return Err(last_pc);
+                } else {
+                    last_pc = self.reg_pc;
+                }
             }
         }
     }
 
-    pub fn run_next(&mut self) {
-        // fetch
-        let instruction = self.fetch_next_instruction();
+    // return true if an instruction executed
+    // false if it was waiting for remaining cycles
+    pub fn run_next(&mut self) -> bool {
+        if self.cycles_to_wait == 0 {
+            // fetch
+            let instruction = self.fetch_next_instruction();
 
-        // decode and execute
-        self.run_instruction(&instruction);
+            // decode and execute
+            self.run_instruction(&instruction);
+            true
+        } else {
+            self.cycles_to_wait -= 1;
+            false
+        }
     }
 
     fn fetch_next_instruction(&mut self) -> Instruction {
@@ -756,6 +766,7 @@ impl<'a> CPU6502<'a> {
             }
         };
 
-        self.cycles_to_wait = cycle_time;
+        // minus this cycle
+        self.cycles_to_wait = cycle_time - 1;
     }
 }
