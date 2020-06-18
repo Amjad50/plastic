@@ -92,7 +92,8 @@ impl<'a> CPU6502<'a> {
                     (high << 8 | low, instruction.get_base_cycle_time())
                 }
                 AddressingMode::XIndirect => {
-                    let location_indirect = instruction.operand & 0xff + self.reg_x as u16;
+                    let location_indirect =
+                        instruction.operand.wrapping_add(self.reg_x as u16) & 0xff;
                     let low = self.bus.read(location_indirect) as u16;
                     let high = self.bus.read(location_indirect + 1) as u16;
                     (high << 8 | low, instruction.get_base_cycle_time())
@@ -305,7 +306,7 @@ impl<'a> CPU6502<'a> {
                     (result as u8 & 0x80) ^ ((self.reg_a & 0x80) | (operand & 0x80)) != 0,
                 );
                 self.set_flag_status(StatusFlag::Carry, result & 0xff00 != 0);
-                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Zero, result as u8 == 0);
                 self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
                 self.reg_a = result as u8;
             }
@@ -380,12 +381,12 @@ impl<'a> CPU6502<'a> {
                     1
                 };
                 // There is a bit at the leftmost position, it will be moved to the carry
-                self.set_flag_status(StatusFlag::Carry, operand & 0x01 != 0);
+                self.set_flag_status(StatusFlag::Carry, operand & 0x80 != 0);
                 // modify the value
                 operand <<= 1;
                 operand |= old_carry;
                 self.set_flag_status(StatusFlag::Zero, operand == 0);
-                self.set_flag_status(StatusFlag::Negative, false);
+                self.set_flag_status(StatusFlag::Negative, operand & 0x80 != 0);
                 if is_operand_address {
                     // save back
                     self.bus.write(decoded_operand, operand);
@@ -415,7 +416,7 @@ impl<'a> CPU6502<'a> {
                 operand >>= 1;
                 operand |= old_carry << 7;
                 self.set_flag_status(StatusFlag::Zero, operand == 0);
-                self.set_flag_status(StatusFlag::Negative, false);
+                self.set_flag_status(StatusFlag::Negative, operand & 0x80 != 0);
                 if is_operand_address {
                     // save back
                     self.bus.write(decoded_operand, operand);
@@ -459,7 +460,7 @@ impl<'a> CPU6502<'a> {
                     (result as u8 & 0x80) & (operand & 0x80) & !(self.reg_a & 0x80) != 0,
                 );
                 self.set_flag_status(StatusFlag::Carry, result & 0xff00 == 0);
-                self.set_flag_status(StatusFlag::Zero, result == 0);
+                self.set_flag_status(StatusFlag::Zero, result as u8 == 0);
                 self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
                 self.reg_a = result as u8;
             }
