@@ -26,9 +26,9 @@ impl Bus for DummyBus {
 
 #[test]
 fn functionality_test() {
-    let file_data = *include_bytes!("./roms/6502_functional_test.bin");
+    let file_data = include_bytes!("./roms/6502_functional_test.bin");
     let mut data = [0; 0x10000];
-    data[0xa..file_data.len() + 0xa].clone_from_slice(&file_data);
+    data[0xa..file_data.len() + 0xa].clone_from_slice(file_data);
 
     const SUCCUSS_ADDRESS: u16 = 0x3381;
 
@@ -37,7 +37,7 @@ fn functionality_test() {
 
     cpu.reg_pc = 0x400;
 
-    let result = cpu.run();
+    let result = cpu.run_all();
     assert!(result.is_err());
     assert!(
         result.err().unwrap() == SUCCUSS_ADDRESS,

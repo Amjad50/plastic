@@ -229,16 +229,12 @@ impl<'a> CPU6502<'a> {
         self.bus.read(0x0100 | self.reg_sp as u16)
     }
 
-    pub fn run(&mut self) -> Result<(), u16>{
-        // used to find infinite loops
+    pub fn run_all(&mut self) -> Result<(), u16> {
         let mut last_pc = self.reg_pc;
 
         // loop until crash..
         loop {
-            let instruction = self.fetch_next_instruction();
-
-            // decode and execute
-            self.run_instruction(&instruction);
+            self.run_next();
 
             // if we stuck in a loop, return error
             if self.reg_pc == last_pc {
@@ -247,6 +243,14 @@ impl<'a> CPU6502<'a> {
                 last_pc = self.reg_pc;
             }
         }
+    }
+
+    pub fn run_next(&mut self) {
+        // fetch
+        let instruction = self.fetch_next_instruction();
+
+        // decode and execute
+        self.run_instruction(&instruction);
     }
 
     fn fetch_next_instruction(&mut self) -> Instruction {
