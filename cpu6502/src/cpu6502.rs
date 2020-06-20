@@ -2,7 +2,6 @@ use super::instruction::{AddressingMode, Instruction, Opcode};
 use super::Bus;
 
 const NMI_VECTOR_ADDRESS: u16 = 0xFFFA;
-// FIXME: implement reset
 const RESET_VECTOR_ADDRESS: u16 = 0xFFFC;
 const IRQ_VECTOR_ADDRESS: u16 = 0xFFFE;
 
@@ -22,6 +21,7 @@ enum StatusFlag {
     Negative = 1 << 7,
 }
 
+// TODO: this CPU does not support BCD mode yet
 pub struct CPU6502<'a> {
     pub reg_pc: u16, // FIXME: find better way to modify the PC for tests
     reg_sp: u8,      // stack is in 0x0100 - 0x01FF only
@@ -258,6 +258,17 @@ impl<'a> CPU6502<'a> {
         }
     }
 
+    fn reset(&mut self) {
+        self.set_flag(StatusFlag::InterruptDisable);
+        self.reg_sp = 0xFD; //reset
+
+        let low = self.bus.read(RESET_VECTOR_ADDRESS) as u16;
+        let high = self.bus.read(RESET_VECTOR_ADDRESS + 1) as u16;
+
+        let pc = high << 8 | low;
+        self.reg_pc = pc;
+    }
+
     // is_soft should be only from BRK
     fn execute_interrupt(&mut self, is_soft: bool, is_nmi: bool) {
         let pc = self.reg_pc;
@@ -392,7 +403,6 @@ impl<'a> CPU6502<'a> {
                     self.bus.write(decoded_operand, operand);
                     cycle_time += 2;
 
-                    // TODO: handle cycles better, PLEASE
                     if instruction.addressing_mode == AddressingMode::AbsoluteX {
                         cycle_time = 7; // special case
                     }

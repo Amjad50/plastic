@@ -13,7 +13,6 @@ const DOES_NOT_EXIST: [u8; 105] = [
     0x7F, 0x8F, 0x9F, 0xAF, 0xBF, 0xCF, 0xDF, 0xEF, 0xFF,
 ];
 
-// TODO: create tests for instructions and cpu
 #[test]
 fn existing_instructions() {
     let mut exists = [0xFF; 256 - DOES_NOT_EXIST.len()];

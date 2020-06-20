@@ -271,7 +271,6 @@ impl Instruction {
             },
         };
 
-        // TODO: fill bytes and len appropriately
         Instruction {
             opcode_byte: byte,
             operand: 0,
@@ -285,7 +284,6 @@ impl Instruction {
         self.addressing_mode.get_instruction_len()
     }
 
-    // TODO: should we move this to do it manually for each instruction
     pub fn get_base_cycle_time(&self) -> u8 {
         match self.addressing_mode {
             AddressingMode::Immediate => 2,
