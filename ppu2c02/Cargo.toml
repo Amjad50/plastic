@@ -1,0 +1,9 @@
+[package]
+name = "ppu2c02"
+version = "0.1.0"
+authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
+edition = "2018"
+
+
+[dependencies]
+common = { path = "../common" }

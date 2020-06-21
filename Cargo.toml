@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "cpu6502",
+    "ppu2c02",
     "common",
 ]

@@ -11,3 +11,10 @@ dependencies = [
  "common 0.1.0",
 ]
 
+[[package]]
+name = "ppu2c02"
+version = "0.1.0"
+dependencies = [
+ "common 0.1.0",
+]
+
