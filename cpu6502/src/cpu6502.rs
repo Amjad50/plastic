@@ -1,5 +1,5 @@
 use super::instruction::{AddressingMode, Instruction, Opcode};
-use super::Bus;
+use common::Bus;
 
 const NMI_VECTOR_ADDRESS: u16 = 0xFFFA;
 const RESET_VECTOR_ADDRESS: u16 = 0xFFFC;
@@ -22,7 +22,7 @@ enum StatusFlag {
 }
 
 // TODO: this CPU does not support BCD mode yet
-pub struct CPU6502<'a> {
+pub struct CPU6502<'a, T: Bus> {
     pub reg_pc: u16, // FIXME: find better way to modify the PC for tests
     reg_sp: u8,      // stack is in 0x0100 - 0x01FF only
     reg_a: u8,
@@ -35,11 +35,14 @@ pub struct CPU6502<'a> {
 
     cycles_to_wait: u8,
 
-    bus: &'a mut dyn Bus,
+    bus: &'a mut T,
 }
 
-impl<'a> CPU6502<'a> {
-    pub fn new(bus: &'a mut dyn Bus) -> Self {
+impl<'a, T> CPU6502<'a, T>
+where
+    T: Bus,
+{
+    pub fn new(bus: &'a mut T) -> Self {
         CPU6502 {
             reg_pc: 0,
             reg_sp: 0xFD, // FIXME: not 100% about this
