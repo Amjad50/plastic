@@ -1,4 +1,4 @@
-use super::error::CartridgeError;
+use super::{error::CartridgeError, mapper::Mapper};
 use common::Bus;
 use std::{
     fs::File,
@@ -21,6 +21,8 @@ pub struct Cartridge {
     pub trainer_data: Vec<u8>,
     pub prg_data: Vec<u8>,
     pub chr_data: Vec<u8>,
+
+    mapper: Box<dyn Mapper>,
 }
 
 impl Cartridge {
@@ -91,6 +93,8 @@ impl Cartridge {
                 trainer_data,
                 prg_data,
                 chr_data,
+                // TODO: remove after testing
+                mapper: Box::new(super::mappers::Mapper0::new()),
             })
         }
     }
@@ -109,7 +113,10 @@ impl Cartridge {
 impl Bus for Cartridge {
     // TODO: implement
     fn read(&self, address: u16) -> u8 {
+        let address = self.mapper.map(address);
         0
     }
-    fn write(&mut self, address: u16, data: u8) {}
+    fn write(&mut self, address: u16, data: u8) {
+        let address = self.mapper.map(address);
+    }
 }
