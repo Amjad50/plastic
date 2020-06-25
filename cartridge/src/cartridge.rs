@@ -114,9 +114,38 @@ impl Bus for Cartridge {
     // TODO: implement
     fn read(&self, address: u16, device: Device) -> u8 {
         let address = self.mapper.map(address);
-        0
+
+        match device {
+            // CPU is reading PRG only
+            Device::CPU => *self
+                .prg_data
+                .get(address as usize)
+                .expect("PRG out of bounds"),
+            // PPU is reading CHR data
+            Device::PPU => *self
+                .chr_data
+                .get(address as usize)
+                .expect("CHR out of bounds"),
+        }
     }
     fn write(&mut self, address: u16, data: u8, device: Device) {
         let address = self.mapper.map(address);
+
+        // ## This is only a ROM data (read only) ##
+        //
+        // match device {
+        //     Device::CPU => {
+        //         *self
+        //             .prg_data
+        //             .get_mut(address as usize)
+        //             .expect("PRG out of bounds") = data;
+        //     }
+        //     Device::PPU => {
+        //         *self
+        //             .chr_data
+        //             .get_mut(address as usize)
+        //             .expect("CHR out of bounds") = data;
+        //     }
+        // }
     }
 }

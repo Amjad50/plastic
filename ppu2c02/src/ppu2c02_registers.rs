@@ -40,19 +40,29 @@ impl<'a, T> Bus for PPU2C02<'a, T>
 where
     T: Bus,
 {
-    fn read(&self, address: u16, _: Device) -> u8 {
-        if let Ok(register) = address.try_into() {
-            self.read_register(register)
+    fn read(&self, address: u16, device: Device) -> u8 {
+        // only the CPU is allowed to read from PPU registers
+        if device == Device::CPU {
+            if let Ok(register) = address.try_into() {
+                self.read_register(register)
+            } else {
+                unreachable!("Bus address mapping should be handled correctly (PPU Memory I/O)");
+            }
         } else {
-            unreachable!("Bus address mapping should be handled correctly (PPU Memory I/O)");
+            unreachable!("CPU is the only device allowed to read from PPU registers");
         }
     }
 
-    fn write(&mut self, address: u16, data: u8, _: Device) {
-        if let Ok(register) = address.try_into() {
-            self.write_register(register, data);
+    fn write(&mut self, address: u16, data: u8, device: Device) {
+        // only the CPU is allowed to write to PPU registers
+        if device == Device::CPU {
+            if let Ok(register) = address.try_into() {
+                self.write_register(register, data);
+            } else {
+                unreachable!("Bus address mapping should be handled correctly (PPU Memory I/O)");
+            }
         } else {
-            unreachable!("Bus address mapping should be handled correctly (PPU Memory I/O)");
+            unreachable!("CPU is the only device allowed to write to PPU registers");
         }
     }
 }
