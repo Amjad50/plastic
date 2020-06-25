@@ -1,5 +1,5 @@
 use super::instruction::{AddressingMode, Instruction, Opcode};
-use common::Bus;
+use common::{Bus, Device};
 
 const NMI_VECTOR_ADDRESS: u16 = 0xFFFA;
 const RESET_VECTOR_ADDRESS: u16 = 0xFFFC;
@@ -76,6 +76,14 @@ where
         }
     }
 
+    fn read_bus(&self, address: u16) -> u8 {
+        self.bus.read(address, Device::CPU)
+    }
+
+    fn write_bus(&mut self, address: u16, data: u8) {
+        self.bus.write(address, data, Device::CPU);
+    }
+
     fn decode_operand(&self, instruction: &Instruction) -> (u16, u8) {
         if instruction.is_operand_address() {
             match instruction.addressing_mode {
@@ -94,10 +102,10 @@ where
                 ),
 
                 AddressingMode::Indirect => {
-                    let low = self.bus.read(instruction.operand) as u16;
+                    let low = self.read_bus(instruction.operand) as u16;
                     // if the indirect vector is at the last of the page (0xff) then
                     // wrap around on the same page
-                    let high = self.bus.read(if instruction.operand & 0xff == 0xff {
+                    let high = self.read_bus(if instruction.operand & 0xff == 0xff {
                         instruction.operand & 0xff00
                     } else {
                         instruction.operand + 1
@@ -108,14 +116,14 @@ where
                 AddressingMode::XIndirect => {
                     let location_indirect =
                         instruction.operand.wrapping_add(self.reg_x as u16) & 0xff;
-                    let low = self.bus.read(location_indirect) as u16;
-                    let high = self.bus.read(location_indirect + 1) as u16;
+                    let low = self.read_bus(location_indirect) as u16;
+                    let high = self.read_bus(location_indirect + 1) as u16;
                     (high << 8 | low, instruction.get_base_cycle_time())
                 }
                 AddressingMode::IndirectY => {
                     let location_indirect = instruction.operand & 0xff;
-                    let low = self.bus.read(location_indirect) as u16;
-                    let high = self.bus.read(location_indirect + 1) as u16;
+                    let low = self.read_bus(location_indirect) as u16;
+                    let high = self.read_bus(location_indirect + 1) as u16;
 
                     let unindxed_address = high << 8 | low;
                     let result = unindxed_address + self.reg_y as u16;
@@ -179,7 +187,7 @@ where
         F: Fn(u8, u8) -> u8,
     {
         let operand = if is_operand_address {
-            self.bus.read(decoded_operand)
+            self.read_bus(decoded_operand)
         } else {
             decoded_operand as u8
         };
@@ -194,7 +202,7 @@ where
 
     fn run_cmp_operation(&mut self, decoded_operand: u16, is_operand_address: bool, register: u8) {
         let operand = if is_operand_address {
-            self.bus.read(decoded_operand)
+            self.read_bus(decoded_operand)
         } else {
             decoded_operand as u8
         };
@@ -222,7 +230,7 @@ where
 
     fn load(&mut self, decoded_operand: u16, is_operand_address: bool) -> u8 {
         let operand = if is_operand_address {
-            self.bus.read(decoded_operand)
+            self.read_bus(decoded_operand)
         } else {
             decoded_operand as u8
         };
@@ -234,13 +242,13 @@ where
     }
 
     fn push_stack(&mut self, data: u8) {
-        self.bus.write(0x0100 | self.reg_sp as u16, data);
+        self.write_bus(0x0100 | self.reg_sp as u16, data);
         self.reg_sp = self.reg_sp.wrapping_sub(1);
     }
 
     fn pull_stack(&mut self) -> u8 {
         self.reg_sp = self.reg_sp.wrapping_add(1);
-        self.bus.read(0x0100 | self.reg_sp as u16)
+        self.read_bus(0x0100 | self.reg_sp as u16)
     }
 
     pub fn run_all(&mut self) -> Result<(), u16> {
@@ -265,8 +273,8 @@ where
         self.set_flag(StatusFlag::InterruptDisable);
         self.reg_sp = 0xFD; //reset
 
-        let low = self.bus.read(RESET_VECTOR_ADDRESS) as u16;
-        let high = self.bus.read(RESET_VECTOR_ADDRESS + 1) as u16;
+        let low = self.read_bus(RESET_VECTOR_ADDRESS) as u16;
+        let high = self.read_bus(RESET_VECTOR_ADDRESS + 1) as u16;
 
         let pc = high << 8 | low;
         self.reg_pc = pc;
@@ -294,8 +302,8 @@ where
 
         self.set_flag(StatusFlag::InterruptDisable);
 
-        let low = self.bus.read(jump_vector_address) as u16;
-        let high = self.bus.read(jump_vector_address + 1) as u16;
+        let low = self.read_bus(jump_vector_address) as u16;
+        let high = self.read_bus(jump_vector_address + 1) as u16;
 
         let pc = high << 8 | low;
         self.reg_pc = pc;
@@ -328,19 +336,19 @@ where
     }
 
     fn fetch_next_instruction(&mut self) -> Instruction {
-        let opcode = self.bus.read(self.reg_pc);
+        let opcode = self.read_bus(self.reg_pc);
         self.reg_pc += 1;
 
         let mut instruction = Instruction::from_byte(opcode);
         let mut operand = 0;
         // low
         if instruction.get_instruction_len() > 1 {
-            operand |= self.bus.read(self.reg_pc) as u16;
+            operand |= self.read_bus(self.reg_pc) as u16;
             self.reg_pc += 1;
         }
         // high
         if instruction.get_instruction_len() > 2 {
-            operand |= (self.bus.read(self.reg_pc) as u16) << 8;
+            operand |= (self.read_bus(self.reg_pc) as u16) << 8;
             self.reg_pc += 1;
         }
 
@@ -359,7 +367,7 @@ where
             // TODO: Add support for BCD mode
             Opcode::Adc => {
                 let operand = if is_operand_address {
-                    self.bus.read(decoded_operand)
+                    self.read_bus(decoded_operand)
                 } else {
                     decoded_operand as u8
                 };
@@ -386,7 +394,7 @@ where
             }
             Opcode::Asl => {
                 let mut operand = if is_operand_address {
-                    self.bus.read(decoded_operand)
+                    self.read_bus(decoded_operand)
                 } else {
                     // if its not address, then its Accumulator for this instruction
                     self.reg_a
@@ -403,7 +411,7 @@ where
 
                 if is_operand_address {
                     // save back
-                    self.bus.write(decoded_operand, operand);
+                    self.write_bus(decoded_operand, operand);
                     cycle_time += 2;
 
                     if instruction.addressing_mode == AddressingMode::AbsoluteX {
@@ -415,7 +423,7 @@ where
             }
             Opcode::Lsr => {
                 let mut operand = if is_operand_address {
-                    self.bus.read(decoded_operand)
+                    self.read_bus(decoded_operand)
                 } else {
                     // if its not address, then its Accumulator for this instruction
                     self.reg_a
@@ -432,7 +440,7 @@ where
 
                 if is_operand_address {
                     // save back
-                    self.bus.write(decoded_operand, operand);
+                    self.write_bus(decoded_operand, operand);
 
                     if instruction.addressing_mode == AddressingMode::AbsoluteX {
                         cycle_time = 7; // special case
@@ -443,7 +451,7 @@ where
             }
             Opcode::Rol => {
                 let mut operand = if is_operand_address {
-                    self.bus.read(decoded_operand)
+                    self.read_bus(decoded_operand)
                 } else {
                     // if its not address, then its Accumulator for this instruction
                     self.reg_a
@@ -462,7 +470,7 @@ where
                 self.set_flag_status(StatusFlag::Negative, operand & 0x80 != 0);
                 if is_operand_address {
                     // save back
-                    self.bus.write(decoded_operand, operand);
+                    self.write_bus(decoded_operand, operand);
 
                     if instruction.addressing_mode == AddressingMode::AbsoluteX {
                         cycle_time = 7; // special case
@@ -473,7 +481,7 @@ where
             }
             Opcode::Ror => {
                 let mut operand = if is_operand_address {
-                    self.bus.read(decoded_operand)
+                    self.read_bus(decoded_operand)
                 } else {
                     // if its not address, then its Accumulator for this instruction
                     self.reg_a
@@ -492,7 +500,7 @@ where
                 self.set_flag_status(StatusFlag::Negative, operand & 0x80 != 0);
                 if is_operand_address {
                     // save back
-                    self.bus.write(decoded_operand, operand);
+                    self.write_bus(decoded_operand, operand);
 
                     if instruction.addressing_mode == AddressingMode::AbsoluteX {
                         cycle_time = 7; // special case
@@ -513,7 +521,7 @@ where
             // TODO: Add support for BCD mode
             Opcode::Sbc => {
                 let operand = if is_operand_address {
-                    self.bus.read(decoded_operand)
+                    self.read_bus(decoded_operand)
                 } else {
                     decoded_operand as u8
                 };
@@ -541,7 +549,7 @@ where
             Opcode::Bit => {
                 // only Absolute and Zero page
                 assert!(is_operand_address);
-                let operand = self.bus.read(decoded_operand);
+                let operand = self.read_bus(decoded_operand);
                 // move the negative and overflow flags to the status register
                 self.set_flag_status(
                     StatusFlag::Negative,
@@ -620,13 +628,13 @@ where
             Opcode::Dec => {
                 assert!(is_operand_address);
 
-                let result = self.bus.read(decoded_operand).wrapping_sub(1);
+                let result = self.read_bus(decoded_operand).wrapping_sub(1);
 
                 self.set_flag_status(StatusFlag::Zero, result == 0);
                 self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
 
                 // put back
-                self.bus.write(decoded_operand, result);
+                self.write_bus(decoded_operand, result);
 
                 cycle_time += if instruction.addressing_mode == AddressingMode::AbsoluteX {
                     3
@@ -637,13 +645,13 @@ where
             Opcode::Inc => {
                 assert!(is_operand_address);
 
-                let result = self.bus.read(decoded_operand).wrapping_add(1);
+                let result = self.read_bus(decoded_operand).wrapping_add(1);
 
                 self.set_flag_status(StatusFlag::Zero, result == 0);
                 self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
 
                 // put back
-                self.bus.write(decoded_operand, result);
+                self.write_bus(decoded_operand, result);
 
                 cycle_time += if instruction.addressing_mode == AddressingMode::AbsoluteX {
                     3
@@ -811,15 +819,15 @@ where
             }
             Opcode::Sta => {
                 assert!(is_operand_address);
-                self.bus.write(decoded_operand, self.reg_a);
+                self.write_bus(decoded_operand, self.reg_a);
             }
             Opcode::Stx => {
                 assert!(is_operand_address);
-                self.bus.write(decoded_operand, self.reg_x);
+                self.write_bus(decoded_operand, self.reg_x);
             }
             Opcode::Sty => {
                 assert!(is_operand_address);
-                self.bus.write(decoded_operand, self.reg_y);
+                self.write_bus(decoded_operand, self.reg_y);
             }
             Opcode::Tsx => {
                 let result = self.reg_sp;

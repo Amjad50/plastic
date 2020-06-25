@@ -1,6 +1,6 @@
 use crate::ppu2c02::PPU2C02;
 
-use common::Bus;
+use common::{Bus, Device};
 
 use std::convert::TryFrom;
 use std::convert::TryInto;
@@ -40,7 +40,7 @@ impl<'a, T> Bus for PPU2C02<'a, T>
 where
     T: Bus,
 {
-    fn read(&self, address: u16) -> u8 {
+    fn read(&self, address: u16, _: Device) -> u8 {
         if let Ok(register) = address.try_into() {
             self.read_register(register)
         } else {
@@ -48,7 +48,7 @@ where
         }
     }
 
-    fn write(&mut self, address: u16, data: u8) {
+    fn write(&mut self, address: u16, data: u8, _: Device) {
         if let Ok(register) = address.try_into() {
             self.write_register(register, data);
         } else {

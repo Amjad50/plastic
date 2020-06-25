@@ -1,7 +1,7 @@
 extern crate cpu6502;
 
+use common::{Bus, Device};
 use cpu6502::CPU6502;
-use common::Bus;
 
 struct DummyBus {
     data: [u8; 0x10000],
@@ -14,10 +14,10 @@ impl DummyBus {
 }
 
 impl Bus for DummyBus {
-    fn read(&self, address: u16) -> u8 {
+    fn read(&self, address: u16, _: Device) -> u8 {
         self.data[address as usize]
     }
-    fn write(&mut self, address: u16, data: u8) {
+    fn write(&mut self, address: u16, data: u8, _: Device) {
         self.data[address as usize] = data;
     }
 }

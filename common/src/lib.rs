@@ -1,3 +1,3 @@
 mod bus;
 
-pub use bus::Bus;
+pub use bus::{Bus, Device};

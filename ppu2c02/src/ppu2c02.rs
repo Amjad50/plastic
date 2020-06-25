@@ -1,5 +1,5 @@
 use crate::ppu2c02_registers::Register;
-use common::Bus;
+use common::{Bus, Device};
 
 pub struct PPU2C02<'a, T: Bus> {
     // memory mapped registers
@@ -130,6 +130,14 @@ where
         };
     }
 
+    fn read_bus(&self, address: u16) -> u8 {
+        self.bus.read(address, Device::PPU)
+    }
+
+    fn write_bus(&mut self, address: u16, data: u8) {
+        self.bus.write(address, data, Device::PPU);
+    }
+
     /*
     ## PPU pattern table addressing ##
     DCBA98 76543210
@@ -148,13 +156,11 @@ where
         // for background
         let pattern_table_selector = if self.reg_control & 0x10 != 0 { 1 } else { 0 };
 
-        let low_plane_pattern = self
-            .bus
-            .read(pattern_table_selector << 12 | (location as u16) << 4 | 0 << 3 | fine_y);
+        let low_plane_pattern =
+            self.read_bus(pattern_table_selector << 12 | (location as u16) << 4 | 0 << 3 | fine_y);
 
-        let high_plane_pattern = self
-            .bus
-            .read(pattern_table_selector << 12 | (location as u16) << 4 | 1 << 3 | fine_y);
+        let high_plane_pattern =
+            self.read_bus(pattern_table_selector << 12 | (location as u16) << 4 | 1 << 3 | fine_y);
 
         [low_plane_pattern, high_plane_pattern]
     }
@@ -171,8 +177,7 @@ where
         let x = (self.x_scroll >> 5) as u16;
         let y = (self.y_scroll >> 5) as u16;
 
-        self.bus
-            .read((self.nametable_selector as u16) << 10 | 0xF << 6 | y << 3 | x)
+        self.read_bus((self.nametable_selector as u16) << 10 | 0xF << 6 | y << 3 | x)
     }
     /*
     ## color location offset 0x3F00 ##
@@ -198,9 +203,8 @@ where
         let palette = (current_attribute >> attribute_location) & 0b11;
         let background = 1; // true
 
-        let color = self
-            .bus
-            .read(0x3F00 | (background << 4 | palette << 2 | color_bit << 2) as u16);
+        let color =
+            self.read_bus(0x3F00 | (background << 4 | palette << 2 | color_bit << 2) as u16);
 
         // advance the shift registers
         for i in 0..=1 {
@@ -264,7 +268,7 @@ where
 
                 // fetch and reload shift registers
                 if self.cycle % 8 == 0 {
-                    let nametable_tile = self.bus.read(self.vram_address_cur);
+                    let nametable_tile = self.read_bus(self.vram_address_cur);
                     let tile_pattern = self.fetch_pattern_background(nametable_tile);
                     let attribute_byte = self.fetch_attribute_byte();
 
@@ -306,7 +310,7 @@ where
                 if self.cycle == 321 {
                     // load next 2 bytes
                     for _ in 0..2 {
-                        let nametable_tile = self.bus.read(self.vram_address_cur);
+                        let nametable_tile = self.read_bus(self.vram_address_cur);
                         let tile_pattern = self.fetch_pattern_background(nametable_tile);
                         let attribute_byte = self.fetch_attribute_byte();
 

@@ -1,5 +1,5 @@
 use super::{error::CartridgeError, mapper::Mapper};
-use common::Bus;
+use common::{Bus, Device};
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom},
@@ -112,11 +112,11 @@ impl Cartridge {
 
 impl Bus for Cartridge {
     // TODO: implement
-    fn read(&self, address: u16) -> u8 {
+    fn read(&self, address: u16, device: Device) -> u8 {
         let address = self.mapper.map(address);
         0
     }
-    fn write(&mut self, address: u16, data: u8) {
+    fn write(&mut self, address: u16, data: u8, device: Device) {
         let address = self.mapper.map(address);
     }
 }
