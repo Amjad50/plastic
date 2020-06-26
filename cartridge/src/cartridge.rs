@@ -1,4 +1,4 @@
-use super::{error::CartridgeError, mapper::Mapper};
+use super::{error::CartridgeError, mapper::Mapper, mappers::*};
 use common::{Bus, Device};
 use std::{
     fs::File,
@@ -93,8 +93,7 @@ impl Cartridge {
                 trainer_data,
                 prg_data,
                 chr_data,
-                // TODO: remove after testing
-                mapper: Box::new(super::mappers::Mapper0::new()),
+                mapper: Self::get_mapper(mapper_id, size_prg, size_chr),
             })
         }
     }
@@ -108,12 +107,24 @@ impl Cartridge {
             Err(CartridgeError::HeaderError)
         }
     }
+
+    fn get_mapper(mapper_id: u8, prg_count: u8, chr_count: u8) -> Box<dyn Mapper> {
+        let mut mapper = match mapper_id {
+            0 => Mapper0::new(),
+            _ => {
+                unimplemented!("Mapper {} is not yet implemented", mapper_id);
+            }
+        };
+
+        mapper.init(prg_count, chr_count);
+
+        Box::new(mapper)
+    }
 }
 
 impl Bus for Cartridge {
-    // TODO: implement
     fn read(&self, address: u16, device: Device) -> u8 {
-        let address = self.mapper.map(address);
+        let address = self.mapper.map_read(address, device);
 
         match device {
             // CPU is reading PRG only
@@ -129,7 +140,8 @@ impl Bus for Cartridge {
         }
     }
     fn write(&mut self, address: u16, data: u8, device: Device) {
-        let address = self.mapper.map(address);
+        // send the write signal, this might trigger bank change
+        self.mapper.map_write(address, data, device);
 
         // ## This is only a ROM data (read only) ##
         //
