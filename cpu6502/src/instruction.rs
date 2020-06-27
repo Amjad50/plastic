@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+
 pub struct Instruction {
     pub opcode_byte: u8,
     pub operand: u16,
@@ -322,5 +324,103 @@ impl Instruction {
 
     pub fn is_operand_address(&self) -> bool {
         self.addressing_mode.is_operand_address()
+    }
+}
+
+impl Display for Opcode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        use Opcode::*;
+        let result = match *self {
+            Adc => "ADC",
+            And => "AND",
+            Asl => "ASL",
+            Eor => "EOR",
+            Lsr => "LSR",
+            Ora => "ORA",
+            Rol => "ROL",
+            Ror => "ROR",
+            Sbc => "SBC",
+
+            Bit => "BIT",
+            Cmp => "CMP",
+            Cpx => "CPX",
+            Cpy => "CPY",
+
+            Brk => "BRK",
+
+            Bcc => "BCC",
+            Bcs => "BCS",
+            Beq => "BEQ",
+            Bmi => "BMI",
+            Bne => "BNE",
+            Bpl => "BPL",
+            Bvc => "BVC",
+            Bvs => "BVS",
+
+            Dec => "DEC",
+            Inc => "INC",
+
+            Clc => "CLC",
+            Cld => "CLD",
+            Cli => "CLI",
+            Clv => "CLV",
+            Sec => "SEC",
+            Sed => "SED",
+            Sei => "SEI",
+
+            Jmp => "JMP",
+            Jsr => "JSR",
+            Rti => "RTI",
+            Rts => "RTS",
+
+            Lda => "LDA",
+            Ldx => "LDX",
+            Ldy => "LDY",
+            Nop => "NOP",
+
+            Dex => "DEX",
+            Dey => "DEY",
+            Inx => "INX",
+            Iny => "INY",
+            Tax => "TAX",
+            Tay => "TAY",
+            Txa => "TXA",
+            Tya => "TYA",
+
+            Pha => "PHA",
+            Php => "PHP",
+            Pla => "PLA",
+            Plp => "PLP",
+            Sta => "STA",
+            Stx => "STX",
+            Sty => "STY",
+            Tsx => "TSX",
+            Txs => "TXS",
+        };
+
+        write!(f, "{}", result)
+    }
+}
+
+impl Display for Instruction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        use AddressingMode::*;
+        let addressing_string = match self.addressing_mode {
+            Immediate => format!("#${:02X}", self.operand),
+            ZeroPage => format!("${:02X}", self.operand),
+            ZeroPageIndexX => format!("${:02X}, X", self.operand),
+            ZeroPageIndexY => format!("${:02X}, Y", self.operand),
+            Indirect => format!("(${:04X})", self.operand),
+            XIndirect => format!("(${:02X}, X)", self.operand),
+            IndirectY => format!("(${:02X}), Y", self.operand),
+            Absolute => format!("${:04X}", self.operand),
+            AbsoluteX => format!("${:04X}, X", self.operand),
+            AbsoluteY => format!("${:04X}, Y", self.operand),
+            Accumulator => format!("A"),
+            Relative => format!("${:02X}", self.operand),
+            Implied => format!(""),
+        };
+
+        write!(f, "{} {}", self.opcode, addressing_string)
     }
 }
