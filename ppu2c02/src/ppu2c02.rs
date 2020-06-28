@@ -3,7 +3,7 @@ use common::{Bus, Device};
 use display::{COLORS, TV};
 use std::cell::Cell;
 
-pub struct PPU2C02<'a, T: Bus> {
+pub struct PPU2C02<T: Bus> {
     // memory mapped registers
     reg_control: u8,
     reg_mask: u8,
@@ -29,15 +29,15 @@ pub struct PPU2C02<'a, T: Bus> {
     bg_pattern_shift_registers: [u16; 2],
     bg_palette_attribute_shift_registers: [u8; 2],
 
-    bus: &'a mut T,
+    bus: T,
     tv: TV,
 }
 
-impl<'a, T> PPU2C02<'a, T>
+impl<T> PPU2C02<T>
 where
     T: Bus,
 {
-    pub fn new(bus: &'a mut T, tv: TV) -> Self {
+    pub fn new(bus: T, tv: TV) -> Self {
         Self {
             reg_control: 0,
             reg_mask: 0,

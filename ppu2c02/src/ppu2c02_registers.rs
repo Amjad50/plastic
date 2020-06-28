@@ -36,7 +36,7 @@ impl TryFrom<u16> for Register {
     }
 }
 
-impl<'a, T> Bus for PPU2C02<'a, T>
+impl<T> Bus for PPU2C02<T>
 where
     T: Bus,
 {

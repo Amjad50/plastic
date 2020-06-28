@@ -9,7 +9,7 @@ struct DummyBus {
 
 impl DummyBus {
     pub fn new(data: [u8; 0x10000]) -> Self {
-        Self { data: data }
+        Self { data }
     }
 }
 
@@ -30,8 +30,8 @@ fn functionality_test() {
 
     const SUCCUSS_ADDRESS: u16 = 0x336d;
 
-    let mut bus = DummyBus::new(data);
-    let mut cpu = CPU6502::new(&mut bus);
+    let bus = DummyBus::new(data);
+    let mut cpu = CPU6502::new(bus);
 
     cpu.reg_pc = 0x400;
 

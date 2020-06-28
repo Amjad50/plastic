@@ -22,7 +22,7 @@ enum StatusFlag {
 }
 
 // TODO: this CPU does not support BCD mode yet
-pub struct CPU6502<'a, T: Bus> {
+pub struct CPU6502<T: Bus> {
     pub reg_pc: u16, // FIXME: find better way to modify the PC for tests
     reg_sp: u8,      // stack is in 0x0100 - 0x01FF only
     reg_a: u8,
@@ -35,14 +35,14 @@ pub struct CPU6502<'a, T: Bus> {
 
     cycles_to_wait: u8,
 
-    bus: &'a mut T,
+    bus: T,
 }
 
-impl<'a, T> CPU6502<'a, T>
+impl<T> CPU6502<T>
 where
     T: Bus,
 {
-    pub fn new(bus: &'a mut T) -> Self {
+    pub fn new(bus: T) -> Self {
         CPU6502 {
             reg_pc: 0,
             reg_sp: 0xFD, // FIXME: not 100% about this
@@ -56,7 +56,7 @@ where
 
             cycles_to_wait: 0,
 
-            bus: bus,
+            bus,
         }
     }
 
@@ -269,7 +269,7 @@ where
         }
     }
 
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.set_flag(StatusFlag::InterruptDisable);
         self.reg_sp = 0xFD; //reset
 
