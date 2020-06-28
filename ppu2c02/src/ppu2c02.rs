@@ -1,27 +1,29 @@
 use crate::ppu2c02_registers::Register;
 use common::{Bus, Device};
+use std::cell::Cell;
 
 pub struct PPU2C02<'a, T: Bus> {
     // memory mapped registers
     reg_control: u8,
     reg_mask: u8,
-    reg_status: u8,
+    reg_status: Cell<u8>,
     reg_oma_addr: u8,
     reg_oma_data: u8,
-    reg_ppu_data: u8,
+    // reg_ppu_data: u8,
     reg_oma_dma: u8,
 
     scanline: u16,
     cycle: u16,
 
-    vram_address_cur: u16,
+    // FIXME: get a better solution for vram address cur and tmp
+    vram_address_cur: Cell<u16>,
     vram_address_tmp: u16,
 
     nametable_selector: u8, // 0, 1, 2, or 3 which maps to 0x2000, 0x2400, 0x2800, 0x2C00
     x_scroll: u8,
     y_scroll: u8,
 
-    w_toggle: bool, // this is used for registers that require 2 writes
+    w_toggle: Cell<bool>, // this is used for registers that require 2 writes
 
     bg_pattern_shift_registers: [u16; 2],
     bg_palette_attribute_shift_registers: [u8; 2],
@@ -37,23 +39,23 @@ where
         Self {
             reg_control: 0,
             reg_mask: 0,
-            reg_status: 0,
+            reg_status: Cell::new(0),
             reg_oma_addr: 0,
             reg_oma_data: 0,
-            reg_ppu_data: 0,
+            // reg_ppu_data: 0,
             reg_oma_dma: 0,
 
             scanline: 261, // start from -1 scanline
             cycle: 0,
 
-            vram_address_cur: 0,
+            vram_address_cur: Cell::new(0),
             vram_address_tmp: 0,
 
             nametable_selector: 0,
             x_scroll: 0,
             y_scroll: 0,
 
-            w_toggle: false,
+            w_toggle: Cell::new(false),
 
             bg_pattern_shift_registers: [0; 2],
             bg_palette_attribute_shift_registers: [0; 2],
@@ -64,9 +66,27 @@ where
 
     pub(crate) fn read_register(&self, register: Register) -> u8 {
         match register {
-            // reset w_mode
-            Register::Status => self.reg_status,
-            Register::DmaOma => self.reg_oma_dma,
+            Register::Status => {
+                // reset w_mode
+                self.w_toggle.set(false);
+
+                let result = self.reg_status.get();
+                //  reading the status register will clear bit 7
+                self.reg_status.set(self.reg_status.get() & 0x7F);
+                result
+            }
+            Register::OmaData => self.reg_oma_data,
+            Register::PPUData => {
+                let result = self.read_bus(self.vram_address_cur.get());
+                if self.reg_control & 0b100 != 0 {
+                    // increment by 1
+                    self.vram_address_cur.set(self.vram_address_cur.get() + 1);
+                } else {
+                    //increment by 32
+                    self.vram_address_cur.set(self.vram_address_cur.get() + 32);
+                }
+                result
+            }
             _ => {
                 // unreadable
                 0
@@ -76,6 +96,8 @@ where
 
     pub(crate) fn write_register(&mut self, register: Register, data: u8) {
         match register {
+            // After power/reset, writes to this register are ignored for about 30,000 cycles
+            // TODO: not sure, if I should account for that
             Register::Control => {
                 self.reg_control = data;
                 self.nametable_selector = data & 0b11;
@@ -88,7 +110,7 @@ where
             Register::OmaAddress => self.reg_oma_addr = data,
             Register::OmaData => self.reg_oma_data = data,
             Register::Scroll => {
-                if self.w_toggle {
+                if self.w_toggle.get() {
                     self.x_scroll = data;
 
                     // update temp address
@@ -102,10 +124,10 @@ where
                     self.vram_address_tmp |= ((data as u16) << 3) & 0b11111000;
                 }
 
-                self.w_toggle = !self.w_toggle;
+                self.w_toggle.set(!self.w_toggle.get());
             }
             Register::PPUAddress => {
-                if self.w_toggle {
+                if self.w_toggle.get() {
                     // zero out the bottom 8 bits
                     self.vram_address_tmp &= 0xff00;
                     // set the data from the parameters
@@ -117,12 +139,21 @@ where
                     self.vram_address_tmp |= (data as u16) << 8;
 
                     // copy to the current vram address
-                    self.vram_address_cur = self.vram_address_tmp;
+                    *self.vram_address_cur.get_mut() = self.vram_address_tmp;
                 }
 
-                self.w_toggle = !self.w_toggle;
+                self.w_toggle.set(!self.w_toggle.get());
             }
-            Register::PPUData => self.reg_ppu_data = data,
+            Register::PPUData => {
+                self.write_bus(self.vram_address_cur.get(), data);
+                if self.reg_control & 0b100 != 0 {
+                    // increment by 1
+                    *self.vram_address_cur.get_mut() += 1;
+                } else {
+                    //increment by 32
+                    *self.vram_address_cur.get_mut() += 32;
+                }
+            }
             Register::DmaOma => self.reg_oma_dma = data,
             _ => {
                 // unwritable
@@ -226,6 +257,13 @@ where
             261 => {
                 // pre-render
 
+                // reset y_scroll from tmp
+                self.y_scroll &= 0b111; // keep fine y only
+                self.y_scroll |= ((self.vram_address_tmp >> 5) & 0b11111) as u8;
+
+                // update temp address
+                *self.vram_address_cur.get_mut() &= 0xFC1F; // second 5 bits
+                *self.vram_address_cur.get_mut() |= ((self.y_scroll as u16) << 3) & 0b11111000;
                 // next round
                 self.scanline = 0;
             }
@@ -240,7 +278,8 @@ where
             241..=260 => {
                 // vertical blanking
                 if self.cycle == 1 && self.scanline == 241 {
-                    self.reg_status |= 0x80; // set v-blank
+                    // set v-blank
+                    *self.reg_status.get_mut() |= 0x80;
 
                     // FIXME: raise non-maskable interrupt to the CPU
                 }
@@ -268,7 +307,7 @@ where
 
                 // fetch and reload shift registers
                 if self.cycle % 8 == 0 {
-                    let nametable_tile = self.read_bus(self.vram_address_cur);
+                    let nametable_tile = self.read_bus(self.vram_address_cur.get());
                     let tile_pattern = self.fetch_pattern_background(nametable_tile);
                     let attribute_byte = self.fetch_attribute_byte();
 
@@ -288,13 +327,14 @@ where
                     if self.cycle != 256 {
                         self.x_scroll += 1;
                         // increase X in vram current address
-                        self.vram_address_cur += 1;
+                        *self.vram_address_cur.get_mut() += 1;
                     } else {
                         self.y_scroll += 1;
 
                         // update vram current address
-                        self.vram_address_cur &= 0xFC1F; // second 5 bits
-                        self.vram_address_cur |= ((self.y_scroll as u16) << 3) & 0b11111000;
+                        *self.vram_address_cur.get_mut() &= 0xFC1F; // second 5 bits
+                        *self.vram_address_cur.get_mut() |=
+                            ((self.y_scroll as u16) << 3) & 0b11111000;
                     }
                 }
             }
@@ -310,7 +350,7 @@ where
                 if self.cycle == 321 {
                     // load next 2 bytes
                     for _ in 0..2 {
-                        let nametable_tile = self.read_bus(self.vram_address_cur);
+                        let nametable_tile = self.read_bus(self.vram_address_cur.get());
                         let tile_pattern = self.fetch_pattern_background(nametable_tile);
                         let attribute_byte = self.fetch_attribute_byte();
 
@@ -329,7 +369,7 @@ where
                         // increment scrolling
                         self.x_scroll += 1;
                         // increase X in vram current address
-                        self.vram_address_cur += 1;
+                        *self.vram_address_cur.get_mut() += 1;
                     }
                 }
             }
