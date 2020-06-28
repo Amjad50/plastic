@@ -1,5 +1,6 @@
 use crate::ppu2c02_registers::Register;
 use common::{Bus, Device};
+use display::{COLORS, TV};
 use std::cell::Cell;
 
 pub struct PPU2C02<'a, T: Bus> {
@@ -29,13 +30,14 @@ pub struct PPU2C02<'a, T: Bus> {
     bg_palette_attribute_shift_registers: [u8; 2],
 
     bus: &'a mut T,
+    tv: TV,
 }
 
 impl<'a, T> PPU2C02<'a, T>
 where
     T: Bus,
 {
-    pub fn new(bus: &'a mut T) -> Self {
+    pub fn new(bus: &'a mut T, tv: TV) -> Self {
         Self {
             reg_control: 0,
             reg_mask: 0,
@@ -60,7 +62,8 @@ where
             bg_pattern_shift_registers: [0; 2],
             bg_palette_attribute_shift_registers: [0; 2],
 
-            bus: bus,
+            bus,
+            tv,
         }
     }
 
@@ -247,7 +250,13 @@ where
 
     fn render_pixel(&mut self) {
         let color = self.get_pixel();
-        // render this color
+        // render the color
+        self.tv.set_pixel(
+            // since we are starting from dot 1
+            self.cycle as u32 - 1,
+            self.scanline as u32,
+            &COLORS[color as usize],
+        );
     }
 
     // run one cycle, this should be fed from Master clock

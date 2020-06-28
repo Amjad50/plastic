@@ -1,7 +1,8 @@
 [workspace]
 members = [
-    "cpu6502",
-    "ppu2c02",
     "cartridge",
     "common",
+    "cpu6502",
+    "display",
+    "ppu2c02",
 ]
