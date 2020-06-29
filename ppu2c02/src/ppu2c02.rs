@@ -1,5 +1,5 @@
 use crate::ppu2c02_registers::Register;
-use common::{Bus, Device};
+use common::{interconnection::PPUCPUConnection, Bus, Device};
 use display::{COLORS, TV};
 use std::cell::Cell;
 
@@ -28,6 +28,8 @@ pub struct PPU2C02<T: Bus> {
 
     bg_pattern_shift_registers: [u16; 2],
     bg_palette_attribute_shift_registers: [u8; 2],
+
+    nmi_pin_status: bool,
 
     bus: T,
     tv: TV,
@@ -61,6 +63,8 @@ where
 
             bg_pattern_shift_registers: [0; 2],
             bg_palette_attribute_shift_registers: [0; 2],
+
+            nmi_pin_status: false,
 
             bus,
             tv,
@@ -135,26 +139,30 @@ where
                     self.vram_address_tmp &= 0xff00;
                     // set the data from the parameters
                     self.vram_address_tmp |= data as u16;
-                } else {
-                    // zero out the bottom 8 bits
-                    self.vram_address_tmp &= 0x00ff;
-                    // set the data from the parameters
-                    self.vram_address_tmp |= (data as u16) << 8;
 
                     // copy to the current vram address
                     *self.vram_address_cur.get_mut() = self.vram_address_tmp;
+                } else {
+                    // zero out the top 8 bits
+                    self.vram_address_tmp &= 0x00ff;
+                    // set the data from the parameters
+                    self.vram_address_tmp |= (data as u16) << 8;
                 }
 
                 self.w_toggle.set(!self.w_toggle.get());
             }
             Register::PPUData => {
                 self.write_bus(self.vram_address_cur.get(), data);
-                if self.reg_control & 0b100 != 0 {
-                    // increment by 1
-                    *self.vram_address_cur.get_mut() += 1;
-                } else {
-                    //increment by 32
-                    *self.vram_address_cur.get_mut() += 32;
+
+                // only increment outside rendering time
+                if self.scanline > 240 {
+                    if self.reg_control & 0b100 == 0 {
+                        // increment by 1
+                        *self.vram_address_cur.get_mut() += 1;
+                    } else {
+                        //increment by 32
+                        *self.vram_address_cur.get_mut() += 32;
+                    }
                 }
             }
             Register::DmaOma => self.reg_oma_dma = data,
@@ -266,15 +274,18 @@ where
             261 => {
                 // pre-render
 
-                // reset y_scroll from tmp
-                self.y_scroll &= 0b111; // keep fine y only
-                self.y_scroll |= ((self.vram_address_tmp >> 5) & 0b11111) as u8;
+                if self.cycle == 1 {
+                    // reset y_scroll from tmp
+                    self.y_scroll &= 0b111; // keep fine y only
+                    self.y_scroll |= ((self.vram_address_tmp >> 5) & 0b11111) as u8;
 
-                // update temp address
-                *self.vram_address_cur.get_mut() &= 0xFC1F; // second 5 bits
-                *self.vram_address_cur.get_mut() |= ((self.y_scroll as u16) << 3) & 0b11111000;
-                // next round
-                self.scanline = 0;
+                    // update temp address
+                    *self.vram_address_cur.get_mut() &= 0xFC1F; // second 5 bits
+                    *self.vram_address_cur.get_mut() |= ((self.y_scroll as u16) << 3) & 0b11111000;
+
+                    // clear v-blank
+                    self.reg_status.set(self.reg_status.get() & 0x7F);
+                }
             }
             0..=239 => {
                 // render
@@ -290,7 +301,10 @@ where
                     // set v-blank
                     *self.reg_status.get_mut() |= 0x80;
 
-                    // FIXME: raise non-maskable interrupt to the CPU
+                    // if raising NMI is enabled
+                    if self.reg_control & 0x80 != 0 {
+                        self.nmi_pin_status = true;
+                    }
                 }
             }
             _ => {
@@ -301,6 +315,11 @@ where
         if self.cycle > 340 {
             self.scanline += 1;
             self.cycle = 0;
+
+            // next frame
+            if self.scanline > 261 {
+                self.scanline = 0;
+            }
         }
     }
 
@@ -399,4 +418,16 @@ where
     tile address      = 0x2000 | (v & 0x0FFF)
     attribute address = 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07)
     */
+}
+
+impl<T> PPUCPUConnection for PPU2C02<T>
+where
+    T: Bus,
+{
+    fn is_nmi_pin_set(&self) -> bool {
+        self.nmi_pin_status
+    }
+    fn clear_nmi_pin(&mut self) {
+        self.nmi_pin_status = false;
+    }
 }

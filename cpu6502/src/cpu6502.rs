@@ -1,5 +1,6 @@
 use super::instruction::{AddressingMode, Instruction, Opcode};
-use common::{Bus, Device};
+use common::{interconnection::PPUCPUConnection, Bus, Device};
+use std::{cell::RefCell, rc::Rc};
 
 const NMI_VECTOR_ADDRESS: u16 = 0xFFFA;
 const RESET_VECTOR_ADDRESS: u16 = 0xFFFC;
@@ -36,13 +37,14 @@ pub struct CPU6502<T: Bus> {
     cycles_to_wait: u8,
 
     bus: T,
+    ppu: Rc<RefCell<dyn PPUCPUConnection>>,
 }
 
 impl<T> CPU6502<T>
 where
     T: Bus,
 {
-    pub fn new(bus: T) -> Self {
+    pub fn new(bus: T, ppu: Rc<RefCell<dyn PPUCPUConnection>>) -> Self {
         CPU6502 {
             reg_pc: 0,
             reg_sp: 0xFD, // FIXME: not 100% about this
@@ -57,6 +59,7 @@ where
             cycles_to_wait: 0,
 
             bus,
+            ppu,
         }
     }
 
@@ -300,6 +303,11 @@ where
             IRQ_VECTOR_ADDRESS
         };
 
+        if is_nmi {
+            // disable after execution, not to stuck in a infinite loop here
+            self.nmi_pin_status = false;
+        }
+
         self.set_flag(StatusFlag::InterruptDisable);
 
         let low = self.read_bus(jump_vector_address) as u16;
@@ -312,6 +320,15 @@ where
     // return true if an instruction executed
     // false if it was waiting for remaining cycles
     pub fn run_next(&mut self) -> bool {
+        // check if the PPU is setting the NMI pin
+        {
+            let mut ppu = self.ppu.borrow_mut();
+            if ppu.is_nmi_pin_set() {
+                self.nmi_pin_status = true;
+                ppu.clear_nmi_pin();
+            }
+        }
+
         if self.cycles_to_wait == 0 {
             // interrupts waiting
             if self.nmi_pin_status
