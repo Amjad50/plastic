@@ -2,7 +2,7 @@ use cartridge::{Cartridge, CartridgeError};
 use common::{Bus, Device};
 use cpu6502::CPU6502;
 use display::TV;
-use ppu2c02::PPU2C02;
+use ppu2c02::{Palette, PPU2C02};
 use std::cell::RefCell;
 use std::fs::File;
 use std::rc::Rc;
@@ -25,7 +25,7 @@ const SCREEN_HEIGHT: u32 = TV_HEIGHT * 3;
 struct PPUBus {
     cartridge: Rc<RefCell<Cartridge>>,
     vram: [u8; 0x1000],
-    palettes: [u8; 0x20],
+    palettes: Palette,
 }
 
 struct CPUBus {
@@ -52,7 +52,8 @@ impl PPUBus {
         PPUBus {
             cartridge,
             vram: [0; 0x1000],
-            palettes: [0; 0x20],
+            // Default power up palettes
+            palettes: Palette::new(),
         }
     }
 }
@@ -62,7 +63,7 @@ impl Bus for PPUBus {
         match address {
             0x0000..=0x1FFF => self.cartridge.borrow().read(address, device),
             0x2000..=0x3EFF => self.vram[(address & 0xFFF) as usize],
-            0x3F00..=0x3FFF => self.palettes[(address & 0x1F) as usize],
+            0x3F00..=0x3FFF => self.palettes.read(address, device),
             // mirror
             0x4000..=0xFFFF => self.read(address & 0x3FFF, device),
         }
@@ -71,7 +72,7 @@ impl Bus for PPUBus {
         match address {
             0x0000..=0x1FFF => self.cartridge.borrow_mut().write(address, data, device),
             0x2000..=0x3EFF => self.vram[(address & 0xFFF) as usize] = data,
-            0x3F00..=0x3FFF => self.palettes[(address & 0x1F) as usize] = data,
+            0x3F00..=0x3FFF => self.palettes.write(address, data, device),
             // mirror
             0x4000..=0xFFFF => self.write(address & 0x3FFF, data, device),
         }
