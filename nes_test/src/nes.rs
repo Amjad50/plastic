@@ -32,6 +32,8 @@ struct CPUBus {
     cartridge: Rc<RefCell<Cartridge>>,
     ram: [u8; 0x800],
     ppu: Rc<RefCell<dyn Bus>>,
+
+    controller: std::cell::Cell<u8>,
 }
 
 impl CPUBus {
@@ -40,6 +42,7 @@ impl CPUBus {
             cartridge,
             ram: [0; 0x800],
             ppu,
+            controller: std::cell::Cell::new(0),
         }
     }
 }
@@ -82,6 +85,39 @@ impl Bus for CPUBus {
             0x2000..=0x3FFF => self.ppu.borrow().read(0x2000 | (address & 0x7), device),
             0x4014 => self.ppu.borrow().read(address, device),
             0x8000..=0xFFFF => self.cartridge.borrow().read(address, device),
+            0x4016 => {
+                // self.controller counter will reset every 8 reads (each read is 8 bits)
+                // the color_test rom performs two reads each time, this is due
+                // to hardware issues with the NES? I think all games must do
+                // two gamepad polls in order to ensure a correct read.
+                //
+                // So 8 reads will be initiated every 4 loops, and how the rom
+                // works, is by reading and making sure the next time it reads zeros
+                // meaning that all the buttons are released, so I'm using the
+                // first time to issue RIGHT click, then zero, then DOWN click
+                // then zeros, which are 4 in total.
+                //
+                // This will allow to loop over all colors
+                //
+                // 0-7   read 1, discarded
+                // 8-15  read 1, stored (RIGHT)
+                // 16-23 read 2, discarded
+                // 24-31 read 2, stored (zeros)
+                // 32-39 read 3, discarded
+                // 40-47 read 3, stored (DOWN)
+                // 48-55 read 4, discarded
+                // 56-63 read 4, stored (zeros)
+                let result = if self.controller.get() == 15 || self.controller.get() == 45 {
+                    1
+                } else {
+                    0
+                };
+
+                self.controller.set(self.controller.get() + 1);
+                self.controller.set(self.controller.get() % 64);
+
+                result
+            }
             _ => {
                 println!("unimplemented read cpu from {:04X}", address);
                 0
@@ -100,6 +136,9 @@ impl Bus for CPUBus {
                 .cartridge
                 .borrow_mut()
                 .write(address, data, Device::CPU),
+            0x4016 => {
+                // ignore for now
+            }
             _ => println!("unimplemented write cpu to {:04X}", address),
         };
     }
