@@ -310,8 +310,7 @@ where
         let color = self.get_pixel();
         // render the color
         self.tv.set_pixel(
-            // since we are starting from dot 1
-            self.cycle as u32 - 1,
+            self.cycle as u32,
             self.scanline as u32,
             &COLORS[color as usize],
         );
@@ -375,16 +374,18 @@ where
 
     // run one cycle which is part of a scanline execution
     fn run_render_cycle(&mut self) {
+        if self.cycle <= 255 {
+            // main render
+            self.render_pixel();
+        }
+
         match self.cycle {
             0 => {
                 // idle
             }
             1..=256 => {
-                // main render
-                self.render_pixel();
-
                 // fetch and reload shift registers
-                if self.cycle % 8 == 0 {
+                if self.cycle != 1 && self.cycle % 8 == 1 {
                     let nametable_tile = self.read_bus(self.vram_address_cur.get());
                     let tile_pattern = self.fetch_pattern_background(nametable_tile);
                     let attribute_byte = self.fetch_attribute_byte();
@@ -403,9 +404,12 @@ where
 
                     // increment scrolling
                     if self.cycle != 256 {
-                        self.x_scroll += 1;
+                        let mut coarse_x = self.x_scroll >> 3; // only top 5 bits
+                        coarse_x += 1;
+
                         // increase X in vram current address
-                        *self.vram_address_cur.get_mut() += 1;
+                        *self.vram_address_cur.get_mut() &= 0xFFE0; // first 5 bits
+                        *self.vram_address_cur.get_mut() |= (coarse_x & 0x1F) as u16;
                     } else {
                         self.y_scroll += 1;
 
