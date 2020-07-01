@@ -237,13 +237,13 @@ where
         let color_bit = high_plane_bit << 1 | low_plane_bit;
 
         let current_attribute = self.bg_palette_attribute_shift_registers[0];
-        let attribute_location_x = (self.x_scroll >> 1) & 0xf;
-        let attribute_location_y = (self.y_scroll >> 1) & 0xf;
+        let attribute_location_x = (self.x_scroll >> 1) & 0x1;
+        let attribute_location_y = (self.y_scroll >> 1) & 0x1;
 
         let attribute_location = attribute_location_y << 1 | attribute_location_x;
 
         let palette = (current_attribute >> attribute_location) & 0b11;
-        let background = 1; // true
+        let background = 0;
 
         let color =
             self.read_bus(0x3F00 | (background << 4 | palette << 2 | color_bit << 2) as u16);
