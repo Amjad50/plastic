@@ -4,5 +4,6 @@ members = [
     "common",
     "cpu6502",
     "display",
+    "nes_test",
     "ppu2c02",
 ]
