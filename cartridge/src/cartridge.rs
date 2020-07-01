@@ -72,8 +72,13 @@ impl Cartridge {
 
         // read CHR data
         let mut chr_data = Vec::new();
-        chr_data.resize((size_chr as usize) * 8 * 1024, 0);
-        file.read_exact(&mut chr_data)?;
+        if size_chr != 0 {
+            chr_data.resize((size_chr as usize) * 8 * 1024, 0);
+            file.read_exact(&mut chr_data)?;
+        } else {
+            // use CHR RAM
+            chr_data.resize(1 * 8 * 1024, 0);
+        }
 
         // there are missing parts
         if file.seek(SeekFrom::Current(0))? != file.seek(SeekFrom::End(0))? {
@@ -122,6 +127,10 @@ impl Cartridge {
 
         Box::new(mapper)
     }
+
+    fn is_chr_ram(&self) -> bool {
+        self.size_chr == 0
+    }
 }
 
 impl Bus for Cartridge {
@@ -145,21 +154,22 @@ impl Bus for Cartridge {
         // send the write signal, this might trigger bank change
         self.mapper.map_write(address, data, device);
 
-        // ## This is only a ROM data (read only) ##
-        //
-        // match device {
-        //     Device::CPU => {
-        //         *self
-        //             .prg_data
-        //             .get_mut(address as usize)
-        //             .expect("PRG out of bounds") = data;
-        //     }
-        //     Device::PPU => {
-        //         *self
-        //             .chr_data
-        //             .get_mut(address as usize)
-        //             .expect("CHR out of bounds") = data;
-        //     }
-        // }
+        match device {
+            Device::CPU => {
+                // ## This is only a ROM data (read only) ##
+                // *self
+                //     .prg_data
+                //     .get_mut(address as usize)
+                //     .expect("PRG out of bounds") = data;
+            }
+            Device::PPU => {
+                if self.is_chr_ram() {
+                    *self
+                        .chr_data
+                        .get_mut(address as usize)
+                        .expect("CHR out of bounds") = data;
+                }
+            }
+        }
     }
 }
