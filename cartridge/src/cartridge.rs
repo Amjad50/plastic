@@ -116,6 +116,8 @@ impl Cartridge {
             }
         };
 
+        // should always call init in a new mapper, as it is the only way
+        // they share a constructor
         mapper.init(prg_count, chr_count);
 
         Box::new(mapper)

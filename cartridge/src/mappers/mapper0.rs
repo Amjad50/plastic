@@ -25,17 +25,25 @@ impl Mapper for Mapper0 {
     fn map_read(&self, address: u16, device: Device) -> u16 {
         match device {
             Device::CPU => {
+                // this is just for extra caution
                 if address >= 0x8000 && address <= 0xFFFF {
+                    // 0x7FFF is for mapping 0x8000-0xFFFF to 0x0000-0x7FFF
+                    // which is the range of the array
                     if self.has_32kb_prg_rom {
-                        address
+                        address & 0x7FFF
                     } else {
-                        address & 0xBFFF
+                        // in case of the array being half of the size (i.e.
+                        // not 32KB, then the range of the address will be only
+                        // 0x8000-0xBFFF, and 0xC000-0xFFFF will mirror the
+                        // previous range
+                        address & 0xBFFF & 0x7FFF
                     }
                 } else {
                     unreachable!()
                 }
             }
             Device::PPU => {
+                // this is just for extra caution
                 if address >= 0x0000 && address < 0x2000 {
                     // only one fixed memory
                     address
@@ -46,7 +54,7 @@ impl Mapper for Mapper0 {
         }
     }
 
-    fn map_write(&self, _: u16, _: u8, _: Device) {
+    fn map_write(&mut self, _: u16, _: u8, _: Device) {
         // nothing
     }
 }
