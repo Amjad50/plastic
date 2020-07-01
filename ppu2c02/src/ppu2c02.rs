@@ -3,14 +3,73 @@ use common::{interconnection::PPUCPUConnection, Bus, Device};
 use display::{COLORS, TV};
 use std::cell::Cell;
 
+bitflags! {
+    pub struct ControlReg: u8 {
+        const BASE_NAMETABLE = 0b00000011;
+        const VRAM_INCREMENT = 0b00000100;
+        const SPRITE_PATTERN_ADDRESS = 0b00001000;
+        const BACKGROUND_PATTERN_ADDRESS = 0b00010000;
+        const SPRITE_SIZE = 0b00100000;
+        const MASTER_SLAVE_SELECT = 0b01000000;
+        const GENERATE_NMI_ENABLE = 0b10000000;
+    }
+}
+
+impl ControlReg {
+    pub fn base_nametable_address(&self) -> u16 {
+        // 0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00
+        0x2000 | ((self.bits & Self::BASE_NAMETABLE.bits) as u16) << 10
+    }
+
+    pub fn vram_increment(&self) -> u16 {
+        if self.intersects(Self::VRAM_INCREMENT) {
+            32
+        } else {
+            1
+        }
+    }
+
+    pub fn sprite_pattern_address(&self) -> u16 {
+        ((self.bits & Self::SPRITE_PATTERN_ADDRESS.bits) as u16) << 12
+    }
+
+    pub fn background_pattern_address(&self) -> u16 {
+        ((self.bits & Self::SPRITE_PATTERN_ADDRESS.bits) as u16) << 12
+    }
+
+    pub fn nmi_enabled(&self) -> bool {
+        self.intersects(Self::GENERATE_NMI_ENABLE)
+    }
+}
+
+bitflags! {
+    pub struct MaskReg: u8 {
+        const GRAYSCALE_ENABLE = 0b00000001;
+        const SHOW_BACKGROUND_LEFTMOST_8 = 0b00000010;
+        const SHOW_SPRITES_LEFTMOST_8 = 0b00000100;
+        const SHOW_BACKGROUND = 0b00001000;
+        const SHOW_SPRITES = 0b00010000;
+        const EMPHASIZE_RED = 0b00100000;
+        const EMPHASIZE_GREEN = 0b01000000;
+        const EMPHASIZE_BLUE = 0b10000000;
+    }
+}
+
+bitflags! {
+    pub struct StatusReg: u8 {
+        const SPRITE_OVERFLOW = 0b00100000;
+        const SPRITE_0_HIT = 0b01000000;
+        const VERTICAL_BLANK = 0b10000000;
+    }
+}
+
 pub struct PPU2C02<T: Bus> {
     // memory mapped registers
-    reg_control: u8,
-    reg_mask: u8,
-    reg_status: Cell<u8>,
+    reg_control: ControlReg,
+    reg_mask: MaskReg,
+    reg_status: Cell<StatusReg>,
     reg_oma_addr: u8,
     reg_oma_data: u8,
-    // reg_ppu_data: u8,
     reg_oma_dma: u8,
 
     scanline: u16,
@@ -20,7 +79,6 @@ pub struct PPU2C02<T: Bus> {
     vram_address_cur: Cell<u16>,
     vram_address_tmp: u16,
 
-    nametable_selector: u8, // 0, 1, 2, or 3 which maps to 0x2000, 0x2400, 0x2800, 0x2C00
     x_scroll: u8,
     y_scroll: u8,
 
@@ -41,12 +99,11 @@ where
 {
     pub fn new(bus: T, tv: TV) -> Self {
         Self {
-            reg_control: 0,
-            reg_mask: 0,
-            reg_status: Cell::new(0),
+            reg_control: ControlReg::empty(),
+            reg_mask: MaskReg::empty(),
+            reg_status: Cell::new(StatusReg::empty()),
             reg_oma_addr: 0,
             reg_oma_data: 0,
-            // reg_ppu_data: 0,
             reg_oma_dma: 0,
 
             scanline: 261, // start from -1 scanline
@@ -55,7 +112,6 @@ where
             vram_address_cur: Cell::new(0),
             vram_address_tmp: 0,
 
-            nametable_selector: 0,
             x_scroll: 0,
             y_scroll: 0,
 
@@ -77,20 +133,21 @@ where
                 // reset w_mode
                 self.w_toggle.set(false);
 
-                let result = self.reg_status.get();
+                let result = self.reg_status.get().bits;
                 //  reading the status register will clear bit 7
-                self.reg_status.set(self.reg_status.get() & 0x7F);
+                self.reg_status
+                    .set(StatusReg::from_bits(result & 0x7F).unwrap());
+
                 result
             }
             Register::OmaData => self.reg_oma_data,
             Register::PPUData => {
                 let result = self.read_bus(self.vram_address_cur.get());
-                if self.reg_control & 0b100 != 0 {
-                    // increment by 1
-                    self.vram_address_cur.set(self.vram_address_cur.get() + 1);
-                } else {
-                    //increment by 32
-                    self.vram_address_cur.set(self.vram_address_cur.get() + 32);
+
+                // increment only during non-rendering cycles
+                if self.scanline > 240 {
+                    self.vram_address_cur
+                        .set(self.vram_address_cur.get() + self.reg_control.vram_increment());
                 }
                 result
             }
@@ -106,14 +163,13 @@ where
             // After power/reset, writes to this register are ignored for about 30,000 cycles
             // TODO: not sure, if I should account for that
             Register::Control => {
-                self.reg_control = data;
-                self.nametable_selector = data & 0b11;
+                self.reg_control.bits = data;
 
                 // update temp address
                 self.vram_address_tmp &= 0x3FF;
-                self.vram_address_tmp |= (self.nametable_selector as u16) << 10;
+                self.vram_address_tmp |= self.reg_control.base_nametable_address()
             }
-            Register::Mask => self.reg_mask = data,
+            Register::Mask => self.reg_mask.bits = data,
             Register::OmaAddress => self.reg_oma_addr = data,
             Register::OmaData => self.reg_oma_data = data,
             Register::Scroll => {
@@ -156,13 +212,7 @@ where
 
                 // only increment outside rendering time
                 if self.scanline > 240 {
-                    if self.reg_control & 0b100 == 0 {
-                        // increment by 1
-                        *self.vram_address_cur.get_mut() += 1;
-                    } else {
-                        //increment by 32
-                        *self.vram_address_cur.get_mut() += 32;
-                    }
+                    *self.vram_address_cur.get_mut() += self.reg_control.vram_increment();
                 }
             }
             Register::DmaOma => self.reg_oma_dma = data,
@@ -196,13 +246,13 @@ where
         let fine_y = (self.y_scroll & 0b111) as u16;
 
         // for background
-        let pattern_table_selector = if self.reg_control & 0x10 != 0 { 1 } else { 0 };
+        let pattern_table = self.reg_control.background_pattern_address();
 
         let low_plane_pattern =
-            self.read_bus(pattern_table_selector << 12 | (location as u16) << 4 | 0 << 3 | fine_y);
+            self.read_bus(pattern_table | (location as u16) << 4 | 0 << 3 | fine_y);
 
         let high_plane_pattern =
-            self.read_bus(pattern_table_selector << 12 | (location as u16) << 4 | 1 << 3 | fine_y);
+            self.read_bus(pattern_table | (location as u16) << 4 | 1 << 3 | fine_y);
 
         [low_plane_pattern, high_plane_pattern]
     }
@@ -219,7 +269,7 @@ where
         let x = (self.x_scroll >> 5) as u16;
         let y = (self.y_scroll >> 5) as u16;
 
-        self.read_bus((self.nametable_selector as u16) << 10 | 0xF << 6 | y << 3 | x)
+        self.read_bus(self.reg_control.base_nametable_address() | 0xF << 6 | y << 3 | x)
     }
     /*
     ## color location offset 0x3F00 ##
@@ -284,7 +334,7 @@ where
                     *self.vram_address_cur.get_mut() |= ((self.y_scroll as u16) << 3) & 0b11111000;
 
                     // clear v-blank
-                    self.reg_status.set(self.reg_status.get() & 0x7F);
+                    self.reg_status.get_mut().remove(StatusReg::VERTICAL_BLANK);
                 }
             }
             0..=239 => {
@@ -299,10 +349,10 @@ where
                 // vertical blanking
                 if self.cycle == 1 && self.scanline == 241 {
                     // set v-blank
-                    *self.reg_status.get_mut() |= 0x80;
+                    self.reg_status.get_mut().insert(StatusReg::VERTICAL_BLANK);
 
                     // if raising NMI is enabled
-                    if self.reg_control & 0x80 != 0 {
+                    if self.reg_control.nmi_enabled() {
                         self.nmi_pin_status = true;
                     }
                 }

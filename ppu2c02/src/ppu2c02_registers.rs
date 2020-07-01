@@ -1,7 +1,5 @@
 use crate::ppu2c02::PPU2C02;
-
 use common::{Bus, Device};
-
 use std::convert::TryFrom;
 use std::convert::TryInto;
 

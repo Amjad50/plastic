@@ -8,3 +8,5 @@ edition = "2018"
 [dependencies]
 common = { path = "../common" }
 display = { path = "../display" }
+
+bitflags = "^1.2.1"

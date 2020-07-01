@@ -79,6 +79,7 @@ dependencies = [
 name = "ppu2c02"
 version = "0.1.0"
 dependencies = [
+ "bitflags 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "common 0.1.0",
  "display 0.1.0",
 ]
