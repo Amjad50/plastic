@@ -55,6 +55,20 @@ bitflags! {
     }
 }
 
+impl MaskReg {
+    pub fn background_enabled(&self) -> bool {
+        self.intersects(Self::SHOW_BACKGROUND)
+    }
+
+    pub fn sprites_enabled(&self) -> bool {
+        self.intersects(Self::SHOW_BACKGROUND)
+    }
+
+    pub fn rendering_enabled(&self) -> bool {
+        self.background_enabled() || self.sprites_enabled()
+    }
+}
+
 bitflags! {
     pub struct StatusReg: u8 {
         const SPRITE_OVERFLOW = 0b00100000;
@@ -144,11 +158,8 @@ where
             Register::PPUData => {
                 let result = self.read_bus(self.vram_address_cur.get());
 
-                // increment only during non-rendering cycles
-                if self.scanline > 240 {
-                    self.vram_address_cur
-                        .set(self.vram_address_cur.get() + self.reg_control.vram_increment());
-                }
+                self.increment_vram_readwrite();
+
                 result
             }
             _ => {
@@ -205,11 +216,7 @@ where
             }
             Register::PPUData => {
                 self.write_bus(self.vram_address_cur.get(), data);
-
-                // only increment outside rendering time
-                if self.scanline > 240 {
-                    *self.vram_address_cur.get_mut() += self.reg_control.vram_increment();
-                }
+                self.increment_vram_readwrite();
             }
             Register::DmaOma => self.reg_oma_dma = data,
             _ => {
@@ -224,6 +231,37 @@ where
 
     fn write_bus(&mut self, address: u16, data: u8) {
         self.bus.write(address, data, Device::PPU);
+    }
+
+    fn increment_vram_readwrite(&self) {
+        // only increment if its valid, and increment by the correct ammount
+        if self.scanline > 240 || !self.reg_mask.rendering_enabled() {
+            self.vram_address_cur
+                .set(self.vram_address_cur.get() + self.reg_control.vram_increment());
+        }
+    }
+
+    fn increment_vram_coarse_scroll_x(&mut self) {
+        // extract coarse_x
+        let mut coarse_x = self.vram_address_cur.get() & 0b11111; // only first 5 bits
+        coarse_x += 1;
+
+        // clear first 5 bits
+        *self.vram_address_cur.get_mut() &= 0xFFE0;
+        // put result back
+        *self.vram_address_cur.get_mut() |= (coarse_x & 0b11111) as u16;
+    }
+
+    // return carry
+    fn increment_vram_coarse_scroll_y(&mut self) {
+        // extract coarse_y
+        let mut coarse_y = (self.vram_address_cur.get() & 0b1111100000) >> 5; // only second 5 bits
+        coarse_y += 1;
+
+        // clear second 5 bits
+        *self.vram_address_cur.get_mut() &= 0xFC1F;
+        // put result back
+        *self.vram_address_cur.get_mut() |= ((coarse_y & 0b11111) as u16) << 5;
     }
 
     /*
@@ -328,8 +366,10 @@ where
                 }
             }
             0..=239 => {
-                // render
-                self.run_render_cycle();
+                // render only if allowed
+                if self.reg_mask.rendering_enabled() {
+                    self.run_render_cycle();
+                }
             }
             240 => {
                 // post-render
@@ -373,7 +413,8 @@ where
                 // fetch and reload shift registers
                 if self.cycle != 1 && self.cycle % 8 == 1 {
                     let nametable_tile = self.read_bus(
-                        self.reg_control.base_nametable_address() | self.vram_address_cur.get(),
+                        self.reg_control.base_nametable_address()
+                            | self.vram_address_cur.get() & 0x3FF,
                     );
                     let tile_pattern = self.fetch_pattern_background(nametable_tile);
                     let attribute_byte = self.fetch_attribute_byte();
@@ -400,11 +441,7 @@ where
 
                 if self.cycle % 8 == 0 {
                     // increment scrolling X in current VRAM address
-                    let mut coarse_x = self.vram_address_cur.get() & 0b11111; // only bottom 5 bits
-                    coarse_x += 1;
-
-                    *self.vram_address_cur.get_mut() &= 0xFFE0; // first 5 bits
-                    *self.vram_address_cur.get_mut() |= (coarse_x & 0b11111) as u16;
+                    self.increment_vram_coarse_scroll_x();
 
                     // increment fine scrolling Y on the last dot
                     if self.cycle == 256 {
@@ -418,18 +455,21 @@ where
                         // if the increment resulted in a carry, go to the next tile
                         // i.e. increment coarse Y
                         if fine_y & 0x8 != 0 {
-                            let mut coarse_y = (self.vram_address_cur.get() & 0b1111100000) >> 5; // only second5 bits
-                            coarse_y += 1;
-
-                            // increment scrolling Y in current VRAM address
-                            *self.vram_address_cur.get_mut() &= 0xFC1F; // second 5 bits
-                            *self.vram_address_cur.get_mut() |= ((coarse_y & 0b11111) as u16) << 5;
+                            self.increment_vram_coarse_scroll_y();
                         }
                     }
                 }
             }
             257..=320 => {
                 // unused
+                if self.cycle == 257 {
+                    // restore coarse X scrolling into current VRAM address
+                    // to prepare for the next scanline
+                    let coarse_x = self.x_scroll >> 3; // only top 5 bits
+
+                    *self.vram_address_cur.get_mut() &= 0xFFE0; // first 5 bits
+                    *self.vram_address_cur.get_mut() |= (coarse_x & 0b11111) as u16;
+                }
             }
             321..=340 => {
                 // lets just do it in the beginning
@@ -452,13 +492,7 @@ where
                             self.bg_palette_attribute_shift_registers[1];
                         self.bg_palette_attribute_shift_registers[1] = attribute_byte;
 
-                        // restore coarse X scrolling into current VRAM address
-                        // to prepare for the next scanline
-                        let mut coarse_x = self.x_scroll >> 3; // only top 5 bits
-                        coarse_x += 1;
-
-                        *self.vram_address_cur.get_mut() &= 0xFFE0; // first 5 bits
-                        *self.vram_address_cur.get_mut() |= (coarse_x & 0b11111) as u16;
+                        self.increment_vram_coarse_scroll_x();
                     }
                 }
             }
