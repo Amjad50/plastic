@@ -34,7 +34,7 @@ impl ControlReg {
     }
 
     pub fn background_pattern_address(&self) -> u16 {
-        ((self.bits & Self::SPRITE_PATTERN_ADDRESS.bits) as u16) << 12
+        ((self.bits & Self::BACKGROUND_PATTERN_ADDRESS.bits) as u16) << 12
     }
 
     pub fn nmi_enabled(&self) -> bool {
@@ -164,33 +164,27 @@ where
             // TODO: not sure, if I should account for that
             Register::Control => {
                 self.reg_control.bits = data;
-
-                // update temp address
-                self.vram_address_tmp &= 0x3FF;
-                self.vram_address_tmp |= self.reg_control.base_nametable_address()
             }
             Register::Mask => self.reg_mask.bits = data,
             Register::OmaAddress => self.reg_oma_addr = data,
             Register::OmaData => self.reg_oma_data = data,
             Register::Scroll => {
                 if self.w_toggle.get() {
-                    self.x_scroll = data;
+                    // w == 1
 
-                    // update temp address
-                    self.vram_address_tmp &= 0xFFFE; // lower 5 bits
-                    self.vram_address_tmp |= (data >> 3) as u16;
-                } else {
                     self.y_scroll = data;
+                } else {
+                    // w == 0
 
-                    // update temp address
-                    self.vram_address_tmp &= 0xFC1F; // second 5 bits
-                    self.vram_address_tmp |= ((data as u16) << 3) & 0b11111000;
+                    self.x_scroll = data;
                 }
 
                 self.w_toggle.set(!self.w_toggle.get());
             }
             Register::PPUAddress => {
                 if self.w_toggle.get() {
+                    // w == 1
+
                     // zero out the bottom 8 bits
                     self.vram_address_tmp &= 0xff00;
                     // set the data from the parameters
@@ -199,6 +193,8 @@ where
                     // copy to the current vram address
                     *self.vram_address_cur.get_mut() = self.vram_address_tmp;
                 } else {
+                    // w == 0
+
                     // zero out the top 8 bits
                     self.vram_address_tmp &= 0x00ff;
                     // set the data from the parameters
@@ -295,8 +291,7 @@ where
         let palette = (current_attribute >> attribute_location) & 0b11;
         let background = 0;
 
-        let color =
-            self.read_bus(0x3F00 | (background << 4 | palette << 2 | color_bit << 2) as u16);
+        let color = self.read_bus(0x3F00 | (background << 4 | palette << 2 | color_bit) as u16);
 
         // advance the shift registers
         for i in 0..=1 {
@@ -324,13 +319,9 @@ where
                 // pre-render
 
                 if self.cycle == 1 {
-                    // reset y_scroll from tmp
-                    self.y_scroll &= 0b111; // keep fine y only
-                    self.y_scroll |= ((self.vram_address_tmp >> 5) & 0b11111) as u8;
-
-                    // update temp address
+                    // use top-left y scrolling in current
                     *self.vram_address_cur.get_mut() &= 0xFC1F; // second 5 bits
-                    *self.vram_address_cur.get_mut() |= ((self.y_scroll as u16) << 3) & 0b11111000;
+                    *self.vram_address_cur.get_mut() |= ((self.y_scroll & 0b11111000) as u16) << 2;
 
                     // clear v-blank
                     self.reg_status.get_mut().remove(StatusReg::VERTICAL_BLANK);
@@ -374,11 +365,6 @@ where
 
     // run one cycle which is part of a scanline execution
     fn run_render_cycle(&mut self) {
-        if self.cycle <= 255 {
-            // main render
-            self.render_pixel();
-        }
-
         match self.cycle {
             0 => {
                 // idle
@@ -386,14 +372,23 @@ where
             1..=256 => {
                 // fetch and reload shift registers
                 if self.cycle != 1 && self.cycle % 8 == 1 {
-                    let nametable_tile = self.read_bus(self.vram_address_cur.get());
+                    let nametable_tile = self.read_bus(
+                        self.reg_control.base_nametable_address() | self.vram_address_cur.get(),
+                    );
                     let tile_pattern = self.fetch_pattern_background(nametable_tile);
                     let attribute_byte = self.fetch_attribute_byte();
 
                     // update th shift registers
                     for i in 0..=1 {
                         self.bg_pattern_shift_registers[i] &= 0xff;
-                        self.bg_pattern_shift_registers[i] |= (tile_pattern[i] as u16) << 8;
+
+                        // in this stage, because we reload in dots (9, 17, 25...)
+                        // the shift registers will be shifted one more time
+                        // meaning, it will be shifted 9 times
+                        // in order to make it continues, we will put the new
+                        // bytes one bit to the right, meaning (>> 8) then (<< 1)
+                        // so (>> 7)
+                        self.bg_pattern_shift_registers[i] |= (tile_pattern[i] as u16) << 7;
                     }
 
                     // reload attribute shift register
@@ -401,31 +396,40 @@ where
                     self.bg_palette_attribute_shift_registers[0] =
                         self.bg_palette_attribute_shift_registers[1];
                     self.bg_palette_attribute_shift_registers[1] = attribute_byte;
+                }
 
-                    // increment scrolling
-                    if self.cycle != 256 {
-                        let mut coarse_x = self.x_scroll >> 3; // only top 5 bits
-                        coarse_x += 1;
+                if self.cycle % 8 == 0 {
+                    // increment scrolling X in current VRAM address
+                    let mut coarse_x = self.vram_address_cur.get() & 0b11111; // only bottom 5 bits
+                    coarse_x += 1;
 
-                        // increase X in vram current address
-                        *self.vram_address_cur.get_mut() &= 0xFFE0; // first 5 bits
-                        *self.vram_address_cur.get_mut() |= (coarse_x & 0x1F) as u16;
-                    } else {
-                        self.y_scroll += 1;
+                    *self.vram_address_cur.get_mut() &= 0xFFE0; // first 5 bits
+                    *self.vram_address_cur.get_mut() |= (coarse_x & 0b11111) as u16;
 
-                        // update vram current address
-                        *self.vram_address_cur.get_mut() &= 0xFC1F; // second 5 bits
-                        *self.vram_address_cur.get_mut() |=
-                            ((self.y_scroll as u16) << 3) & 0b11111000;
+                    // increment fine scrolling Y on the last dot
+                    if self.cycle == 256 {
+                        // increment fine without carry
+                        let mut fine_y = self.y_scroll & 0b111;
+                        fine_y += 1;
+
+                        self.y_scroll &= 0b11111000;
+                        self.y_scroll |= fine_y & 0b111;
+
+                        // if the increment resulted in a carry, go to the next tile
+                        // i.e. increment coarse Y
+                        if fine_y & 0x8 != 0 {
+                            let mut coarse_y = (self.vram_address_cur.get() & 0b1111100000) >> 5; // only second5 bits
+                            coarse_y += 1;
+
+                            // increment scrolling Y in current VRAM address
+                            *self.vram_address_cur.get_mut() &= 0xFC1F; // second 5 bits
+                            *self.vram_address_cur.get_mut() |= ((coarse_y & 0b11111) as u16) << 5;
+                        }
                     }
                 }
             }
             257..=320 => {
-                if self.cycle == 257 {
-                    let fine_x = self.x_scroll & 0x7; // save
-                    self.x_scroll = ((self.vram_address_tmp & 0b11111) << 3) as u8;
-                    self.x_scroll |= fine_x; //restore
-                }
+                // unused
             }
             321..=340 => {
                 // lets just do it in the beginning
@@ -448,16 +452,25 @@ where
                             self.bg_palette_attribute_shift_registers[1];
                         self.bg_palette_attribute_shift_registers[1] = attribute_byte;
 
-                        // increment scrolling
-                        self.x_scroll += 1;
-                        // increase X in vram current address
-                        *self.vram_address_cur.get_mut() += 1;
+                        // restore coarse X scrolling into current VRAM address
+                        // to prepare for the next scanline
+                        let mut coarse_x = self.x_scroll >> 3; // only top 5 bits
+                        coarse_x += 1;
+
+                        *self.vram_address_cur.get_mut() &= 0xFFE0; // first 5 bits
+                        *self.vram_address_cur.get_mut() |= (coarse_x & 0b11111) as u16;
                     }
                 }
             }
             _ => {
                 unreachable!();
             }
+        }
+
+        // render after reloading
+        if self.cycle <= 255 {
+            // main render
+            self.render_pixel();
         }
     }
 
