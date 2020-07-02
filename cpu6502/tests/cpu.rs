@@ -1,7 +1,8 @@
 extern crate cpu6502;
 
-use common::{Bus, Device};
+use common::{interconnection::PPUCPUConnection, Bus, Device};
 use cpu6502::CPU6502;
+use std::{cell::RefCell, rc::Rc};
 
 struct DummyBus {
     data: [u8; 0x10000],
@@ -22,6 +23,15 @@ impl Bus for DummyBus {
     }
 }
 
+struct DummyPPUHandler {}
+
+impl PPUCPUConnection for DummyPPUHandler {
+    fn is_nmi_pin_set(&self) -> bool {
+        false
+    }
+    fn clear_nmi_pin(&mut self) {}
+}
+
 #[test]
 fn functionality_test() {
     let file_data = include_bytes!("./roms/6502_functional_test.bin");
@@ -31,7 +41,7 @@ fn functionality_test() {
     const SUCCUSS_ADDRESS: u16 = 0x336d;
 
     let bus = DummyBus::new(data);
-    let mut cpu = CPU6502::new(bus);
+    let mut cpu = CPU6502::new(bus, Rc::new(RefCell::new(DummyPPUHandler {})));
 
     cpu.reg_pc = 0x400;
 
