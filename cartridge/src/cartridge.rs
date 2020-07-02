@@ -103,6 +103,10 @@ impl Cartridge {
         }
     }
 
+    pub fn is_vertical_mirroring(&self) -> bool {
+        self.mirroring_vertical
+    }
+
     fn check_magic(header: &[u8]) -> Result<(), CartridgeError> {
         let real = [0x4E, 0x45, 0x53, 0x1A];
 

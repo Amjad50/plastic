@@ -2,7 +2,7 @@ use cartridge::{Cartridge, CartridgeError};
 use common::{Bus, Device};
 use cpu6502::CPU6502;
 use display::TV;
-use ppu2c02::{Palette, PPU2C02};
+use ppu2c02::{Palette, VRam, PPU2C02};
 use std::cell::RefCell;
 use std::fs::File;
 use std::rc::Rc;
@@ -24,7 +24,7 @@ const SCREEN_HEIGHT: u32 = TV_HEIGHT * 3;
 
 struct PPUBus {
     cartridge: Rc<RefCell<Cartridge>>,
-    vram: [u8; 0x1000],
+    vram: VRam,
     palettes: Palette,
 }
 
@@ -48,11 +48,10 @@ impl CPUBus {
 }
 
 impl PPUBus {
-    pub fn new(cartridge: Rc<RefCell<Cartridge>>) -> Self {
+    pub fn new(cartridge: Rc<RefCell<Cartridge>>, is_vertical_mirroring: bool) -> Self {
         PPUBus {
             cartridge,
-            vram: [0; 0x1000],
-            // Default power up palettes
+            vram: VRam::new(is_vertical_mirroring),
             palettes: Palette::new(),
         }
     }
@@ -62,7 +61,7 @@ impl Bus for PPUBus {
     fn read(&self, address: u16, device: Device) -> u8 {
         match address {
             0x0000..=0x1FFF => self.cartridge.borrow().read(address, device),
-            0x2000..=0x3EFF => self.vram[(address & 0xFFF) as usize],
+            0x2000..=0x3EFF => self.vram.read(address & 0x2FFF, device),
             0x3F00..=0x3FFF => self.palettes.read(address, device),
             // mirror
             0x4000..=0xFFFF => self.read(address & 0x3FFF, device),
@@ -71,7 +70,7 @@ impl Bus for PPUBus {
     fn write(&mut self, address: u16, data: u8, device: Device) {
         match address {
             0x0000..=0x1FFF => self.cartridge.borrow_mut().write(address, data, device),
-            0x2000..=0x3EFF => self.vram[(address & 0xFFF) as usize] = data,
+            0x2000..=0x3EFF => self.vram.write(address & 0x2FFF, data, device),
             0x3F00..=0x3FFF => self.palettes.write(address, data, device),
             // mirror
             0x4000..=0xFFFF => self.write(address & 0x3FFF, data, device),
@@ -155,7 +154,10 @@ impl NES {
     pub fn new(filename: &str) -> Result<Self, CartridgeError> {
         let cartridge = Cartridge::from_file(File::open(filename)?)?;
         let cartridge = Rc::new(RefCell::new(cartridge));
-        let ppubus = PPUBus::new(cartridge.clone());
+        let ppubus = PPUBus::new(
+            cartridge.clone(),
+            cartridge.borrow().is_vertical_mirroring(),
+        );
 
         let tv = TV::new(TV_WIDTH, TV_HEIGHT);
         let image = tv.get_image_clone();
