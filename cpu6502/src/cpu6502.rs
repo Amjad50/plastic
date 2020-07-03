@@ -356,7 +356,11 @@ where
         let opcode = self.read_bus(self.reg_pc);
         self.reg_pc += 1;
 
-        let mut instruction = Instruction::from_byte(opcode);
+        let mut instruction = match Instruction::from_byte(opcode) {
+            Ok(instruction) => instruction,
+            Err(msg) => panic!("{} {}", msg, opcode),
+        };
+
         let mut operand = 0;
         // low
         if instruction.get_instruction_len() > 1 {

@@ -122,12 +122,12 @@ impl AddressingMode {
 
 impl Instruction {
     // got this bit format from (http://nparker.llx.com/a2/opcodes.html)
-    pub fn from_byte(byte: u8) -> Instruction {
+    pub fn from_byte(byte: u8) -> Result<Instruction, &'static str> {
         let cc = byte & 0b11;
         let addressing_mode_bbb = (byte >> 2) & 0b111;
         let opcode_aaa = (byte >> 5) & 0b111;
 
-        let invalid_instruction_message = format!("Invalid instruction {:02x}", byte);
+        let invalid_instruction_message = "Invalid instruction";
 
         let (opcode, addressing_mode) = match cc {
             0b01 => {
@@ -156,7 +156,7 @@ impl Instruction {
 
                 // This instruction does not exists (STA with immediate)
                 if opcode == Opcode::Sta && addressing_mode == AddressingMode::Immediate {
-                    panic!(invalid_instruction_message)
+                    return Err(invalid_instruction_message);
                 }
 
                 (opcode, addressing_mode)
@@ -269,16 +269,18 @@ impl Instruction {
                 0xCA => (Opcode::Dex, AddressingMode::Implied),
                 0xEA => (Opcode::Nop, AddressingMode::Implied),
 
-                _ => panic!(invalid_instruction_message),
+                _ => {
+                    return Err(invalid_instruction_message);
+                }
             },
         };
 
-        Instruction {
+        Ok(Instruction {
             opcode_byte: byte,
             operand: 0,
             opcode: opcode,
             addressing_mode: addressing_mode,
-        }
+        })
     }
 
     pub fn get_instruction_len(&self) -> usize {

@@ -26,14 +26,14 @@ fn existing_instructions() {
     }
 
     for &byte in exists.iter() {
-        Instruction::from_byte(byte);
+        assert!(Instruction::from_byte(byte).is_ok());
     }
 }
 
 #[test]
 fn nonexisting_instructions() {
     for &byte in DOES_NOT_EXIST.iter() {
-        let result = std::panic::catch_unwind(|| Instruction::from_byte(byte));
+        let result = Instruction::from_byte(byte);
         assert!(result.is_err());
     }
 }
