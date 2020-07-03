@@ -252,7 +252,26 @@ where
         *self.vram_address_cur.get_mut() |= (coarse_x & 0b11111) as u16;
     }
 
-    // return carry
+    fn restore_vram_coarse_scroll_x(&mut self) {
+        // extract coarse_x
+        let coarse_x = self.x_scroll >> 3; // only top 5 bits
+
+        // clear first 5 bits
+        *self.vram_address_cur.get_mut() &= 0xFFE0;
+        // put result back
+        *self.vram_address_cur.get_mut() |= (coarse_x & 0b11111) as u16;
+    }
+
+    fn restore_vram_coarse_scroll_y(&mut self) {
+        // extract coarse_y
+        let coarse_y = self.y_scroll >> 3; // only top 5 bits
+
+        // clear second 5 bits
+        *self.vram_address_cur.get_mut() &= 0xFC1F;
+        // put result back
+        *self.vram_address_cur.get_mut() |= ((coarse_y & 0b11111) as u16) << 5;
+    }
+
     fn increment_vram_coarse_scroll_y(&mut self) {
         // extract coarse_y
         let mut coarse_y = (self.vram_address_cur.get() & 0b1111100000) >> 5; // only second 5 bits
@@ -262,6 +281,30 @@ where
         *self.vram_address_cur.get_mut() &= 0xFC1F;
         // put result back
         *self.vram_address_cur.get_mut() |= ((coarse_y & 0b11111) as u16) << 5;
+    }
+
+    fn reload_shift_registers(&mut self) {
+        let nametable_tile = self.read_bus(
+            self.reg_control.base_nametable_address() | self.vram_address_cur.get() & 0x3FF,
+        );
+
+        let tile_pattern = self.fetch_pattern_background(nametable_tile);
+        let attribute_byte = self.fetch_attribute_byte();
+
+        // update th shift registers
+        for i in 0..=1 {
+            self.bg_pattern_shift_registers[i] &= 0xFF00;
+
+            // in this stage, because we reload in dots (8, 16, 24...)
+            // the shift registers will be shifted one more time
+            // meaning, it will be shifted 8 times
+            self.bg_pattern_shift_registers[i] |= tile_pattern[i] as u16;
+        }
+
+        // reload attribute shift register
+        // TODO: this does not seem like a shift register but not sure
+        self.bg_palette_attribute_shift_registers[0] = self.bg_palette_attribute_shift_registers[1];
+        self.bg_palette_attribute_shift_registers[1] = attribute_byte;
     }
 
     /*
@@ -358,13 +401,24 @@ where
             261 => {
                 // pre-render
 
-                if self.cycle == 1 {
-                    // use top-left y scrolling in current
-                    *self.vram_address_cur.get_mut() &= 0xFC1F; // second 5 bits
-                    *self.vram_address_cur.get_mut() |= ((self.y_scroll & 0b11111000) as u16) << 2;
+                if self.cycle == 1 && self.reg_mask.rendering_enabled() {
+                    self.restore_vram_coarse_scroll_x();
+                    self.restore_vram_coarse_scroll_y();
 
                     // clear v-blank
                     self.reg_status.get_mut().remove(StatusReg::VERTICAL_BLANK);
+
+                    // load next 2 bytes
+                    for _ in 0..2 {
+                        for i in 0..=1 {
+                            // as this is the first time, shift the registers
+                            // as we are reloading 2 times
+                            self.bg_pattern_shift_registers[i] =
+                                self.bg_pattern_shift_registers[i].wrapping_shl(8);
+                        }
+                        self.reload_shift_registers();
+                        self.increment_vram_coarse_scroll_x();
+                    }
                 }
             }
             0..=239 => {
@@ -414,35 +468,13 @@ where
             1..=256 => {
                 // fetch and reload shift registers
                 if self.cycle % 8 == 0 {
-                    let nametable_tile = self.read_bus(
-                        self.reg_control.base_nametable_address()
-                            | self.vram_address_cur.get() & 0x3FF,
-                    );
-                    let tile_pattern = self.fetch_pattern_background(nametable_tile);
-                    let attribute_byte = self.fetch_attribute_byte();
+                    self.reload_shift_registers();
 
-                    // update th shift registers
-                    for i in 0..=1 {
-                        self.bg_pattern_shift_registers[i] &= 0xFF00;
-
-                        // in this stage, because we reload in dots (8, 16, 24...)
-                        // the shift registers will be shifted one more time
-                        // meaning, it will be shifted 8 times
-                        self.bg_pattern_shift_registers[i] |= tile_pattern[i] as u16;
-                    }
-
-                    // reload attribute shift register
-                    // TODO: this does not seem like a shift register but not sure
-                    self.bg_palette_attribute_shift_registers[0] =
-                        self.bg_palette_attribute_shift_registers[1];
-                    self.bg_palette_attribute_shift_registers[1] = attribute_byte;
-
-                    // increment scrolling X in current VRAM address
-                    self.increment_vram_coarse_scroll_x();
-
-                    // increment fine scrolling Y on the last dot
-                    if self.cycle == 256 {
-                        // increment fine without carry
+                    if self.cycle != 256 {
+                        // increment scrolling X in current VRAM address
+                        self.increment_vram_coarse_scroll_x();
+                    } else {
+                        // increment fine scrolling Y on the last dot without carry
                         let mut fine_y = self.y_scroll & 0b111;
                         fine_y += 1;
 
@@ -460,12 +492,7 @@ where
             257..=320 => {
                 // unused
                 if self.cycle == 257 {
-                    // restore coarse X scrolling into current VRAM address
-                    // to prepare for the next scanline
-                    let coarse_x = self.x_scroll >> 3; // only top 5 bits
-
-                    *self.vram_address_cur.get_mut() &= 0xFFE0; // first 5 bits
-                    *self.vram_address_cur.get_mut() |= (coarse_x & 0b11111) as u16;
+                    self.restore_vram_coarse_scroll_x();
                 }
             }
             321..=340 => {
@@ -473,26 +500,13 @@ where
                 if self.cycle == 321 {
                     // load next 2 bytes
                     for _ in 0..2 {
-                        let nametable_tile = self.read_bus(
-                            self.reg_control.base_nametable_address()
-                                | self.vram_address_cur.get() & 0x3FF,
-                        );
-                        let tile_pattern = self.fetch_pattern_background(nametable_tile);
-                        let attribute_byte = self.fetch_attribute_byte();
-
-                        // update th shift registers
                         for i in 0..=1 {
+                            // as this is the first time, shift the registers
+                            // as we are reloading 2 times
                             self.bg_pattern_shift_registers[i] =
                                 self.bg_pattern_shift_registers[i].wrapping_shl(8);
-                            self.bg_pattern_shift_registers[i] |= tile_pattern[i] as u16;
                         }
-
-                        // reload attribute shift register
-                        // TODO: this does not seem like a shift register but not sure
-                        self.bg_palette_attribute_shift_registers[0] =
-                            self.bg_palette_attribute_shift_registers[1];
-                        self.bg_palette_attribute_shift_registers[1] = attribute_byte;
-
+                        self.reload_shift_registers();
                         self.increment_vram_coarse_scroll_x();
                     }
                 }
