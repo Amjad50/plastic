@@ -394,8 +394,8 @@ where
     ++--------------- nametable select
     */
     fn fetch_attribute_byte(&self) -> u8 {
-        let x = (self.x_scroll >> 5) as u16;
-        let y = (self.y_scroll >> 5) as u16;
+        let x = (self.get_vram_coarse_x() >> 2) as u16;
+        let y = (self.get_vram_coarse_y() >> 2) as u16;
 
         self.read_bus(self.reg_control.base_nametable_address() | 0xF << 6 | y << 3 | x)
     }
@@ -417,12 +417,23 @@ where
         let color_bit = high_plane_bit << 1 | low_plane_bit;
 
         let current_attribute = self.bg_palette_attribute_shift_registers[0];
-        let attribute_location_x = (self.x_scroll >> 1) & 0x1;
-        let attribute_location_y = (self.y_scroll >> 1) & 0x1;
+
+        // since we can't use `self.x_scroll` and `self.y_scroll`
+        // let's extract the scroll values from vram
+        // because vram is pointing to the address to fetch next, we need
+        // to go back to retrieve the current rendering x scroll value,
+        // we sub 2
+        let coarse_x = self.get_vram_coarse_x().wrapping_sub(2);
+        let coarse_y = self.get_vram_coarse_y();
+
+        let attribute_location_x = (coarse_x >> 1) & 0x1;
+        let attribute_location_y = (coarse_y >> 1) & 0x1;
 
         let attribute_location = attribute_location_y << 1 | attribute_location_x;
 
-        let palette = (current_attribute >> attribute_location) & 0b11;
+        // 00: top-left, 01: top-right, 10: bottom-left, 11: bottom-right
+        // bit-1 is for (top, bottom), bit-0 is for (left, right)
+        let palette = (current_attribute >> (attribute_location * 2)) & 0b11;
         let background = 0;
 
         let color = self.read_bus(0x3F00 | (background << 4 | palette << 2 | color_bit) as u16);
