@@ -315,8 +315,10 @@ where
     */
     fn get_pixel(&mut self) -> u8 {
         let fine_x = self.x_scroll & 0b111;
-        let low_plane_bit = ((self.bg_pattern_shift_registers[0] >> fine_x as u16) & 0x1) as u8;
-        let high_plane_bit = ((self.bg_pattern_shift_registers[1] >> fine_x as u16) & 0x1) as u8;
+        let low_plane_bit =
+            ((self.bg_pattern_shift_registers[0] >> (15 - fine_x) as u16) & 0x1) as u8;
+        let high_plane_bit =
+            ((self.bg_pattern_shift_registers[1] >> (15 - fine_x) as u16) & 0x1) as u8;
 
         let color_bit = high_plane_bit << 1 | low_plane_bit;
 
@@ -333,7 +335,7 @@ where
 
         // advance the shift registers
         for i in 0..=1 {
-            self.bg_pattern_shift_registers[i] >>= 1;
+            self.bg_pattern_shift_registers[i] = self.bg_pattern_shift_registers[i].wrapping_shl(1);
         }
 
         color
@@ -411,7 +413,7 @@ where
             }
             1..=256 => {
                 // fetch and reload shift registers
-                if self.cycle != 1 && self.cycle % 8 == 1 {
+                if self.cycle % 8 == 0 {
                     let nametable_tile = self.read_bus(
                         self.reg_control.base_nametable_address()
                             | self.vram_address_cur.get() & 0x3FF,
@@ -421,15 +423,12 @@ where
 
                     // update th shift registers
                     for i in 0..=1 {
-                        self.bg_pattern_shift_registers[i] &= 0xff;
+                        self.bg_pattern_shift_registers[i] &= 0xFF00;
 
-                        // in this stage, because we reload in dots (9, 17, 25...)
+                        // in this stage, because we reload in dots (8, 16, 24...)
                         // the shift registers will be shifted one more time
-                        // meaning, it will be shifted 9 times
-                        // in order to make it continues, we will put the new
-                        // bytes one bit to the right, meaning (>> 8) then (<< 1)
-                        // so (>> 7)
-                        self.bg_pattern_shift_registers[i] |= (tile_pattern[i] as u16) << 7;
+                        // meaning, it will be shifted 8 times
+                        self.bg_pattern_shift_registers[i] |= tile_pattern[i] as u16;
                     }
 
                     // reload attribute shift register
@@ -437,9 +436,7 @@ where
                     self.bg_palette_attribute_shift_registers[0] =
                         self.bg_palette_attribute_shift_registers[1];
                     self.bg_palette_attribute_shift_registers[1] = attribute_byte;
-                }
 
-                if self.cycle % 8 == 0 {
                     // increment scrolling X in current VRAM address
                     self.increment_vram_coarse_scroll_x();
 
@@ -476,14 +473,18 @@ where
                 if self.cycle == 321 {
                     // load next 2 bytes
                     for _ in 0..2 {
-                        let nametable_tile = self.read_bus(self.vram_address_cur.get());
+                        let nametable_tile = self.read_bus(
+                            self.reg_control.base_nametable_address()
+                                | self.vram_address_cur.get() & 0x3FF,
+                        );
                         let tile_pattern = self.fetch_pattern_background(nametable_tile);
                         let attribute_byte = self.fetch_attribute_byte();
 
                         // update th shift registers
                         for i in 0..=1 {
-                            self.bg_pattern_shift_registers[i] >>= 8;
-                            self.bg_pattern_shift_registers[i] |= (tile_pattern[i] as u16) << 8;
+                            self.bg_pattern_shift_registers[i] =
+                                self.bg_pattern_shift_registers[i].wrapping_shl(8);
+                            self.bg_pattern_shift_registers[i] |= tile_pattern[i] as u16;
                         }
 
                         // reload attribute shift register
