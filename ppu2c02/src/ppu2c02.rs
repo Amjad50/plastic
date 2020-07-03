@@ -21,6 +21,16 @@ impl ControlReg {
         0x2000 | ((self.bits & Self::BASE_NAMETABLE.bits) as u16) << 10
     }
 
+    // because its an increment of one bit without overflow, inverting
+    // the bit will do the job
+    pub fn increment_name_table_vertical(&mut self) {
+        self.bits ^= Self::BASE_NAMETABLE.bits & 0b10;
+    }
+
+    pub fn increment_name_table_horizontal(&mut self) {
+        self.bits ^= Self::BASE_NAMETABLE.bits & 0b1;
+    }
+
     pub fn vram_increment(&self) -> u16 {
         if self.intersects(Self::VRAM_INCREMENT) {
             32
@@ -250,6 +260,11 @@ where
         *self.vram_address_cur.get_mut() &= 0xFFE0;
         // put result back
         *self.vram_address_cur.get_mut() |= (coarse_x & 0b11111) as u16;
+
+        // in case of overflow, increment nametable horizontal address
+        if coarse_x & 0b100000 != 0 {
+            self.reg_control.increment_name_table_horizontal();
+        }
     }
 
     fn restore_vram_coarse_scroll_x(&mut self) {
@@ -262,20 +277,25 @@ where
         *self.vram_address_cur.get_mut() |= (coarse_x & 0b11111) as u16;
     }
 
-    fn restore_vram_coarse_scroll_y(&mut self) {
+    fn increment_vram_coarse_scroll_y(&mut self) {
         // extract coarse_y
-        let coarse_y = self.y_scroll >> 3; // only top 5 bits
+        let mut coarse_y = (self.vram_address_cur.get() & 0b1111100000) >> 5; // only second 5 bits
+        coarse_y += 1;
 
         // clear second 5 bits
         *self.vram_address_cur.get_mut() &= 0xFC1F;
         // put result back
         *self.vram_address_cur.get_mut() |= ((coarse_y & 0b11111) as u16) << 5;
+
+        // in case of overflow, increment nametable vertical address
+        if coarse_y & 0b100000 != 0 {
+            self.reg_control.increment_name_table_vertical();
+        }
     }
 
-    fn increment_vram_coarse_scroll_y(&mut self) {
+    fn restore_vram_coarse_scroll_y(&mut self) {
         // extract coarse_y
-        let mut coarse_y = (self.vram_address_cur.get() & 0b1111100000) >> 5; // only second 5 bits
-        coarse_y += 1;
+        let coarse_y = self.y_scroll >> 3; // only top 5 bits
 
         // clear second 5 bits
         *self.vram_address_cur.get_mut() &= 0xFC1F;
