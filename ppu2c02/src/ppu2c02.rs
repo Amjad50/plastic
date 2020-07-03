@@ -103,6 +103,8 @@ pub struct PPU2C02<T: Bus> {
     vram_address_cur: Cell<u16>,
     vram_address_tmp: u16,
 
+    ppu_data_read_buffer: Cell<u8>,
+
     x_scroll: u8,
     y_scroll: u8,
 
@@ -136,6 +138,8 @@ where
             vram_address_cur: Cell::new(0),
             vram_address_tmp: 0,
 
+            ppu_data_read_buffer: Cell::new(0),
+
             x_scroll: 0,
             y_scroll: 0,
 
@@ -166,7 +170,10 @@ where
             }
             Register::OmaData => self.reg_oma_data,
             Register::PPUData => {
-                let result = self.read_bus(self.vram_address_cur.get());
+                let result = self.ppu_data_read_buffer.get();
+
+                self.ppu_data_read_buffer
+                    .set(self.read_bus(self.vram_address_cur.get()));
 
                 self.increment_vram_readwrite();
 
