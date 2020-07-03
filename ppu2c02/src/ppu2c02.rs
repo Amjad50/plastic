@@ -103,6 +103,8 @@ pub struct PPU2C02<T: Bus> {
     vram_address_cur: Cell<u16>,
     vram_address_tmp: u16,
 
+    nametable_tmp: u8,
+
     ppu_data_read_buffer: Cell<u8>,
 
     x_scroll: u8,
@@ -137,6 +139,8 @@ where
 
             vram_address_cur: Cell::new(0),
             vram_address_tmp: 0,
+
+            nametable_tmp: 0,
 
             ppu_data_read_buffer: Cell::new(0),
 
@@ -192,6 +196,8 @@ where
             // TODO: not sure, if I should account for that
             Register::Control => {
                 self.reg_control.bits = data;
+
+                self.nametable_tmp = self.reg_control.bits & ControlReg::BASE_NAMETABLE.bits;
             }
             Register::Mask => self.reg_mask.bits = data,
             Register::OmaAddress => self.reg_oma_addr = data,
@@ -248,6 +254,14 @@ where
 
     fn write_bus(&mut self, address: u16, data: u8) {
         self.bus.write(address, data, Device::PPU);
+    }
+
+    fn get_vram_coarse_x(&self) -> u8 {
+        (self.vram_address_cur.get() & 0b11111) as u8
+    }
+
+    fn get_vram_coarse_y(&self) -> u8 {
+        ((self.vram_address_cur.get() & 0b1111100000) >> 5) as u8
     }
 
     fn increment_vram_readwrite(&self) {
@@ -308,6 +322,16 @@ where
         *self.vram_address_cur.get_mut() &= 0xFC1F;
         // put result back
         *self.vram_address_cur.get_mut() |= ((coarse_y & 0b11111) as u16) << 5;
+    }
+
+    fn restore_nametable_horizontal(&mut self) {
+        self.reg_control.bits &= 0xFE; // clear bit 0
+        self.reg_control.bits |= self.nametable_tmp & 0b1;
+    }
+
+    fn restore_nametable_vertical(&mut self) {
+        self.reg_control.bits &= 0xFD; // clear bit 0
+        self.reg_control.bits |= self.nametable_tmp & 0b10;
     }
 
     fn reload_shift_registers(&mut self) {
@@ -432,6 +456,9 @@ where
                     self.restore_vram_coarse_scroll_x();
                     self.restore_vram_coarse_scroll_y();
 
+                    self.restore_nametable_horizontal();
+                    self.restore_nametable_vertical();
+
                     // clear v-blank
                     self.reg_status.get_mut().remove(StatusReg::VERTICAL_BLANK);
 
@@ -520,6 +547,8 @@ where
                 // unused
                 if self.cycle == 257 {
                     self.restore_vram_coarse_scroll_x();
+                    // to fix nametable wrapping around
+                    self.restore_nametable_horizontal();
                 }
             }
             321..=340 => {
