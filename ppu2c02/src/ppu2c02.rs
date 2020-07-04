@@ -301,17 +301,21 @@ where
     fn increment_vram_coarse_scroll_y(&mut self) {
         // extract coarse_y
         let mut coarse_y = (self.vram_address_cur.get() & 0b1111100000) >> 5; // only second 5 bits
-        coarse_y += 1;
+
+        // in case of overflow, increment nametable vertical address
+        if coarse_y == 29 {
+            coarse_y = 0;
+            self.reg_control.increment_name_table_vertical();
+        } else if coarse_y == 31 {
+            coarse_y = 0;
+        } else {
+            coarse_y += 1;
+        }
 
         // clear second 5 bits
         *self.vram_address_cur.get_mut() &= 0xFC1F;
         // put result back
         *self.vram_address_cur.get_mut() |= ((coarse_y & 0b11111) as u16) << 5;
-
-        // in case of overflow, increment nametable vertical address
-        if coarse_y & 0b100000 != 0 {
-            self.reg_control.increment_name_table_vertical();
-        }
     }
 
     fn restore_vram_coarse_scroll_y(&mut self) {
