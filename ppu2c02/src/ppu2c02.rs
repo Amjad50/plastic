@@ -437,8 +437,13 @@ where
 
         // 00: top-left, 01: top-right, 10: bottom-left, 11: bottom-right
         // bit-1 is for (top, bottom), bit-0 is for (left, right)
-        let palette = (current_attribute >> (attribute_location * 2)) & 0b11;
+        let mut palette = (current_attribute >> (attribute_location * 2)) & 0b11;
         let background = 0;
+
+        if color_bit == 0 {
+            // universal background color
+            palette = 0;
+        }
 
         let color = self.read_bus(0x3F00 | (background << 4 | palette << 2 | color_bit) as u16);
 
