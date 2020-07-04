@@ -40,11 +40,11 @@ impl ControlReg {
     }
 
     pub fn sprite_pattern_address(&self) -> u16 {
-        ((self.bits & Self::SPRITE_PATTERN_ADDRESS.bits) as u16) << 12
+        ((self.intersects(Self::SPRITE_PATTERN_ADDRESS)) as u16) << 12
     }
 
     pub fn background_pattern_address(&self) -> u16 {
-        ((self.bits & Self::BACKGROUND_PATTERN_ADDRESS.bits) as u16) << 12
+        ((self.intersects(Self::BACKGROUND_PATTERN_ADDRESS)) as u16) << 12
     }
 
     pub fn nmi_enabled(&self) -> bool {
