@@ -57,6 +57,10 @@ impl Cartridge {
 
         let mapper_id = upper_mapper << 4 | lower_mapper;
 
+        // initialize the mapper first, so that if it is not supported yet,
+        // panic
+        let mapper = Self::get_mapper(mapper_id, size_prg, size_chr);
+
         let mut trainer_data = Vec::new();
 
         // read training data if present
@@ -98,7 +102,7 @@ impl Cartridge {
                 trainer_data,
                 prg_data,
                 chr_data,
-                mapper: Self::get_mapper(mapper_id, size_prg, size_chr),
+                mapper,
             })
         }
     }
