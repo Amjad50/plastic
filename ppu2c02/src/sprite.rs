@@ -42,6 +42,45 @@ impl Sprite {
         }
     }
 
+    // return a sprite which consists of 0xFF bytes only
+    pub fn filled_ff() -> Self {
+        Self {
+            x: 0xFF,
+            y: 0xFF,
+            tile_index: 0xFF,
+            attributes: SpriteAttribute::all(),
+        }
+    }
+
+    pub fn get_y(&self) -> u8 {
+        self.y
+    }
+
+    pub fn get_x(&self) -> u8 {
+        self.x
+    }
+
+    /*
+    for 8x8:
+    use the byte normally as index into the pattern table
+
+    for 8x16:
+
+    76543210
+    ||||||||
+    |||||||+- Bank ($0000 or $1000) of tiles
+    +++++++-- Tile number of top of sprite (0 to 254; bottom half gets the next tile)
+     */
+
+    pub fn get_tile(&self) -> u8 {
+        // FIXME: add support for 8x16
+        self.tile_index
+    }
+
+    pub fn get_attribute(&self) -> SpriteAttribute {
+        self.attributes
+    }
+
     pub fn read_offset(&self, offset: u8) -> u8 {
         match offset {
             0 => self.y,
