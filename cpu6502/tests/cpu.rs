@@ -30,6 +30,16 @@ impl PPUCPUConnection for DummyPPUHandler {
         false
     }
     fn clear_nmi_pin(&mut self) {}
+    fn is_dma_request(&self) -> bool {
+        false
+    }
+    fn clear_dma_request(&mut self) {}
+    fn dma_address(&mut self) -> u8 {
+        unreachable!()
+    }
+    fn send_oam_data(&mut self, _address: u8, _data: u8) {
+        unreachable!();
+    }
 }
 
 #[test]

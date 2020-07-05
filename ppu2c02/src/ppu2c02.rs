@@ -1,4 +1,5 @@
 use crate::ppu2c02_registers::Register;
+use crate::sprite::Sprite;
 use common::{interconnection::PPUCPUConnection, Bus, Device};
 use display::{COLORS, TV};
 use std::cell::Cell;
@@ -92,9 +93,7 @@ pub struct PPU2C02<T: Bus> {
     reg_control: ControlReg,
     reg_mask: MaskReg,
     reg_status: Cell<StatusReg>,
-    reg_oma_addr: u8,
-    reg_oma_data: u8,
-    reg_oma_dma: u8,
+    reg_oma_addr: Cell<u8>,
 
     scanline: u16,
     cycle: u16,
@@ -119,6 +118,16 @@ pub struct PPU2C02<T: Bus> {
 
     bus: T,
     tv: TV,
+
+    primary_oam: [Sprite; 64],
+    secondary_oam: [Sprite; 8],
+
+    sprite_pattern_shift_registers: [[u8; 2]; 8],
+    sprite_palette_attribute_shift_registers: [u8; 8],
+    sprite_counters: [u8; 8],
+
+    is_dma_request: bool,
+    dma_request_address: u8,
 }
 
 impl<T> PPU2C02<T>
@@ -130,9 +139,7 @@ where
             reg_control: ControlReg::empty(),
             reg_mask: MaskReg::empty(),
             reg_status: Cell::new(StatusReg::empty()),
-            reg_oma_addr: 0,
-            reg_oma_data: 0,
-            reg_oma_dma: 0,
+            reg_oma_addr: Cell::new(0),
 
             scanline: 261, // start from -1 scanline
             cycle: 0,
@@ -156,6 +163,16 @@ where
 
             bus,
             tv,
+
+            primary_oam: [Sprite::empty(); 64],
+            secondary_oam: [Sprite::empty(); 8],
+
+            sprite_pattern_shift_registers: [[0; 2]; 8],
+            sprite_palette_attribute_shift_registers: [0; 8],
+            sprite_counters: [0; 8],
+
+            is_dma_request: false,
+            dma_request_address: 0,
         }
     }
 
@@ -172,7 +189,16 @@ where
 
                 result
             }
-            Register::OmaData => self.reg_oma_data,
+            Register::OmaData => {
+                let result = self.read_sprite_byte(self.reg_oma_addr.get());
+
+                if self.scanline > 240 || !self.reg_mask.rendering_enabled() {
+                    self.reg_oma_addr
+                        .set(self.reg_oma_addr.get().wrapping_add(1));
+                }
+
+                result
+            }
             Register::PPUData => {
                 let result = self.ppu_data_read_buffer.get();
 
@@ -200,8 +226,13 @@ where
                 self.nametable_tmp = self.reg_control.bits & ControlReg::BASE_NAMETABLE.bits;
             }
             Register::Mask => self.reg_mask.bits = data,
-            Register::OmaAddress => self.reg_oma_addr = data,
-            Register::OmaData => self.reg_oma_data = data,
+            Register::OmaAddress => self.reg_oma_addr.set(data),
+            Register::OmaData => {
+                self.write_sprite_byte(self.reg_oma_addr.get(), data);
+                if self.scanline > 240 || !self.reg_mask.rendering_enabled() {
+                    *self.reg_oma_addr.get_mut() += 1;
+                }
+            }
             Register::Scroll => {
                 if self.w_toggle.get() {
                     // w == 1
@@ -241,7 +272,10 @@ where
                 self.write_bus(self.vram_address_cur.get(), data);
                 self.increment_vram_readwrite();
             }
-            Register::DmaOma => self.reg_oma_dma = data,
+            Register::DmaOma => {
+                self.dma_request_address = data;
+                self.is_dma_request = true;
+            }
             _ => {
                 // unwritable
             }
@@ -254,6 +288,16 @@ where
 
     fn write_bus(&mut self, address: u16, data: u8) {
         self.bus.write(address, data, Device::PPU);
+    }
+
+    fn read_sprite_byte(&self, address: u8) -> u8 {
+        let sprite_location = address >> 2;
+        self.primary_oam[sprite_location as usize].read_offset(address & 0b11)
+    }
+
+    fn write_sprite_byte(&mut self, address: u8, data: u8) {
+        let sprite_location = address >> 2;
+        self.primary_oam[sprite_location as usize].write_offset(address & 0b11, data);
     }
 
     fn get_vram_coarse_x(&self) -> u8 {
@@ -619,7 +663,24 @@ where
     fn is_nmi_pin_set(&self) -> bool {
         self.nmi_pin_status
     }
+
     fn clear_nmi_pin(&mut self) {
         self.nmi_pin_status = false;
+    }
+
+    fn is_dma_request(&self) -> bool {
+        self.is_dma_request
+    }
+
+    fn clear_dma_request(&mut self) {
+        self.is_dma_request = false;
+    }
+
+    fn dma_address(&mut self) -> u8 {
+        self.dma_request_address
+    }
+
+    fn send_oam_data(&mut self, address: u8, data: u8) {
+        self.write_sprite_byte(address, data);
     }
 }

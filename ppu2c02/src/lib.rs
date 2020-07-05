@@ -4,6 +4,7 @@ extern crate bitflags;
 mod palette;
 mod ppu2c02;
 mod ppu2c02_registers;
+mod sprite;
 mod vram;
 
 pub use crate::palette::Palette;

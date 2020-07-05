@@ -36,6 +36,9 @@ pub struct CPU6502<T: Bus> {
 
     cycles_to_wait: u8,
 
+    dma_remaining: u16,
+    dma_address: u8,
+
     bus: T,
     ppu: Rc<RefCell<dyn PPUCPUConnection>>,
 }
@@ -57,6 +60,9 @@ where
             irq_pin_status: false,
 
             cycles_to_wait: 0,
+
+            dma_remaining: 0,
+            dma_address: 0,
 
             bus,
             ppu,
@@ -320,32 +326,56 @@ where
     // return true if an instruction executed
     // false if it was waiting for remaining cycles
     pub fn run_next(&mut self) -> bool {
-        // check if the PPU is setting the NMI pin
         {
             let mut ppu = self.ppu.borrow_mut();
+            // check if the PPU is setting the NMI pin
             if ppu.is_nmi_pin_set() {
                 self.nmi_pin_status = true;
                 ppu.clear_nmi_pin();
             }
+            // check if PPU is requesting DMA
+            if ppu.is_dma_request() {
+                self.dma_address = ppu.dma_address();
+                self.dma_remaining = 256;
+                ppu.clear_dma_request();
+            }
         }
 
         if self.cycles_to_wait == 0 {
-            // interrupts waiting
-            if self.nmi_pin_status
-                || (self.irq_pin_status
-                    && !(self.reg_status & (StatusFlag::InterruptDisable as u8) != 0))
-            {
-                // hardware side interrupt
-                self.execute_interrupt(false, self.nmi_pin_status);
-                return true;
+            // are we still executing the DMA transfer instruction?
+            if self.dma_remaining > 0 {
+                self.dma_remaining -= 1;
+                {
+                    // send one byte at a time
+                    let mut ppu = self.ppu.borrow_mut();
+                    let oma_address = (255 - self.dma_remaining) & 0xFF;
+                    let cpu_address = (self.dma_address as u16) << 8 | oma_address;
+
+                    let data = self.read_bus(cpu_address);
+                    ppu.send_oam_data(oma_address as u8, data);
+                }
+
+                // since it should read in one cycle and write in the other cycle
+                self.cycles_to_wait = 1;
+                false
+            } else {
+                // interrupts waiting
+                if self.nmi_pin_status
+                    || (self.irq_pin_status
+                        && !(self.reg_status & (StatusFlag::InterruptDisable as u8) != 0))
+                {
+                    // hardware side interrupt
+                    self.execute_interrupt(false, self.nmi_pin_status);
+                    return true;
+                }
+
+                // fetch
+                let instruction = self.fetch_next_instruction();
+
+                // decode and execute
+                self.run_instruction(&instruction);
+                true
             }
-
-            // fetch
-            let instruction = self.fetch_next_instruction();
-
-            // decode and execute
-            self.run_instruction(&instruction);
-            true
         } else {
             self.cycles_to_wait -= 1;
             false
