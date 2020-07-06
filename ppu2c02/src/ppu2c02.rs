@@ -562,6 +562,7 @@ where
         let mut color_bits = 0;
         let mut palette = 0;
         let mut background_priority = false;
+        let mut first_non_transparent_found = false;
 
         for i in 0..8 {
             // active sprite
@@ -580,7 +581,7 @@ where
 
                 // if its a zero, ignore it and try to find the next non-transparent
                 // color-bit, if all are zeros, then ok
-                if current_color_bits != 0 {
+                if !first_non_transparent_found && current_color_bits != 0 {
                     color_bits = current_color_bits;
 
                     let attribute = self.sprite_attribute_registers[i];
@@ -588,7 +589,7 @@ where
                     background_priority = attribute.is_behind_background();
 
                     // stop searching
-                    break;
+                    first_non_transparent_found = true;
                 }
             } else {
                 self.sprite_counters[i] -= 1;
