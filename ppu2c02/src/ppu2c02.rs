@@ -198,8 +198,8 @@ where
                 let address = self.vram_address_cur.get();
                 let data_in_addr = self.read_bus(address);
 
-                // only VRAM is buffered
-                let result = if address >= 0x2000 && address <= 0x3EFF {
+                // only 0 - 0x2FFF (before palette) is buffered
+                let result = if address <= 0x3EFF {
                     let tmp_result = self.ppu_data_read_buffer.get();
 
                     // fill buffer
