@@ -472,9 +472,35 @@ where
 
         for i in 0..self.secondary_oam_counter as usize {
             let sprite = self.secondary_oam[i];
+            let mut fine_y = next_y.wrapping_sub(sprite.get_y());
+
+            // handle flipping vertically
+            if sprite.get_attribute().is_flip_vertical() {
+                fine_y = 7 - fine_y;
+            }
+
             self.sprite_counters[i] = sprite.get_x();
             self.sprite_pattern_shift_registers[i] =
-                self.fetch_pattern_sprite(sprite.get_tile(), next_y.wrapping_sub(sprite.get_y()));
+                self.fetch_pattern_sprite(sprite.get_tile(), fine_y);
+
+            // handle flipping horizontally
+            if sprite.get_attribute().is_flip_horizontal() {
+                let mut tmp_low = 0;
+                let mut tmp_high = 0;
+                for _ in 0..7 {
+                    tmp_low |= self.sprite_pattern_shift_registers[i][0] & 0b1;
+                    tmp_high |= self.sprite_pattern_shift_registers[i][1] & 0b1;
+
+                    tmp_low <<= 1;
+                    tmp_high <<= 1;
+                    self.sprite_pattern_shift_registers[i][0] >>= 1;
+                    self.sprite_pattern_shift_registers[i][1] >>= 1;
+                }
+
+                self.sprite_pattern_shift_registers[i][0] = tmp_low;
+                self.sprite_pattern_shift_registers[i][1] = tmp_high;
+            }
+
             self.sprite_attribute_registers[i] = sprite.get_attribute();
         }
         // fill the remianing bytes with empty patterns, x and attributes
