@@ -204,10 +204,24 @@ where
                 result
             }
             Register::PPUData => {
-                let result = self.ppu_data_read_buffer.get();
+                let address = self.vram_address_cur.get();
+                let data_in_addr = self.read_bus(address);
 
-                self.ppu_data_read_buffer
-                    .set(self.read_bus(self.vram_address_cur.get()));
+                // only VRAM is buffered
+                let result = if address >= 0x2000 && address <= 0x3EFF {
+                    let tmp_result = self.ppu_data_read_buffer.get();
+
+                    // fill buffer
+                    self.ppu_data_read_buffer.set(data_in_addr);
+
+                    tmp_result
+                } else {
+                    // reload buffer with VRAM address hidden by palette
+                    // wrap to 0x2FFF rather than 0x3EFF, to avoid the mirror
+                    self.ppu_data_read_buffer
+                        .set(self.read_bus(address & 0x2FFF));
+                    data_in_addr
+                };
 
                 self.increment_vram_readwrite();
 
