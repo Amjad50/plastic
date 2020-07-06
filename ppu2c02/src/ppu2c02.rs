@@ -78,6 +78,10 @@ impl MaskReg {
     pub fn rendering_enabled(&self) -> bool {
         self.background_enabled() || self.sprites_enabled()
     }
+
+    pub fn is_grayscale(&self) -> bool {
+        self.intersects(Self::GRAYSCALE_ENABLE)
+    }
 }
 
 bitflags! {
@@ -662,7 +666,13 @@ where
     }
 
     fn render_pixel(&mut self) {
-        let color = self.get_pixel();
+        let mut color = self.get_pixel();
+
+        if self.reg_mask.is_grayscale() {
+            // select from the gray column (0x00, 0x10, 0x20, 0x30)
+            color &= 0x30;
+        }
+
         // render the color
         self.tv.set_pixel(
             self.cycle as u32,
