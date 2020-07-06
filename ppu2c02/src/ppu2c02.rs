@@ -93,7 +93,7 @@ pub struct PPU2C02<T: Bus> {
     reg_control: ControlReg,
     reg_mask: MaskReg,
     reg_status: Cell<StatusReg>,
-    reg_oma_addr: Cell<u8>,
+    reg_oam_addr: Cell<u8>,
 
     scanline: u16,
     cycle: u16,
@@ -141,7 +141,7 @@ where
             reg_control: ControlReg::empty(),
             reg_mask: MaskReg::empty(),
             reg_status: Cell::new(StatusReg::empty()),
-            reg_oma_addr: Cell::new(0),
+            reg_oam_addr: Cell::new(0),
 
             scanline: 261, // start from -1 scanline
             cycle: 0,
@@ -193,16 +193,7 @@ where
 
                 result
             }
-            Register::OmaData => {
-                let result = self.read_sprite_byte(self.reg_oma_addr.get());
-
-                if self.scanline > 240 || !self.reg_mask.rendering_enabled() {
-                    self.reg_oma_addr
-                        .set(self.reg_oma_addr.get().wrapping_add(1));
-                }
-
-                result
-            }
+            Register::OmaData => self.read_sprite_byte(self.reg_oam_addr.get()),
             Register::PPUData => {
                 let address = self.vram_address_cur.get();
                 let data_in_addr = self.read_bus(address);
@@ -244,11 +235,11 @@ where
                 self.nametable_tmp = self.reg_control.bits & ControlReg::BASE_NAMETABLE.bits;
             }
             Register::Mask => self.reg_mask.bits = data,
-            Register::OmaAddress => self.reg_oma_addr.set(data),
+            Register::OmaAddress => self.reg_oam_addr.set(data),
             Register::OmaData => {
-                self.write_sprite_byte(self.reg_oma_addr.get(), data);
+                self.write_sprite_byte(self.reg_oam_addr.get(), data);
                 if self.scanline > 240 || !self.reg_mask.rendering_enabled() {
-                    *self.reg_oma_addr.get_mut() += 1;
+                    *self.reg_oam_addr.get_mut() += 1;
                 }
             }
             Register::Scroll => {
@@ -898,6 +889,6 @@ where
     }
 
     fn send_oam_data(&mut self, address: u8, data: u8) {
-        self.write_sprite_byte(address, data);
+        self.write_sprite_byte(self.reg_oam_addr.get().wrapping_add(address), data);
     }
 }
