@@ -243,7 +243,7 @@ where
             Register::OmaData => {
                 self.write_sprite_byte(self.reg_oam_addr.get(), data);
                 if self.scanline > 240 || !self.reg_mask.rendering_enabled() {
-                    *self.reg_oam_addr.get_mut() += 1;
+                    *self.reg_oam_addr.get_mut() = self.reg_oam_addr.get().wrapping_add(1);
                 }
             }
             Register::Scroll => {
