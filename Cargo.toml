@@ -2,6 +2,7 @@
 members = [
     "cartridge",
     "common",
+    "controller",
     "cpu6502",
     "display",
     "nes_test",

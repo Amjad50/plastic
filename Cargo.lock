@@ -17,6 +17,14 @@ name = "common"
 version = "0.1.0"
 
 [[package]]
+name = "controller"
+version = "0.1.0"
+dependencies = [
+ "bitflags 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "common 0.1.0",
+]
+
+[[package]]
 name = "cpu6502"
 version = "0.1.0"
 dependencies = [
@@ -69,6 +77,7 @@ version = "0.1.0"
 dependencies = [
  "cartridge 0.1.0",
  "common 0.1.0",
+ "controller 0.1.0",
  "cpu6502 0.1.0",
  "display 0.1.0",
  "ppu2c02 0.1.0",

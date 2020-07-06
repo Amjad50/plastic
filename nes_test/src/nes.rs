@@ -1,5 +1,6 @@
 use cartridge::{Cartridge, CartridgeError};
 use common::{Bus, Device};
+use controller::{Controller, StandardNESControllerState, StandardNESKey};
 use cpu6502::CPU6502;
 use display::TV;
 use ppu2c02::{Palette, VRam, PPU2C02};
@@ -32,17 +33,20 @@ struct CPUBus {
     cartridge: Rc<RefCell<Cartridge>>,
     ram: [u8; 0x800],
     ppu: Rc<RefCell<dyn Bus>>,
-
-    controller: std::cell::Cell<u8>,
+    contoller: Controller,
 }
 
 impl CPUBus {
-    pub fn new(cartridge: Rc<RefCell<Cartridge>>, ppu: Rc<RefCell<dyn Bus>>) -> Self {
+    pub fn new(
+        cartridge: Rc<RefCell<Cartridge>>,
+        ppu: Rc<RefCell<dyn Bus>>,
+        contoller: Controller,
+    ) -> Self {
         CPUBus {
             cartridge,
             ram: [0; 0x800],
             ppu,
-            controller: std::cell::Cell::new(0),
+            contoller,
         }
     }
 }
@@ -85,39 +89,7 @@ impl Bus for CPUBus {
             0x2000..=0x3FFF => self.ppu.borrow().read(0x2000 | (address & 0x7), device),
             0x4014 => self.ppu.borrow().read(address, device),
             0x8000..=0xFFFF => self.cartridge.borrow().read(address, device),
-            0x4016 => {
-                // self.controller counter will reset every 8 reads (each read is 8 bits)
-                // the color_test rom performs two reads each time, this is due
-                // to hardware issues with the NES? I think all games must do
-                // two gamepad polls in order to ensure a correct read.
-                //
-                // So 8 reads will be initiated every 4 loops, and how the rom
-                // works, is by reading and making sure the next time it reads zeros
-                // meaning that all the buttons are released, so I'm using the
-                // first time to issue RIGHT click, then zero, then DOWN click
-                // then zeros, which are 4 in total.
-                //
-                // This will allow to loop over all colors
-                //
-                // 0-7   read 1, discarded
-                // 8-15  read 1, stored (RIGHT)
-                // 16-23 read 2, discarded
-                // 24-31 read 2, stored (zeros)
-                // 32-39 read 3, discarded
-                // 40-47 read 3, stored (DOWN)
-                // 48-55 read 4, discarded
-                // 56-63 read 4, stored (zeros)
-                let result = if self.controller.get() == 15 || self.controller.get() == 45 {
-                    1
-                } else {
-                    0
-                };
-
-                self.controller.set(self.controller.get() + 1);
-                self.controller.set(self.controller.get() % 64);
-
-                result
-            }
+            0x4016 => self.contoller.read(address, device),
             _ => {
                 println!("unimplemented read cpu from {:04X}", address);
                 0
@@ -136,9 +108,7 @@ impl Bus for CPUBus {
                 .cartridge
                 .borrow_mut()
                 .write(address, data, Device::CPU),
-            0x4016 => {
-                // ignore for now
-            }
+            0x4016 => self.contoller.write(address, data, device),
             _ => println!("unimplemented write cpu to {:04X}", address),
         };
     }
@@ -148,6 +118,7 @@ pub struct NES {
     cpu: CPU6502<CPUBus>,
     ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
     image: Arc<Mutex<Vec<u8>>>,
+    ctrl_state: Arc<Mutex<StandardNESControllerState>>,
 }
 
 impl NES {
@@ -166,7 +137,10 @@ impl NES {
 
         let ppu = Rc::new(RefCell::new(ppu));
 
-        let cpubus = CPUBus::new(cartridge.clone(), ppu.clone());
+        let ctrl = Controller::new();
+        let ctrl_state = ctrl.get_primary_controller_state();
+
+        let cpubus = CPUBus::new(cartridge.clone(), ppu.clone(), ctrl);
 
         let cpu = CPU6502::new(cpubus, ppu.clone());
 
@@ -174,6 +148,7 @@ impl NES {
             cpu,
             ppu: ppu.clone(),
             image,
+            ctrl_state,
         })
     }
 
@@ -184,6 +159,7 @@ impl NES {
         let (stop_tx, stop_rx) = std::sync::mpsc::channel::<bool>();
 
         let image = self.image.clone();
+        let ctrl_state = self.ctrl_state.clone();
 
         let thread = std::thread::spawn(move || {
             let mut window = RenderWindow::new(
@@ -207,14 +183,35 @@ impl NES {
             let mut texture = Texture::new(TV_WIDTH, TV_HEIGHT).expect("texture");
 
             'main: loop {
-                // TODO: also handle NES controller input here later
-                while let Some(event) = window.poll_event() {
-                    match event {
-                        Event::Closed
-                        | Event::KeyPressed {
-                            code: Key::Escape, ..
-                        } => break 'main,
-                        _ => {}
+                if let Ok(mut ctrl) = ctrl_state.lock() {
+                    while let Some(event) = window.poll_event() {
+                        match event {
+                            Event::Closed => break 'main,
+                            Event::KeyPressed { code: key, .. } => match key {
+                                Key::J => ctrl.press(StandardNESKey::B),
+                                Key::K => ctrl.press(StandardNESKey::A),
+                                Key::U => ctrl.press(StandardNESKey::Select),
+                                Key::I => ctrl.press(StandardNESKey::Start),
+                                Key::W => ctrl.press(StandardNESKey::Up),
+                                Key::S => ctrl.press(StandardNESKey::Down),
+                                Key::A => ctrl.press(StandardNESKey::Left),
+                                Key::D => ctrl.press(StandardNESKey::Right),
+                                _ => {}
+                            },
+                            Event::KeyReleased { code: key, .. } => match key {
+                                Key::J => ctrl.release(StandardNESKey::B),
+                                Key::K => ctrl.release(StandardNESKey::A),
+                                Key::U => ctrl.release(StandardNESKey::Select),
+                                Key::I => ctrl.release(StandardNESKey::Start),
+                                Key::W => ctrl.release(StandardNESKey::Up),
+                                Key::S => ctrl.release(StandardNESKey::Down),
+                                Key::A => ctrl.release(StandardNESKey::Left),
+                                Key::D => ctrl.release(StandardNESKey::Right),
+                                _ => {}
+                            },
+
+                            _ => {}
+                        }
                     }
                 }
 
