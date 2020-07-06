@@ -72,7 +72,7 @@ impl MaskReg {
     }
 
     pub fn sprites_enabled(&self) -> bool {
-        self.intersects(Self::SHOW_BACKGROUND)
+        self.intersects(Self::SHOW_SPRITES)
     }
 
     pub fn rendering_enabled(&self) -> bool {
@@ -131,6 +131,8 @@ pub struct PPU2C02<T: Bus> {
     sprite_pattern_shift_registers: [[u8; 2]; 8],
     sprite_attribute_registers: [SpriteAttribute; 8],
     sprite_counters: [u8; 8],
+    sprite_0_present: bool,
+    next_scanline_sprite_0_present: bool,
 
     is_dma_request: bool,
     dma_request_address: u8,
@@ -178,6 +180,8 @@ where
             sprite_pattern_shift_registers: [[0; 2]; 8],
             sprite_attribute_registers: [SpriteAttribute::empty(); 8],
             sprite_counters: [0; 8],
+            sprite_0_present: false,
+            next_scanline_sprite_0_present: false,
 
             is_dma_request: false,
             dma_request_address: 0,
@@ -474,6 +478,11 @@ where
     }
 
     fn reload_sprite_shift_registers(&mut self) {
+        // move sprite_0_present
+        self.sprite_0_present = self.next_scanline_sprite_0_present;
+        // reset for scanline after next
+        self.next_scanline_sprite_0_present = false;
+
         let next_y = self.get_next_scroll_y_render();
 
         // must not exceed 8
@@ -541,6 +550,11 @@ where
     }
 
     fn get_background_pixel(&self) -> (u8, u8) {
+        // skip all this, if the background is disabled
+        if !self.reg_mask.background_enabled() {
+            return (0, 0);
+        }
+
         let fine_x = self.x_scroll & 0b111;
         let low_plane_bit =
             ((self.bg_pattern_shift_registers[0] >> (15 - fine_x) as u16) & 0x1) as u8;
@@ -571,11 +585,17 @@ where
         (color_bit, palette)
     }
 
-    fn get_sprites_first_non_transparent_pixel(&mut self) -> (u8, u8, bool) {
+    fn get_sprites_first_non_transparent_pixel(&mut self) -> (u8, u8, bool, bool) {
+        // skip all this, if the sprites is disabled
+        if !self.reg_mask.sprites_enabled() {
+            return (0, 0, false, false);
+        }
+
         let mut color_bits = 0;
         let mut palette = 0;
         let mut background_priority = false;
         let mut first_non_transparent_found = false;
+        let mut is_sprite_0 = false;
 
         for i in 0..8 {
             // active sprite
@@ -601,6 +621,9 @@ where
                     palette = attribute.palette();
                     background_priority = attribute.is_behind_background();
 
+                    // set if its sprite 0
+                    is_sprite_0 = i == 0 && self.sprite_0_present;
+
                     // stop searching
                     first_non_transparent_found = true;
                 }
@@ -609,7 +632,7 @@ where
             }
         }
 
-        (color_bits, palette, background_priority)
+        (color_bits, palette, background_priority, is_sprite_0)
     }
 
     /*
@@ -622,7 +645,7 @@ where
     */
     fn get_pixel(&mut self) -> u8 {
         let (background_color_bits, background_palette) = self.get_background_pixel();
-        let (sprite_color_bits, sprite_palette, background_priority) =
+        let (sprite_color_bits, sprite_palette, background_priority, is_sprite_0) =
             self.get_sprites_first_non_transparent_pixel();
 
         // 0 for background, 1 for sprite
@@ -642,6 +665,10 @@ where
                 color_bits = sprite_color_bits;
                 palette = sprite_palette;
                 palette_selector = 1;
+            }
+            if is_sprite_0 {
+                // if sprite and background are not transparent, then there is a collision
+                self.reg_status.get_mut().insert(StatusReg::SPRITE_0_HIT);
             }
         } else if sprite_color_bits != 0 {
             color_bits = sprite_color_bits;
@@ -703,6 +730,8 @@ where
                     self.reg_status.get_mut().remove(StatusReg::VERTICAL_BLANK);
                     // clear sprite overflow
                     self.reg_status.get_mut().remove(StatusReg::SPRITE_OVERFLOW);
+                    // clear sprite 0 hit
+                    self.reg_status.get_mut().remove(StatusReg::SPRITE_0_HIT);
 
                     // load next 2 bytes
                     for _ in 0..2 {
@@ -804,12 +833,19 @@ where
                     65..=128 => {
                         let next_y = self.get_next_scroll_y_render() as i16;
 
-                        let sprite = self.primary_oam[(self.cycle - 65) as usize];
+                        let index = (self.cycle - 65) as usize;
+
+                        let sprite = self.primary_oam[index];
                         let sprite_y = sprite.get_y() as i16;
 
                         let diff = next_y - sprite_y;
                         if diff >= 0 && diff < 8 {
                             // in range
+
+                            // sprite 0
+                            if index == 0 {
+                                self.next_scanline_sprite_0_present = true;
+                            }
 
                             if self.secondary_oam_counter > 7 {
                                 // overflow

@@ -99,6 +99,12 @@ impl Sprite {
             3 => &mut self.x,
             _ => unreachable!(),
         };
-        *to_change = data;
+        // y location is set to the position before the sprite (so weird)
+        // but do not wrap 255
+        *to_change = if offset == 0 && data != 255 {
+            data + 1
+        } else {
+            data
+        }
     }
 }
