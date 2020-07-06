@@ -506,6 +506,10 @@ where
                     self.sprite_pattern_shift_registers[i][1] >>= 1;
                 }
 
+                // put the reminaing bit without shifting
+                tmp_low |= self.sprite_pattern_shift_registers[i][0];
+                tmp_high |= self.sprite_pattern_shift_registers[i][1];
+
                 self.sprite_pattern_shift_registers[i][0] = tmp_low;
                 self.sprite_pattern_shift_registers[i][1] = tmp_high;
             }
