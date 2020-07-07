@@ -83,7 +83,13 @@ impl Sprite {
 
     pub fn read_offset(&self, offset: u8) -> u8 {
         match offset {
-            0 => self.y,
+            0 => {
+                if self.y != 0 {
+                    self.y - 1
+                } else {
+                    self.y
+                }
+            }
             1 => self.tile_index,
             2 => self.attributes.bits,
             3 => self.x,
