@@ -6,6 +6,7 @@ const NMI_VECTOR_ADDRESS: u16 = 0xFFFA;
 const RESET_VECTOR_ADDRESS: u16 = 0xFFFC;
 const IRQ_VECTOR_ADDRESS: u16 = 0xFFFE;
 
+#[derive(PartialEq)]
 pub enum CPURunState {
     DmaTransfere,
     Waiting,
@@ -47,7 +48,7 @@ pub struct CPU6502<T: Bus> {
     dma_remaining: u16,
     dma_address: u8,
 
-    bus: T,
+    bus: Rc<RefCell<T>>,
     ppu: Rc<RefCell<dyn PPUCPUConnection>>,
 }
 
@@ -55,7 +56,7 @@ impl<T> CPU6502<T>
 where
     T: Bus,
 {
-    pub fn new(bus: T, ppu: Rc<RefCell<dyn PPUCPUConnection>>) -> Self {
+    pub fn new(bus: Rc<RefCell<T>>, ppu: Rc<RefCell<dyn PPUCPUConnection>>) -> Self {
         CPU6502 {
             reg_pc: 0,
             reg_sp: 0xFD, // FIXME: not 100% about this
@@ -94,11 +95,11 @@ where
     }
 
     fn read_bus(&self, address: u16) -> u8 {
-        self.bus.read(address, Device::CPU)
+        self.bus.borrow().read(address, Device::CPU)
     }
 
     fn write_bus(&mut self, address: u16, data: u8) {
-        self.bus.write(address, data, Device::CPU);
+        self.bus.borrow_mut().write(address, data, Device::CPU);
     }
 
     fn decode_operand(&self, instruction: &Instruction) -> (u16, u8) {

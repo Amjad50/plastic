@@ -51,7 +51,10 @@ fn functionality_test() {
     const SUCCUSS_ADDRESS: u16 = 0x336d;
 
     let bus = DummyBus::new(data);
-    let mut cpu = CPU6502::new(bus, Rc::new(RefCell::new(DummyPPUHandler {})));
+    let mut cpu = CPU6502::new(
+        Rc::new(RefCell::new(bus)),
+        Rc::new(RefCell::new(DummyPPUHandler {})),
+    );
 
     cpu.reg_pc = 0x400;
 

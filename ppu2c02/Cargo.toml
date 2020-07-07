@@ -10,3 +10,11 @@ common = { path = "../common" }
 display = { path = "../display" }
 
 bitflags = "^1.2.1"
+
+# for testing only
+[dev-dependencies]
+common = { path = "../common" }
+display = { path = "../display" }
+cartridge = { path = "../cartridge" }
+cpu6502 = { path = "../cpu6502" }
+
