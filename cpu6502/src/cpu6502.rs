@@ -6,6 +6,14 @@ const NMI_VECTOR_ADDRESS: u16 = 0xFFFA;
 const RESET_VECTOR_ADDRESS: u16 = 0xFFFC;
 const IRQ_VECTOR_ADDRESS: u16 = 0xFFFE;
 
+pub enum CPURunState {
+    DmaTransfere,
+    Waiting,
+    InfiniteLoop(u16),
+    StartingInterrupt,
+    NormalInstructionExecution,
+}
+
 // helper function
 fn is_on_same_page(address1: u16, address2: u16) -> bool {
     address1 & 0xff00 == address2 & 0xff00
@@ -223,8 +231,13 @@ where
         self.set_flag_status(StatusFlag::Carry, result & 0xff00 == 0);
     }
 
-    fn run_branch_condition(&mut self, decoded_operand: u16, condition: bool) -> u8 {
+    fn run_branch_condition(&mut self, decoded_operand: u16, condition: bool) -> (u8, CPURunState) {
         let mut cycle_time = 0;
+
+        // all branch instructions are 2 bytes, its hardcoded number
+        // not sure if its good or not
+        let pc = self.reg_pc.wrapping_sub(2);
+
         if condition {
             cycle_time = if is_on_same_page(self.reg_pc, decoded_operand) {
                 1
@@ -234,7 +247,15 @@ where
 
             self.reg_pc = decoded_operand;
         }
-        cycle_time
+
+        (
+            cycle_time,
+            if condition && decoded_operand == pc {
+                CPURunState::InfiniteLoop(pc)
+            } else {
+                CPURunState::NormalInstructionExecution
+            },
+        )
     }
 
     fn load(&mut self, decoded_operand: u16, is_operand_address: bool) -> u8 {
@@ -258,24 +279,6 @@ where
     fn pull_stack(&mut self) -> u8 {
         self.reg_sp = self.reg_sp.wrapping_add(1);
         self.read_bus(0x0100 | self.reg_sp as u16)
-    }
-
-    pub fn run_all(&mut self) -> Result<(), u16> {
-        let mut last_pc = self.reg_pc;
-
-        // loop until crash..
-        loop {
-            let executed = self.run_next();
-
-            // if we stuck in a loop, return error
-            if executed {
-                if self.reg_pc == last_pc {
-                    return Err(last_pc);
-                } else {
-                    last_pc = self.reg_pc;
-                }
-            }
-        }
     }
 
     pub fn reset(&mut self) {
@@ -325,7 +328,7 @@ where
 
     // return true if an instruction executed
     // false if it was waiting for remaining cycles
-    pub fn run_next(&mut self) -> bool {
+    pub fn run_next(&mut self) -> CPURunState {
         {
             let mut ppu = self.ppu.borrow_mut();
             // check if the PPU is setting the NMI pin
@@ -357,7 +360,7 @@ where
 
                 // since it should read in one cycle and write in the other cycle
                 self.cycles_to_wait = 1;
-                false
+                CPURunState::DmaTransfere
             } else {
                 // interrupts waiting
                 if self.nmi_pin_status
@@ -366,19 +369,18 @@ where
                 {
                     // hardware side interrupt
                     self.execute_interrupt(false, self.nmi_pin_status);
-                    return true;
+                    CPURunState::StartingInterrupt
+                } else {
+                    // fetch
+                    let instruction = self.fetch_next_instruction();
+
+                    // decode and execute
+                    self.run_instruction(&instruction)
                 }
-
-                // fetch
-                let instruction = self.fetch_next_instruction();
-
-                // decode and execute
-                self.run_instruction(&instruction);
-                true
             }
         } else {
             self.cycles_to_wait -= 1;
-            false
+            CPURunState::Waiting
         }
     }
 
@@ -408,11 +410,13 @@ where
         instruction
     }
 
-    fn run_instruction(&mut self, instruction: &Instruction) {
+    fn run_instruction(&mut self, instruction: &Instruction) -> CPURunState {
         let (decoded_operand, cycle_time) = self.decode_operand(instruction);
         let mut cycle_time = cycle_time;
 
         let is_operand_address = instruction.is_operand_address();
+
+        let mut state = CPURunState::NormalInstructionExecution;
 
         match instruction.opcode {
             // TODO: Add support for BCD mode
@@ -629,52 +633,68 @@ where
                 cycle_time = 7;
             }
             Opcode::Bcc => {
-                cycle_time += self.run_branch_condition(
+                let (time, run_state) = self.run_branch_condition(
                     decoded_operand,
                     self.reg_status & (StatusFlag::Carry as u8) == 0,
                 );
+                cycle_time += time;
+                state = run_state;
             }
             Opcode::Bcs => {
-                cycle_time += self.run_branch_condition(
+                let (time, run_state) = self.run_branch_condition(
                     decoded_operand,
                     self.reg_status & (StatusFlag::Carry as u8) != 0,
                 );
+                cycle_time += time;
+                state = run_state;
             }
             Opcode::Beq => {
-                cycle_time += self.run_branch_condition(
+                let (time, run_state) = self.run_branch_condition(
                     decoded_operand,
                     self.reg_status & (StatusFlag::Zero as u8) != 0,
                 );
+                cycle_time += time;
+                state = run_state;
             }
             Opcode::Bmi => {
-                cycle_time += self.run_branch_condition(
+                let (time, run_state) = self.run_branch_condition(
                     decoded_operand,
                     self.reg_status & (StatusFlag::Negative as u8) != 0,
                 );
+                cycle_time += time;
+                state = run_state;
             }
             Opcode::Bne => {
-                cycle_time += self.run_branch_condition(
+                let (time, run_state) = self.run_branch_condition(
                     decoded_operand,
                     self.reg_status & (StatusFlag::Zero as u8) == 0,
                 );
+                cycle_time += time;
+                state = run_state;
             }
             Opcode::Bpl => {
-                cycle_time += self.run_branch_condition(
+                let (time, run_state) = self.run_branch_condition(
                     decoded_operand,
                     self.reg_status & (StatusFlag::Negative as u8) == 0,
                 );
+                cycle_time += time;
+                state = run_state;
             }
             Opcode::Bvc => {
-                cycle_time += self.run_branch_condition(
+                let (time, run_state) = self.run_branch_condition(
                     decoded_operand,
                     self.reg_status & (StatusFlag::Overflow as u8) == 0,
                 );
+                cycle_time += time;
+                state = run_state;
             }
             Opcode::Bvs => {
-                cycle_time += self.run_branch_condition(
+                let (time, run_state) = self.run_branch_condition(
                     decoded_operand,
                     self.reg_status & (StatusFlag::Overflow as u8) != 0,
                 );
+                cycle_time += time;
+                state = run_state;
             }
             Opcode::Dec => {
                 assert!(is_operand_address);
@@ -733,7 +753,15 @@ where
             }
             Opcode::Jmp => {
                 assert!(is_operand_address);
+
+                // this instruction is 3 bytes long in both addressing variants
+                let pc = self.reg_pc.wrapping_sub(3);
+
                 self.reg_pc = decoded_operand;
+
+                if pc == decoded_operand {
+                    state = CPURunState::InfiniteLoop(pc);
+                }
 
                 cycle_time -= 1;
             }
@@ -896,5 +924,7 @@ where
 
         // minus this cycle
         self.cycles_to_wait = cycle_time - 1;
+
+        state
     }
 }

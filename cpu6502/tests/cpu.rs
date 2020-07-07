@@ -1,7 +1,7 @@
 extern crate cpu6502;
 
 use common::{interconnection::PPUCPUConnection, Bus, Device};
-use cpu6502::CPU6502;
+use cpu6502::{CPURunState, CPU6502};
 use std::{cell::RefCell, rc::Rc};
 
 struct DummyBus {
@@ -55,11 +55,17 @@ fn functionality_test() {
 
     cpu.reg_pc = 0x400;
 
-    let result = cpu.run_all();
-    assert!(result.is_err());
-    assert!(
-        result.err().unwrap() == SUCCUSS_ADDRESS,
-        "Test failed at {:04X}, check the `.lst` file for more info",
-        result.err().unwrap()
-    );
+    loop {
+        let state = cpu.run_next();
+
+        // if we stuck in a loop, return error
+        if let CPURunState::InfiniteLoop(pc) = state {
+            assert!(
+                pc == SUCCUSS_ADDRESS,
+                "Test failed at {:04X}, check the `.lst` file for more info",
+                pc
+            );
+            break;
+        }
+    }
 }
