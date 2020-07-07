@@ -4,7 +4,7 @@ mod ppu_tests {
     use cartridge::{Cartridge, CartridgeError};
     use common::{Bus, Device};
     use cpu6502::{CPURunState, CPU6502};
-    use display::TV;
+    use display::{COLORS, TV};
     use std::{
         cell::RefCell,
         convert::From,
@@ -12,7 +12,12 @@ mod ppu_tests {
         fmt::{Debug, Display, Formatter, Result as fmtResult},
         fs::File,
         rc::Rc,
+        sync::{Arc, Mutex},
     };
+
+    // FIXME: used constants hosted in TV
+    const TV_WIDTH: u32 = 256;
+    const TV_HEIGHT: u32 = 240;
 
     enum PPUTestError {
         CartridgeError(CartridgeError),
@@ -137,6 +142,7 @@ mod ppu_tests {
         cpu: CPU6502<CPUBus>,
         ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
         cpubus: Rc<RefCell<CPUBus>>,
+        tv_image: Arc<Mutex<Vec<u8>>>,
     }
 
     impl NES {
@@ -147,11 +153,9 @@ mod ppu_tests {
                 cartridge.clone(),
                 cartridge.borrow().is_vertical_mirroring(),
             );
-            // FIXME: used constants hosted in TV
-            const TV_WIDTH: u32 = 256;
-            const TV_HEIGHT: u32 = 240;
 
             let tv = TV::new(TV_WIDTH, TV_HEIGHT);
+            let tv_image = tv.get_image_clone();
 
             let ppu = Rc::new(RefCell::new(PPU2C02::new(ppubus, tv)));
 
@@ -163,6 +167,7 @@ mod ppu_tests {
                 cpu,
                 ppu: ppu.clone(),
                 cpubus: cpubus.clone(),
+                tv_image,
             })
         }
 
@@ -193,6 +198,31 @@ mod ppu_tests {
                 }
             }
         }
+
+        /// after each CPU clock (3 PPU clocks), check if the pixel in `x, y`
+        /// match the color specified `color_code`, if match, then return
+        ///
+        /// this check is done manually now, not sure if it should be added
+        /// to `display::TV` or not
+        fn clock_until_pixel_appears(&mut self, x: u32, y: u32, color_code: u8) {
+            loop {
+                self.clock();
+
+                let index = (y * TV_WIDTH + x) as usize * 4;
+
+                if let Ok(image) = self.tv_image.lock() {
+                    let color = &COLORS[color_code as usize];
+
+                    if image[index + 0] == color.r
+                        && image[index + 1] == color.g
+                        && image[index + 2] == color.b
+                        && image[index + 3] == 0xFF
+                    {
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     fn run_test(filename: &str, result_memory_address: u16) -> Result<(), PPUTestError> {
@@ -200,6 +230,24 @@ mod ppu_tests {
         nes.cpu.reset();
 
         nes.clock_until_infinite_loop();
+
+        let result = nes.cpubus.borrow().read(result_memory_address, Device::CPU);
+
+        if result != 1 {
+            Err(PPUTestError::ResultError(result))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn run_sprite_hit_test(filename: &str) -> Result<(), PPUTestError> {
+        let result_memory_address = 0x00F8;
+
+        let mut nes = NES::new(filename)?;
+        nes.cpu.reset();
+
+        // this is the top-left pixel of the word "PASSED" or "FAILED"
+        nes.clock_until_pixel_appears(17, 48, 0x30);
 
         let result = nes.cpubus.borrow().read(result_memory_address, Device::CPU);
 
@@ -251,5 +299,66 @@ mod ppu_tests {
     #[test]
     fn blargg_ppu_test_vram_access() -> Result<(), PPUTestError> {
         run_test("./tests/roms/blargg_ppu_tests/vram_access.nes", 0x00f0)
+    }
+
+    #[test]
+    fn sprite_hit_test_01_basics() -> Result<(), PPUTestError> {
+        run_sprite_hit_test("./tests/roms/sprite_hit_tests/01.basics.nes")
+    }
+
+    #[test]
+    fn sprite_hit_test_02_alignment() -> Result<(), PPUTestError> {
+        run_sprite_hit_test("./tests/roms/sprite_hit_tests/02.alignment.nes")
+    }
+
+    #[test]
+    fn sprite_hit_test_03_corners() -> Result<(), PPUTestError> {
+        run_sprite_hit_test("./tests/roms/sprite_hit_tests/03.corners.nes")
+    }
+
+    #[test]
+    fn sprite_hit_test_04_flip() -> Result<(), PPUTestError> {
+        run_sprite_hit_test("./tests/roms/sprite_hit_tests/04.flip.nes")
+    }
+
+    // FIXME: this test is still failing
+    // #[test]
+    fn sprite_hit_test_05_left_clip() -> Result<(), PPUTestError> {
+        run_sprite_hit_test("./tests/roms/sprite_hit_tests/05.left_clip.nes")
+    }
+
+    // FIXME: this test is still failing
+    // #[test]
+    fn sprite_hit_test_06_right_edge() -> Result<(), PPUTestError> {
+        run_sprite_hit_test("./tests/roms/sprite_hit_tests/06.right_edge.nes")
+    }
+
+    #[test]
+    fn sprite_hit_test_07_screen_bottom() -> Result<(), PPUTestError> {
+        run_sprite_hit_test("./tests/roms/sprite_hit_tests/07.screen_bottom.nes")
+    }
+
+    // FIXME: this test is still failing
+    // #[test]
+    fn sprite_hit_test_08_double_height() -> Result<(), PPUTestError> {
+        run_sprite_hit_test("./tests/roms/sprite_hit_tests/08.double_height.nes")
+    }
+
+    // FIXME: this test is still failing
+    // #[test]
+    fn sprite_hit_test_09_timing_basics() -> Result<(), PPUTestError> {
+        run_sprite_hit_test("./tests/roms/sprite_hit_tests/09.timing_basics.nes")
+    }
+
+    // FIXME: this test is still failing
+    // #[test]
+    fn sprite_hit_test_10_timing_order() -> Result<(), PPUTestError> {
+        run_sprite_hit_test("./tests/roms/sprite_hit_tests/10.timing_order.nes")
+    }
+
+    // FIXME: this test is still failing
+    // #[test]
+    fn sprite_hit_test_11_edge_timing() -> Result<(), PPUTestError> {
+        run_sprite_hit_test("./tests/roms/sprite_hit_tests/11.edge_timing.nes")
     }
 }
