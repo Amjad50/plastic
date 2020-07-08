@@ -113,10 +113,12 @@ pub struct PPU2C02<T: Bus> {
     x_scroll: u8,
     y_scroll: u8,
 
+    rendering_y_fine_scroll: u8,
+
     w_toggle: Cell<bool>, // this is used for registers that require 2 writes
 
     bg_pattern_shift_registers: [u16; 2],
-    bg_palette_attribute_shift_registers: [u8; 2],
+    bg_palette_shift_registers: [u16; 2],
 
     nmi_pin_status: bool,
 
@@ -162,10 +164,12 @@ where
             x_scroll: 0,
             y_scroll: 0,
 
+            rendering_y_fine_scroll: 0,
+
             w_toggle: Cell::new(false),
 
             bg_pattern_shift_registers: [0; 2],
-            bg_palette_attribute_shift_registers: [0; 2],
+            bg_palette_shift_registers: [0; 2],
 
             nmi_pin_status: false,
 
@@ -349,7 +353,7 @@ where
         }
     }
 
-    fn restore_vram_coarse_scroll_x(&mut self) {
+    fn restore_rendering_scroll_x(&mut self) {
         // extract coarse_x
         let coarse_x = self.x_scroll >> 3; // only top 5 bits
 
@@ -379,7 +383,7 @@ where
         *self.vram_address_cur.get_mut() |= ((coarse_y & 0b11111) as u16) << 5;
     }
 
-    fn restore_vram_coarse_scroll_y(&mut self) {
+    fn restore_rendering_scroll_y(&mut self) {
         // extract coarse_y
         let coarse_y = self.y_scroll >> 3; // only top 5 bits
 
@@ -387,6 +391,9 @@ where
         *self.vram_address_cur.get_mut() &= 0xFC1F;
         // put result back
         *self.vram_address_cur.get_mut() |= ((coarse_y & 0b11111) as u16) << 5;
+
+        // restore fine y
+        self.rendering_y_fine_scroll = self.y_scroll & 0b111;
     }
 
     fn restore_nametable_horizontal(&mut self) {
@@ -417,7 +424,21 @@ where
         );
 
         let tile_pattern = self.fetch_pattern_background(nametable_tile);
+
+        // fetch and prepare the palette
         let attribute_byte = self.fetch_attribute_byte();
+
+        let coarse_x = self.get_vram_coarse_x();
+        let coarse_y = self.get_vram_coarse_y();
+
+        let attribute_location_x = (coarse_x >> 1) & 0x1;
+        let attribute_location_y = (coarse_y >> 1) & 0x1;
+
+        let attribute_location = attribute_location_y << 1 | attribute_location_x;
+
+        // 00: top-left, 01: top-right, 10: bottom-left, 11: bottom-right
+        // bit-1 is for (top, bottom), bit-0 is for (left, right)
+        let palette = (attribute_byte >> (attribute_location * 2)) & 0b11;
 
         // update th shift registers
         for i in 0..=1 {
@@ -427,12 +448,16 @@ where
             // the shift registers will be shifted one more time
             // meaning, it will be shifted 8 times
             self.bg_pattern_shift_registers[i] |= tile_pattern[i] as u16;
-        }
 
-        // reload attribute shift register
-        // TODO: this does not seem like a shift register but not sure
-        self.bg_palette_attribute_shift_registers[0] = self.bg_palette_attribute_shift_registers[1];
-        self.bg_palette_attribute_shift_registers[1] = attribute_byte;
+            // palette
+            self.bg_palette_shift_registers[i] &= 0xFF00;
+
+            // as palettes are two bits, we store the first bit in index 0 and
+            // the second bit in index 1 in the array
+            //
+            // this is similar to how the patterns are stored in CHR table
+            self.bg_palette_shift_registers[i] |= 0xFF * ((palette >> i) & 1) as u16;
+        }
     }
 
     /*
@@ -448,7 +473,7 @@ where
     +--------------- 0: Pattern table is at $0000-$1FFF
     */
     fn fetch_pattern_background(&self, location: u8) -> [u8; 2] {
-        let fine_y = (self.y_scroll & 0b111) as u16;
+        let fine_y = self.rendering_y_fine_scroll as u16;
 
         // for background
         let pattern_table = self.reg_control.background_pattern_address();
@@ -563,24 +588,12 @@ where
 
         let color_bit = high_plane_bit << 1 | low_plane_bit;
 
-        let current_attribute = self.bg_palette_attribute_shift_registers[0];
+        let low_palette_bit =
+            ((self.bg_palette_shift_registers[0] >> (15 - fine_x) as u16) & 0x1) as u8;
+        let high_palette_bit =
+            ((self.bg_palette_shift_registers[1] >> (15 - fine_x) as u16) & 0x1) as u8;
 
-        // since we can't use `self.x_scroll` and `self.y_scroll`
-        // let's extract the scroll values from vram
-        // because vram is pointing to the address to fetch next, we need
-        // to go back to retrieve the current rendering x scroll value,
-        // we sub 2
-        let coarse_x = self.get_vram_coarse_x().wrapping_sub(2);
-        let coarse_y = self.get_vram_coarse_y();
-
-        let attribute_location_x = (coarse_x >> 1) & 0x1;
-        let attribute_location_y = (coarse_y >> 1) & 0x1;
-
-        let attribute_location = attribute_location_y << 1 | attribute_location_x;
-
-        // 00: top-left, 01: top-right, 10: bottom-left, 11: bottom-right
-        // bit-1 is for (top, bottom), bit-0 is for (left, right)
-        let palette = (current_attribute >> (attribute_location * 2)) & 0b11;
+        let palette = high_palette_bit << 1 | low_palette_bit;
 
         (color_bit, palette)
     }
@@ -691,6 +704,7 @@ where
         // advance the shift registers
         for i in 0..=1 {
             self.bg_pattern_shift_registers[i] = self.bg_pattern_shift_registers[i].wrapping_shl(1);
+            self.bg_palette_shift_registers[i] = self.bg_palette_shift_registers[i].wrapping_shl(1);
         }
 
         color
@@ -720,8 +734,8 @@ where
                 // pre-render
 
                 if self.cycle == 1 && self.reg_mask.rendering_enabled() {
-                    self.restore_vram_coarse_scroll_x();
-                    self.restore_vram_coarse_scroll_y();
+                    self.restore_rendering_scroll_x();
+                    self.restore_rendering_scroll_y();
 
                     self.restore_nametable_horizontal();
                     self.restore_nametable_vertical();
@@ -740,6 +754,8 @@ where
                             // as we are reloading 2 times
                             self.bg_pattern_shift_registers[i] =
                                 self.bg_pattern_shift_registers[i].wrapping_shl(8);
+                            self.bg_palette_shift_registers[i] =
+                                self.bg_palette_shift_registers[i].wrapping_shl(8);
                         }
                         self.reload_shift_registers();
                         self.increment_vram_coarse_scroll_x();
@@ -804,15 +820,12 @@ where
                         self.increment_vram_coarse_scroll_x();
                     } else {
                         // increment fine scrolling Y on the last dot without carry
-                        let mut fine_y = self.y_scroll & 0b111;
-                        fine_y += 1;
-
-                        self.y_scroll &= 0b11111000;
-                        self.y_scroll |= fine_y & 0b111;
+                        self.rendering_y_fine_scroll += 1;
 
                         // if the increment resulted in a carry, go to the next tile
                         // i.e. increment coarse Y
-                        if fine_y & 0x8 != 0 {
+                        if self.rendering_y_fine_scroll & 0x8 != 0 {
+                            self.rendering_y_fine_scroll = 0;
                             self.increment_vram_coarse_scroll_y();
                         }
                     }
@@ -863,7 +876,7 @@ where
             257..=320 => {
                 // unused
                 if self.cycle == 257 {
-                    self.restore_vram_coarse_scroll_x();
+                    self.restore_rendering_scroll_x();
                     // to fix nametable wrapping around
                     self.restore_nametable_horizontal();
                 }
@@ -883,6 +896,8 @@ where
                             // as we are reloading 2 times
                             self.bg_pattern_shift_registers[i] =
                                 self.bg_pattern_shift_registers[i].wrapping_shl(8);
+                            self.bg_palette_shift_registers[i] =
+                                self.bg_palette_shift_registers[i].wrapping_shl(8);
                         }
                         self.reload_shift_registers();
                         self.increment_vram_coarse_scroll_x();
