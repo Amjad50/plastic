@@ -733,13 +733,7 @@ where
             261 => {
                 // pre-render
 
-                if self.cycle == 1 && self.reg_mask.rendering_enabled() {
-                    self.restore_rendering_scroll_x();
-                    self.restore_rendering_scroll_y();
-
-                    self.restore_nametable_horizontal();
-                    self.restore_nametable_vertical();
-
+                if self.cycle == 1 {
                     // clear v-blank
                     self.reg_status.get_mut().remove(StatusReg::VERTICAL_BLANK);
                     // clear sprite overflow
@@ -747,22 +741,30 @@ where
                     // clear sprite 0 hit
                     self.reg_status.get_mut().remove(StatusReg::SPRITE_0_HIT);
 
-                    // load next 2 bytes
-                    for _ in 0..2 {
-                        for i in 0..=1 {
-                            // as this is the first time, shift the registers
-                            // as we are reloading 2 times
-                            self.bg_pattern_shift_registers[i] =
-                                self.bg_pattern_shift_registers[i].wrapping_shl(8);
-                            self.bg_palette_shift_registers[i] =
-                                self.bg_palette_shift_registers[i].wrapping_shl(8);
+                    if self.reg_mask.rendering_enabled() {
+                        self.restore_rendering_scroll_x();
+                        self.restore_rendering_scroll_y();
+
+                        self.restore_nametable_horizontal();
+                        self.restore_nametable_vertical();
+
+                        // load next 2 bytes
+                        for _ in 0..2 {
+                            for i in 0..=1 {
+                                // as this is the first time, shift the registers
+                                // as we are reloading 2 times
+                                self.bg_pattern_shift_registers[i] =
+                                    self.bg_pattern_shift_registers[i].wrapping_shl(8);
+                                self.bg_palette_shift_registers[i] =
+                                    self.bg_palette_shift_registers[i].wrapping_shl(8);
+                            }
+                            self.reload_shift_registers();
+                            self.increment_vram_coarse_scroll_x();
                         }
-                        self.reload_shift_registers();
-                        self.increment_vram_coarse_scroll_x();
                     }
                 }
                 // reload all of them in one go
-                if self.cycle == 257 {
+                if self.cycle == 257 && self.reg_mask.sprites_enabled() {
                     self.reload_sprite_shift_registers();
                 }
             }
