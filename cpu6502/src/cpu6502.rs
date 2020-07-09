@@ -325,6 +325,9 @@ where
 
         let pc = high << 8 | low;
         self.reg_pc = pc;
+
+        // delay of interrupt
+        self.cycles_to_wait += 7;
     }
 
     // return true if an instruction executed
@@ -472,6 +475,8 @@ where
 
                     if instruction.addressing_mode == AddressingMode::AbsoluteX {
                         cycle_time = 7; // special case
+                    } else {
+                        cycle_time += 2;
                     }
                 } else {
                     self.reg_a = operand;
@@ -500,6 +505,8 @@ where
 
                     if instruction.addressing_mode == AddressingMode::AbsoluteX {
                         cycle_time = 7; // special case
+                    } else {
+                        cycle_time += 2;
                     }
                 } else {
                     self.reg_a = operand;
@@ -530,6 +537,8 @@ where
 
                     if instruction.addressing_mode == AddressingMode::AbsoluteX {
                         cycle_time = 7; // special case
+                    } else {
+                        cycle_time += 2;
                     }
                 } else {
                     self.reg_a = operand;
@@ -560,6 +569,8 @@ where
 
                     if instruction.addressing_mode == AddressingMode::AbsoluteX {
                         cycle_time = 7; // special case
+                    } else {
+                        cycle_time += 2;
                     }
                 } else {
                     self.reg_a = operand;
@@ -631,7 +642,6 @@ where
                 // increment the PC for saving
                 self.reg_pc += 1;
                 self.execute_interrupt(true, self.nmi_pin_status);
-                cycle_time = 7;
             }
             Opcode::Bcc => {
                 let (time, run_state) = self.run_branch_condition(
@@ -708,10 +718,10 @@ where
                 // put back
                 self.write_bus(decoded_operand, result);
 
-                cycle_time += if instruction.addressing_mode == AddressingMode::AbsoluteX {
-                    3
+                if instruction.addressing_mode == AddressingMode::AbsoluteX {
+                    cycle_time = 7; // special case
                 } else {
-                    2
+                    cycle_time += 2;
                 };
             }
             Opcode::Inc => {
@@ -725,10 +735,10 @@ where
                 // put back
                 self.write_bus(decoded_operand, result);
 
-                cycle_time += if instruction.addressing_mode == AddressingMode::AbsoluteX {
-                    3
+                if instruction.addressing_mode == AddressingMode::AbsoluteX {
+                    cycle_time = 7; // special case
                 } else {
-                    2
+                    cycle_time += 2;
                 };
             }
             Opcode::Clc => {
@@ -764,7 +774,12 @@ where
                     state = CPURunState::InfiniteLoop(pc);
                 }
 
-                cycle_time -= 1;
+                // this instruction has only `Absolute` and `Relative` as adressing modes
+                cycle_time = if instruction.addressing_mode == AddressingMode::Absolute {
+                    3
+                } else {
+                    5
+                };
             }
             Opcode::Jsr => {
                 assert!(is_operand_address);
@@ -777,6 +792,8 @@ where
                 self.push_stack(low);
 
                 self.reg_pc = decoded_operand;
+
+                cycle_time = 6;
             }
             Opcode::Rti => {
                 let old_status = self.reg_status & 0x30;
@@ -789,6 +806,8 @@ where
 
                 // unlike RTS, this is the actual address
                 self.reg_pc = address;
+
+                cycle_time = 6;
             }
             Opcode::Rts => {
                 let low = self.pull_stack() as u16;
@@ -798,6 +817,8 @@ where
 
                 // go to address + 1
                 self.reg_pc = address + 1;
+
+                cycle_time = 6;
             }
             Opcode::Lda => {
                 self.reg_a = self.load(decoded_operand, is_operand_address);
@@ -877,11 +898,15 @@ where
             }
             Opcode::Pha => {
                 self.push_stack(self.reg_a);
+
+                cycle_time = 3;
             }
             Opcode::Php => {
                 // bit 4 and 5 must be set
                 let status = self.reg_status | 0x30;
                 self.push_stack(status);
+
+                cycle_time = 3;
             }
             Opcode::Pla => {
                 let result = self.pull_stack();
@@ -891,11 +916,15 @@ where
                 self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
 
                 self.reg_a = result;
+
+                cycle_time = 4;
             }
             Opcode::Plp => {
                 // Bits 4 and 5 should not be edited
                 let old_status = self.reg_status & 0x30;
                 self.reg_status = self.pull_stack() | old_status;
+
+                cycle_time = 4;
             }
             Opcode::Sta => {
                 assert!(is_operand_address);
