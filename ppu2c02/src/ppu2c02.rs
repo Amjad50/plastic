@@ -138,6 +138,8 @@ pub struct PPU2C02<T: Bus> {
 
     is_dma_request: bool,
     dma_request_address: u8,
+
+    is_odd_frame: bool,
 }
 
 impl<T> PPU2C02<T>
@@ -189,6 +191,8 @@ where
 
             is_dma_request: false,
             dma_request_address: 0,
+
+            is_odd_frame: false,
         }
     }
 
@@ -795,13 +799,19 @@ where
             }
         }
         self.cycle += 1;
-        if self.cycle > 340 {
+        if self.cycle > 340
+            || (self.scanline == 261
+                && self.cycle == 340
+                && self.is_odd_frame
+                && self.reg_mask.rendering_enabled())
+        {
             self.scanline += 1;
             self.cycle = 0;
 
             // next frame
             if self.scanline > 261 {
                 self.scanline = 0;
+                self.is_odd_frame = !self.is_odd_frame;
             }
         }
     }
