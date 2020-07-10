@@ -61,6 +61,7 @@ mod ppu_tests {
     struct CPUBus {
         cartridge: Rc<RefCell<Cartridge>>,
         ram: [u8; 0x800],
+        battery_ram: [u8; 0x2000],
         ppu: Rc<RefCell<dyn Bus>>,
     }
 
@@ -69,6 +70,7 @@ mod ppu_tests {
             CPUBus {
                 cartridge,
                 ram: [0; 0x800],
+                battery_ram: [0; 0x2000],
                 ppu,
             }
         }
@@ -111,6 +113,7 @@ mod ppu_tests {
                 0x0000..=0x1FFF => self.ram[(address & 0x7FF) as usize],
                 0x2000..=0x3FFF => self.ppu.borrow().read(0x2000 | (address & 0x7), device),
                 0x4014 => self.ppu.borrow().read(address, device),
+                0x6000..=0x7FFF => self.battery_ram[(address & 0x1FFF) as usize],
                 0x8000..=0xFFFF => self.cartridge.borrow().read(address, device),
                 _ => {
                     // ignored
@@ -127,6 +130,7 @@ mod ppu_tests {
                         .write(0x2000 | (address & 0x7), data, device)
                 }
                 0x4014 => self.ppu.borrow_mut().write(address, data, device),
+                0x6000..=0x7FFF => self.battery_ram[(address & 0x1FFF) as usize] = data,
                 0x8000..=0xFFFF => self
                     .cartridge
                     .borrow_mut()
@@ -199,6 +203,17 @@ mod ppu_tests {
             }
         }
 
+        /// loop until the memory at `address` does not equal to `data`
+        fn clock_until_memory_neq(&mut self, address: u16, data: u8) {
+            loop {
+                self.clock();
+
+                if self.cpubus.borrow().read(address, Device::CPU) != data {
+                    break;
+                }
+            }
+        }
+
         /// after each CPU clock (3 PPU clocks), check if the pixel in `x, y`
         /// match the color specified `color_code`, if match, then return
         ///
@@ -252,6 +267,30 @@ mod ppu_tests {
         let result = nes.cpubus.borrow().read(result_memory_address, Device::CPU);
 
         if result != 1 {
+            Err(PPUTestError::ResultError(result))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn run_ppu_vbl_nmi_test(filename: &str) -> Result<(), PPUTestError> {
+        let result_memory_address = 0x6000;
+
+        let mut nes = NES::new(filename)?;
+        nes.cpu.reset();
+
+        // first loop until an infnite loop (this infinite loop might be the
+        // end or not), then loop until the value of `0x6000` is not `0x80`
+        // the reason we can't loop until memory_neq from the beginning
+        // is because the ram starts with all zeros, so it will stop after the
+        // first instruction
+        nes.clock_until_infinite_loop();
+        // the default is 0x80, when the rom starts
+        nes.clock_until_memory_neq(0x6000, 0x80);
+
+        let result = nes.cpubus.borrow().read(result_memory_address, Device::CPU);
+
+        if result != 0 {
             Err(PPUTestError::ResultError(result))
         } else {
             Ok(())
@@ -358,5 +397,60 @@ mod ppu_tests {
     // #[test]
     fn sprite_hit_test_11_edge_timing() -> Result<(), PPUTestError> {
         run_sprite_hit_test("./tests/roms/sprite_hit_tests/11.edge_timing.nes")
+    }
+
+    #[test]
+    fn ppu_vbl_nmi_test_01_vbl_basics() -> Result<(), PPUTestError> {
+        run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/01-vbl_basics.nes")
+    }
+
+    // FIXME: this test is still failing
+    // #[test]
+    fn ppu_vbl_nmi_test_02_vbl_set_time() -> Result<(), PPUTestError> {
+        run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/02-vbl_set_time.nes")
+    }
+
+    #[test]
+    fn ppu_vbl_nmi_test_03_vbl_clear_time() -> Result<(), PPUTestError> {
+        run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/03-vbl_clear_time.nes")
+    }
+
+    #[test]
+    fn ppu_vbl_nmi_test_04_nmi_control() -> Result<(), PPUTestError> {
+        run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/04-nmi_control.nes")
+    }
+
+    // FIXME: this test is still failing
+    // #[test]
+    fn ppu_vbl_nmi_test_05_nmi_timing() -> Result<(), PPUTestError> {
+        run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/05-nmi_timing.nes")
+    }
+
+    // FIXME: this test is still failing
+    // #[test]
+    fn ppu_vbl_nmi_test_06_suppression() -> Result<(), PPUTestError> {
+        run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/06-suppression.nes")
+    }
+
+    #[test]
+    fn ppu_vbl_nmi_test_07_nmi_on_timing() -> Result<(), PPUTestError> {
+        run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/07-nmi_on_timing.nes")
+    }
+
+    // FIXME: this test is still failing
+    // #[test]
+    fn ppu_vbl_nmi_test_08_nmi_off_timing() -> Result<(), PPUTestError> {
+        run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/08-nmi_off_timing.nes")
+    }
+
+    #[test]
+    fn ppu_vbl_nmi_test_09_even_odd_frames() -> Result<(), PPUTestError> {
+        run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/09-even_odd_frames.nes")
+    }
+
+    // FIXME: this test is still failing
+    // #[test]
+    fn ppu_vbl_nmi_test_10_even_odd_timing() -> Result<(), PPUTestError> {
+        run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/10-even_odd_timing.nes")
     }
 }
