@@ -121,6 +121,7 @@ pub struct PPU2C02<T: Bus> {
     bg_palette_shift_registers: [u16; 2],
 
     nmi_pin_status: bool,
+    nmi_occured_in_this_frame: bool,
 
     bus: T,
     tv: TV,
@@ -174,6 +175,7 @@ where
             bg_palette_shift_registers: [0; 2],
 
             nmi_pin_status: false,
+            nmi_occured_in_this_frame: false,
 
             bus,
             tv,
@@ -249,6 +251,23 @@ where
                 self.reg_control.bits = data;
 
                 self.nametable_tmp = self.reg_control.bits & ControlReg::BASE_NAMETABLE.bits;
+
+                // if the NMI flag is set, run immediate NMI to the CPU
+                // but only run if we are in the VBLANK period and no
+                // other NMI has occurred so far
+                if self.reg_control.nmi_enabled() {
+                    if self.reg_status.get().intersects(StatusReg::VERTICAL_BLANK)
+                        && !self.nmi_occured_in_this_frame
+                    {
+                        self.nmi_pin_status = true;
+                        self.nmi_occured_in_this_frame = true;
+                    }
+                } else {
+                    // in case if the NMI flag was disabled, then mark as nmi
+                    // never occurred on this frame, even if it has
+                    // meaning, that in some cases 2 NMI can occur
+                    self.nmi_occured_in_this_frame = false;
+                }
             }
             Register::Mask => self.reg_mask.bits = data,
             Register::OmaAddress => self.reg_oam_addr.set(data),
@@ -738,6 +757,8 @@ where
                 // pre-render
 
                 if self.cycle == 1 {
+                    // reset nmi_occured_in_this_frame
+                    self.nmi_occured_in_this_frame = false;
                     // clear v-blank
                     self.reg_status.get_mut().remove(StatusReg::VERTICAL_BLANK);
                     // clear sprite overflow
@@ -791,6 +812,7 @@ where
                     // if raising NMI is enabled
                     if self.reg_control.nmi_enabled() {
                         self.nmi_pin_status = true;
+                        self.nmi_occured_in_this_frame = true;
                     }
                 }
             }
