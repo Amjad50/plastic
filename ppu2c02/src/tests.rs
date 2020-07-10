@@ -273,8 +273,7 @@ mod ppu_tests {
         run_test("./tests/roms/blargg_ppu_tests/sprite_ram.nes", 0x00f0)
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn blargg_ppu_test_vbl_clear_time() -> Result<(), PPUTestError> {
         let filename = "./tests/roms/blargg_ppu_tests/vbl_clear_time.nes";
         let result_memory_address = 0x00f0;
@@ -350,8 +349,7 @@ mod ppu_tests {
         run_sprite_hit_test("./tests/roms/sprite_hit_tests/09.timing_basics.nes")
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn sprite_hit_test_10_timing_order() -> Result<(), PPUTestError> {
         run_sprite_hit_test("./tests/roms/sprite_hit_tests/10.timing_order.nes")
     }

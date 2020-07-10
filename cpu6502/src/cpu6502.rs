@@ -330,24 +330,24 @@ where
         self.cycles_to_wait += 7;
     }
 
+    fn check_for_nmi_dma(&mut self) {
+        let mut ppu = self.ppu.borrow_mut();
+        // check if the PPU is setting the NMI pin
+        if ppu.is_nmi_pin_set() {
+            self.nmi_pin_status = true;
+            ppu.clear_nmi_pin();
+        }
+        // check if PPU is requesting DMA
+        if ppu.is_dma_request() {
+            self.dma_address = ppu.dma_address();
+            self.dma_remaining = 256;
+            ppu.clear_dma_request();
+        }
+    }
+
     // return true if an instruction executed
     // false if it was waiting for remaining cycles
     pub fn run_next(&mut self) -> CPURunState {
-        {
-            let mut ppu = self.ppu.borrow_mut();
-            // check if the PPU is setting the NMI pin
-            if ppu.is_nmi_pin_set() {
-                self.nmi_pin_status = true;
-                ppu.clear_nmi_pin();
-            }
-            // check if PPU is requesting DMA
-            if ppu.is_dma_request() {
-                self.dma_address = ppu.dma_address();
-                self.dma_remaining = 256;
-                ppu.clear_dma_request();
-            }
-        }
-
         if self.cycles_to_wait == 0 {
             // are we still executing the DMA transfer instruction?
             if self.dma_remaining > 0 {
@@ -375,6 +375,10 @@ where
                     self.execute_interrupt(false, self.nmi_pin_status);
                     CPURunState::StartingInterrupt
                 } else {
+                    // check for NMI and DMA and apply them only after the next
+                    // instruction
+                    self.check_for_nmi_dma();
+
                     // fetch
                     let instruction = self.fetch_next_instruction();
 
