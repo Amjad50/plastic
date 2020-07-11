@@ -25,14 +25,14 @@ impl Mapper for Mapper0 {
         self.is_chr_ram = chr_count == 0;
     }
 
-    fn map_read(&self, address: u16, device: Device) -> u16 {
+    fn map_read(&self, address: u16, device: Device) -> usize {
         match device {
             Device::CPU => {
                 // this is just for extra caution
                 if address >= 0x8000 && address <= 0xFFFF {
                     // 0x7FFF is for mapping 0x8000-0xFFFF to 0x0000-0x7FFF
                     // which is the range of the array
-                    if self.has_32kb_prg_rom {
+                    (if self.has_32kb_prg_rom {
                         address & 0x7FFF
                     } else {
                         // in case of the array being half of the size (i.e.
@@ -40,7 +40,7 @@ impl Mapper for Mapper0 {
                         // 0x8000-0xBFFF, and 0xC000-0xFFFF will mirror the
                         // previous range
                         address & 0xBFFF & 0x7FFF
-                    }
+                    }) as usize
                 } else {
                     unreachable!()
                 }
@@ -51,7 +51,7 @@ impl Mapper for Mapper0 {
                 // this is just for extra caution
                 if address >= 0x0000 && address < 0x2000 {
                     // only one fixed memory
-                    address
+                    address as usize
                 } else {
                     unreachable!()
                 }

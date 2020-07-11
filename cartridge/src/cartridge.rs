@@ -122,8 +122,9 @@ impl Cartridge {
     }
 
     fn get_mapper(mapper_id: u8, prg_count: u8, chr_count: u8) -> Box<dyn Mapper> {
-        let mut mapper = match mapper_id {
-            0 => Mapper0::new(),
+        let mut mapper: Box<dyn Mapper> = match mapper_id {
+            0 => Box::new(Mapper0::new()),
+            1 => Box::new(Mapper1::new()),
             _ => {
                 unimplemented!("Mapper {} is not yet implemented", mapper_id);
             }
@@ -133,7 +134,7 @@ impl Cartridge {
         // they share a constructor
         mapper.init(prg_count, chr_count);
 
-        Box::new(mapper)
+        mapper
     }
 
     fn is_chr_ram(&self) -> bool {
@@ -147,15 +148,9 @@ impl Bus for Cartridge {
 
         match device {
             // CPU is reading PRG only
-            Device::CPU => *self
-                .prg_data
-                .get(address as usize)
-                .expect("PRG out of bounds"),
+            Device::CPU => *self.prg_data.get(address).expect("PRG out of bounds"),
             // PPU is reading CHR data
-            Device::PPU => *self
-                .chr_data
-                .get(address as usize)
-                .expect("CHR out of bounds"),
+            Device::PPU => *self.chr_data.get(address).expect("CHR out of bounds"),
         }
     }
     fn write(&mut self, address: u16, data: u8, device: Device) {
