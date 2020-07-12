@@ -66,6 +66,7 @@ impl Mapper1 {
         self.writing_shift_register = 0b10000;
     }
 
+    // FIXME: handle mirroring from here, and add support to switchable mirroring modes
     fn get_mirroring(&self) -> u8 {
         self.control_register & 0b00011
     }
@@ -134,8 +135,20 @@ impl Mapper for Mapper1 {
 
                 let start_of_bank = 0x4000 * bank;
 
+                let last_bank = 0x4000 * (self.prg_count - 1) as usize;
+
+                // since banks can be odd in number, we don't want to go out
+                // of bounds, but this solution does mirroring, in case of
+                // a possible out of bounds, but not sure what is the correct
+                // solution
+                let mask = if self.is_PRG_32kb_mode() && start_of_bank != last_bank {
+                    0x7FFF
+                } else {
+                    0x3FFF
+                };
+
                 // add the offset
-                start_of_bank + (address & 0x3FFF) as usize
+                start_of_bank + (address & mask) as usize
             }
             Device::PPU => {
                 let bank = if self.is_CHR_8kb_mode() {
@@ -155,8 +168,14 @@ impl Mapper for Mapper1 {
 
                 let start_of_bank = 0x1000 * bank;
 
+                let mask = if self.is_CHR_8kb_mode() {
+                    0x1FFF
+                } else {
+                    0xFFF
+                };
+
                 // add the offset
-                start_of_bank + (address & 0xFFF) as usize
+                start_of_bank + (address & mask) as usize
             }
         }
     }
