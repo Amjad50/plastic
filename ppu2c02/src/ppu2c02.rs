@@ -17,19 +17,9 @@ bitflags! {
 }
 
 impl ControlReg {
-    pub fn base_nametable_address(&self) -> u16 {
+    pub fn nametable_selector(&self) -> u8 {
         // 0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00
-        0x2000 | ((self.bits & Self::BASE_NAMETABLE.bits) as u16) << 10
-    }
-
-    // because its an increment of one bit without overflow, inverting
-    // the bit will do the job
-    pub fn increment_name_table_vertical(&mut self) {
-        self.bits ^= Self::BASE_NAMETABLE.bits & 0b10;
-    }
-
-    pub fn increment_name_table_horizontal(&mut self) {
-        self.bits ^= Self::BASE_NAMETABLE.bits & 0b1;
+        self.bits & Self::BASE_NAMETABLE.bits
     }
 
     pub fn vram_increment(&self) -> u16 {
@@ -102,18 +92,12 @@ pub struct PPU2C02<T: Bus> {
     scanline: u16,
     cycle: u16,
 
-    // FIXME: get a better solution for vram address cur and tmp
     vram_address_cur: Cell<u16>,
-    vram_address_tmp: u16,
-
-    nametable_tmp: u8,
+    vram_address_top_left: u16,
 
     ppu_data_read_buffer: Cell<u8>,
 
-    x_scroll: u8,
-    y_scroll: u8,
-
-    rendering_y_fine_scroll: u8,
+    fine_x_scroll: u8,
 
     w_toggle: Cell<bool>, // this is used for registers that require 2 writes
 
@@ -158,16 +142,11 @@ where
             cycle: 0,
 
             vram_address_cur: Cell::new(0),
-            vram_address_tmp: 0,
-
-            nametable_tmp: 0,
+            vram_address_top_left: 0,
 
             ppu_data_read_buffer: Cell::new(0),
 
-            x_scroll: 0,
-            y_scroll: 0,
-
-            rendering_y_fine_scroll: 0,
+            fine_x_scroll: 0,
 
             w_toggle: Cell::new(false),
 
@@ -250,7 +229,9 @@ where
             Register::Control => {
                 self.reg_control.bits = data;
 
-                self.nametable_tmp = self.reg_control.bits & ControlReg::BASE_NAMETABLE.bits;
+                // write nametable also in top_left vram address
+                self.vram_address_top_left &= 0xF3FF;
+                self.vram_address_top_left |= (self.reg_control.nametable_selector() as u16) << 10;
 
                 // if the NMI flag is set, run immediate NMI to the CPU
                 // but only run if we are in the VBLANK period and no
@@ -280,12 +261,10 @@ where
             Register::Scroll => {
                 if self.w_toggle.get() {
                     // w == 1
-
-                    self.y_scroll = data;
+                    self.set_top_left_y_scroll(data);
                 } else {
                     // w == 0
-
-                    self.x_scroll = data;
+                    self.set_top_left_x_scroll(data);
                 }
 
                 self.w_toggle.set(!self.w_toggle.get());
@@ -295,19 +274,23 @@ where
                     // w == 1
 
                     // zero out the bottom 8 bits
-                    self.vram_address_tmp &= 0xff00;
+                    self.vram_address_top_left &= 0xff00;
                     // set the data from the parameters
-                    self.vram_address_tmp |= data as u16;
+                    self.vram_address_top_left |= data as u16;
 
                     // copy to the current vram address
-                    *self.vram_address_cur.get_mut() = self.vram_address_tmp;
+                    *self.vram_address_cur.get_mut() = self.vram_address_top_left;
                 } else {
                     // w == 0
 
                     // zero out the top 8 bits
-                    self.vram_address_tmp &= 0x00ff;
+                    self.vram_address_top_left &= 0x00ff;
                     // set the data from the parameters
-                    self.vram_address_tmp |= (data as u16) << 8;
+                    self.vram_address_top_left |= (data as u16) << 8;
+
+                    // update nametable
+                    self.reg_control.bits &= !(ControlReg::BASE_NAMETABLE.bits);
+                    self.reg_control.bits |= (data >> 2) & 0b11;
                 }
 
                 self.w_toggle.set(!self.w_toggle.get());
@@ -344,13 +327,138 @@ where
         self.primary_oam[sprite_location as usize].write_offset(address & 0b11, data);
     }
 
-    fn get_vram_coarse_x(&self) -> u8 {
+    // SCROLL attributes START
+    fn current_coarse_x_scroll(&self) -> u8 {
         (self.vram_address_cur.get() & 0b11111) as u8
     }
 
-    fn get_vram_coarse_y(&self) -> u8 {
-        ((self.vram_address_cur.get() & 0b1111100000) >> 5) as u8
+    fn set_current_coarse_x_scroll(&mut self, coarse_x: u8) {
+        let vram_cur = self.vram_address_cur.get_mut();
+
+        // clear first 5 bits
+        *vram_cur &= 0xFFE0;
+        // copy new value
+        *vram_cur |= (coarse_x & 0b11111) as u16;
     }
+
+    fn current_coarse_y_scroll(&self) -> u8 {
+        ((self.vram_address_cur.get() >> 5) & 0b11111) as u8
+    }
+
+    fn set_current_coarse_y_scroll(&mut self, coarse_y: u8) {
+        let vram_cur = self.vram_address_cur.get_mut();
+
+        // clear second 5 bits
+        *vram_cur &= 0xFC1F;
+        // copy new value
+        *vram_cur |= ((coarse_y & 0b11111) as u16) << 5;
+    }
+
+    fn current_fine_x_scroll(&self) -> u8 {
+        self.fine_x_scroll
+    }
+
+    fn set_current_fine_x_scroll(&mut self, fine_x: u8) {
+        self.fine_x_scroll = fine_x & 0b111;
+    }
+
+    fn current_fine_y_scroll(&self) -> u8 {
+        ((self.vram_address_cur.get() >> 12) & 0b111) as u8
+    }
+
+    fn set_current_fine_y_scroll(&mut self, fine_y: u8) {
+        let vram_cur = self.vram_address_cur.get_mut();
+
+        // clear fine_y
+        *vram_cur &= 0x0FFF;
+        // copy new value
+        *vram_cur |= ((fine_y & 0b111) as u16) << 12;
+    }
+
+    fn top_left_coarse_x_scroll(&self) -> u8 {
+        (self.vram_address_top_left & 0b11111) as u8
+    }
+
+    fn set_top_left_coarse_x_scroll(&mut self, coarse_x: u8) {
+        // clear first 5 bits
+        self.vram_address_top_left &= 0xFFE0;
+        // copy new value
+        self.vram_address_top_left |= (coarse_x & 0b11111) as u16;
+    }
+
+    fn top_left_coarse_y_scroll(&self) -> u8 {
+        ((self.vram_address_top_left >> 5) & 0b11111) as u8
+    }
+
+    fn set_top_left_coarse_y_scroll(&mut self, coarse_y: u8) {
+        // clear second 5 bits
+        self.vram_address_top_left &= 0xFC1F;
+        // copy new value
+        self.vram_address_top_left |= ((coarse_y & 0b11111) as u16) << 5;
+    }
+
+    fn set_top_left_fine_x_scroll(&mut self, fine_x: u8) {
+        self.fine_x_scroll = fine_x & 0b111;
+    }
+
+    fn top_left_fine_y_scroll(&self) -> u8 {
+        ((self.vram_address_top_left >> 12) & 0b111) as u8
+    }
+
+    fn set_top_left_fine_y_scroll(&mut self, fine_y: u8) {
+        // clear fine_y
+        self.vram_address_top_left &= 0x0FFF;
+        // copy new value
+        self.vram_address_top_left |= ((fine_y & 0b111) as u16) << 12;
+    }
+
+    fn set_top_left_x_scroll(&mut self, x_scroll: u8) {
+        self.set_top_left_coarse_x_scroll(x_scroll >> 3);
+        self.set_top_left_fine_x_scroll(x_scroll & 0b111);
+    }
+
+    fn set_top_left_y_scroll(&mut self, y_scroll: u8) {
+        self.set_top_left_coarse_y_scroll(y_scroll >> 3);
+        self.set_top_left_fine_y_scroll(y_scroll & 0b111);
+    }
+
+    fn increment_y_scroll(&mut self) {
+        // increment fine scrolling Y on the last dot without carry
+        let fine_y = self.current_fine_y_scroll() + 1;
+
+        self.set_current_fine_y_scroll(fine_y & 0b111);
+
+        // if the increment resulted in a carry, go to the next tile
+        // i.e. increment coarse Y
+        if fine_y & 0x8 != 0 {
+            // extract coarse_y
+            let mut coarse_y = self.current_coarse_y_scroll();
+
+            // in case of overflow, increment nametable vertical address
+            if coarse_y == 29 {
+                coarse_y = 0;
+                self.increment_vram_nametable_vertical();
+            } else if coarse_y == 31 {
+                coarse_y = 0;
+            } else {
+                coarse_y += 1;
+            }
+
+            self.set_current_coarse_y_scroll(coarse_y);
+        }
+    }
+
+    fn increment_coarse_x_scroll(&mut self) {
+        let coarse_x = self.current_coarse_x_scroll() + 1;
+
+        self.set_current_coarse_x_scroll(coarse_x & 0b11111);
+
+        // in case of overflow, increment nametable horizontal address
+        if coarse_x & 0b100000 != 0 {
+            self.increment_vram_nametable_horizontal();
+        }
+    }
+    // SCROLL attributes END
 
     fn increment_vram_readwrite(&self) {
         // only increment if its valid, and increment by the correct ammount
@@ -360,73 +468,44 @@ where
         }
     }
 
-    fn increment_vram_coarse_scroll_x(&mut self) {
-        // extract coarse_x
-        let mut coarse_x = self.vram_address_cur.get() & 0b11111; // only first 5 bits
-        coarse_x += 1;
-
-        // clear first 5 bits
-        *self.vram_address_cur.get_mut() &= 0xFFE0;
-        // put result back
-        *self.vram_address_cur.get_mut() |= (coarse_x & 0b11111) as u16;
-
-        // in case of overflow, increment nametable horizontal address
-        if coarse_x & 0b100000 != 0 {
-            self.reg_control.increment_name_table_horizontal();
-        }
-    }
-
     fn restore_rendering_scroll_x(&mut self) {
-        // extract coarse_x
-        let coarse_x = self.x_scroll >> 3; // only top 5 bits
-
-        // clear first 5 bits
-        *self.vram_address_cur.get_mut() &= 0xFFE0;
-        // put result back
-        *self.vram_address_cur.get_mut() |= (coarse_x & 0b11111) as u16;
-    }
-
-    fn increment_vram_coarse_scroll_y(&mut self) {
-        // extract coarse_y
-        let mut coarse_y = (self.vram_address_cur.get() & 0b1111100000) >> 5; // only second 5 bits
-
-        // in case of overflow, increment nametable vertical address
-        if coarse_y == 29 {
-            coarse_y = 0;
-            self.reg_control.increment_name_table_vertical();
-        } else if coarse_y == 31 {
-            coarse_y = 0;
-        } else {
-            coarse_y += 1;
-        }
-
-        // clear second 5 bits
-        *self.vram_address_cur.get_mut() &= 0xFC1F;
-        // put result back
-        *self.vram_address_cur.get_mut() |= ((coarse_y & 0b11111) as u16) << 5;
+        self.set_current_coarse_x_scroll(self.top_left_coarse_x_scroll());
     }
 
     fn restore_rendering_scroll_y(&mut self) {
-        // extract coarse_y
-        let coarse_y = self.y_scroll >> 3; // only top 5 bits
+        self.set_current_fine_y_scroll(self.top_left_fine_y_scroll());
+        self.set_current_coarse_y_scroll(self.top_left_coarse_y_scroll());
+    }
 
-        // clear second 5 bits
-        *self.vram_address_cur.get_mut() &= 0xFC1F;
-        // put result back
-        *self.vram_address_cur.get_mut() |= ((coarse_y & 0b11111) as u16) << 5;
+    fn increment_vram_nametable_horizontal(&mut self) {
+        *self.vram_address_cur.get_mut() ^= 0b01 << 10;
+    }
 
-        // restore fine y
-        self.rendering_y_fine_scroll = self.y_scroll & 0b111;
+    fn increment_vram_nametable_vertical(&mut self) {
+        *self.vram_address_cur.get_mut() ^= 0b10 << 10;
+    }
+
+    // restore from top_left or original nametable selector from `reg_control`
+    fn restore_nametable(&mut self) {
+        let vram_cur = self.vram_address_cur.get_mut();
+
+        // clear old nametable data
+        *vram_cur &= 0xF3FF;
+
+        *vram_cur |= (self.reg_control.nametable_selector() as u16) << 10;
     }
 
     fn restore_nametable_horizontal(&mut self) {
-        self.reg_control.bits &= 0xFE; // clear bit 0
-        self.reg_control.bits |= self.nametable_tmp & 0b1;
+        let vram_cur = self.vram_address_cur.get_mut();
+
+        // clear horizontal nametable data
+        *vram_cur &= 0xFBFF;
+
+        *vram_cur |= (self.reg_control.nametable_selector() as u16 & 1) << 10;
     }
 
-    fn restore_nametable_vertical(&mut self) {
-        self.reg_control.bits &= 0xFD; // clear bit 0
-        self.reg_control.bits |= self.nametable_tmp & 0b10;
+    fn current_nametable(&self) -> u16 {
+        (self.vram_address_cur.get() >> 10) & 0b11
     }
 
     // this should only be called when rendering and a bit after that,
@@ -442,17 +521,15 @@ where
     }
 
     fn reload_shift_registers(&mut self) {
-        let nametable_tile = self.read_bus(
-            self.reg_control.base_nametable_address() | self.vram_address_cur.get() & 0x3FF,
-        );
+        let nametable_tile = self.read_bus(0x2000 | self.vram_address_cur.get() & 0xFFF);
 
         let tile_pattern = self.fetch_pattern_background(nametable_tile);
 
         // fetch and prepare the palette
         let attribute_byte = self.fetch_attribute_byte();
 
-        let coarse_x = self.get_vram_coarse_x();
-        let coarse_y = self.get_vram_coarse_y();
+        let coarse_x = self.current_coarse_x_scroll();
+        let coarse_y = self.current_coarse_y_scroll();
 
         let attribute_location_x = (coarse_x >> 1) & 0x1;
         let attribute_location_y = (coarse_y >> 1) & 0x1;
@@ -496,7 +573,7 @@ where
     +--------------- 0: Pattern table is at $0000-$1FFF
     */
     fn fetch_pattern_background(&self, location: u8) -> [u8; 2] {
-        let fine_y = self.rendering_y_fine_scroll as u16;
+        let fine_y = self.current_fine_y_scroll() as u16;
 
         // for background
         let pattern_table = self.reg_control.background_pattern_address();
@@ -519,10 +596,10 @@ where
     ++--------------- nametable select
     */
     fn fetch_attribute_byte(&self) -> u8 {
-        let x = (self.get_vram_coarse_x() >> 2) as u16;
-        let y = (self.get_vram_coarse_y() >> 2) as u16;
+        let x = (self.current_coarse_x_scroll() >> 2) as u16;
+        let y = (self.current_coarse_y_scroll() >> 2) as u16;
 
-        self.read_bus(self.reg_control.base_nametable_address() | 0xF << 6 | y << 3 | x)
+        self.read_bus(0x2000 | self.current_nametable() << 10 | 0xF << 6 | y << 3 | x)
     }
 
     fn reload_sprite_shift_registers(&mut self) {
@@ -603,7 +680,7 @@ where
             return (0, 0);
         }
 
-        let fine_x = self.x_scroll & 0b111;
+        let fine_x = self.current_fine_x_scroll();
         let low_plane_bit =
             ((self.bg_pattern_shift_registers[0] >> (15 - fine_x) as u16) & 0x1) as u8;
         let high_plane_bit =
@@ -770,8 +847,7 @@ where
                         self.restore_rendering_scroll_x();
                         self.restore_rendering_scroll_y();
 
-                        self.restore_nametable_horizontal();
-                        self.restore_nametable_vertical();
+                        self.restore_nametable();
 
                         // load next 2 bytes
                         for _ in 0..2 {
@@ -784,7 +860,7 @@ where
                                     self.bg_palette_shift_registers[i].wrapping_shl(8);
                             }
                             self.reload_shift_registers();
-                            self.increment_vram_coarse_scroll_x();
+                            self.increment_coarse_x_scroll();
                         }
                     }
                 }
@@ -851,17 +927,10 @@ where
 
                     if self.cycle != 256 {
                         // increment scrolling X in current VRAM address
-                        self.increment_vram_coarse_scroll_x();
+                        self.increment_coarse_x_scroll();
                     } else {
-                        // increment fine scrolling Y on the last dot without carry
-                        self.rendering_y_fine_scroll += 1;
-
-                        // if the increment resulted in a carry, go to the next tile
-                        // i.e. increment coarse Y
-                        if self.rendering_y_fine_scroll & 0x8 != 0 {
-                            self.rendering_y_fine_scroll = 0;
-                            self.increment_vram_coarse_scroll_y();
-                        }
+                        // fine and carry to coarse
+                        self.increment_y_scroll();
                     }
                 }
 
@@ -934,7 +1003,7 @@ where
                                 self.bg_palette_shift_registers[i].wrapping_shl(8);
                         }
                         self.reload_shift_registers();
-                        self.increment_vram_coarse_scroll_x();
+                        self.increment_coarse_x_scroll();
                     }
                 }
             }
