@@ -73,7 +73,6 @@ impl Sprite {
      */
 
     pub fn get_tile(&self) -> u8 {
-        // FIXME: add support for 8x16
         self.tile_index
     }
 

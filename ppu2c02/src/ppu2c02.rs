@@ -41,6 +41,14 @@ impl ControlReg {
     pub fn nmi_enabled(&self) -> bool {
         self.intersects(Self::GENERATE_NMI_ENABLE)
     }
+
+    pub fn sprite_height(&self) -> u8 {
+        if self.intersects(Self::SPRITE_SIZE) {
+            16
+        } else {
+            8
+        }
+    }
 }
 
 bitflags! {
@@ -617,9 +625,11 @@ where
             let sprite = self.secondary_oam[i];
             let mut fine_y = next_y.wrapping_sub(sprite.get_y());
 
+            let sprite_height = self.reg_control.sprite_height();
+
             // handle flipping vertically
             if sprite.get_attribute().is_flip_vertical() {
-                fine_y = 7 - fine_y;
+                fine_y = (sprite_height - 1) - fine_y;
             }
 
             self.sprite_counters[i] = sprite.get_x();
@@ -661,9 +671,22 @@ where
         }
     }
 
-    fn fetch_pattern_sprite(&self, location: u8, fine_y: u8) -> [u8; 2] {
+    fn fetch_pattern_sprite(&self, tile: u8, mut fine_y: u8) -> [u8; 2] {
+        let mut location = tile;
+
         // for sprites
-        let pattern_table = self.reg_control.sprite_pattern_address();
+        let pattern_table = if self.reg_control.sprite_height() == 16 {
+            // zero the first bit as it is used as a pattern_table selector
+            location &= !(1);
+            ((tile & 1) as u16) << 12
+        } else {
+            self.reg_control.sprite_pattern_address()
+        };
+
+        if fine_y > 7 {
+            fine_y -= 8;
+            location = location.wrapping_add(1);
+        }
 
         let low_plane_pattern =
             self.read_bus(pattern_table | (location as u16) << 4 | 0 << 3 | fine_y as u16);
@@ -955,7 +978,9 @@ where
                         let sprite_y = sprite.get_y() as i16;
 
                         let diff = next_y - sprite_y;
-                        if diff >= 0 && diff < 8 {
+                        let height = self.reg_control.sprite_height() as i16;
+
+                        if diff >= 0 && diff < height {
                             // in range
 
                             // sprite 0
