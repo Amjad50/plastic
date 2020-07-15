@@ -376,8 +376,7 @@ mod ppu_tests {
         run_sprite_hit_test("./tests/roms/sprite_hit_tests/07.screen_bottom.nes")
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn sprite_hit_test_08_double_height() -> Result<(), PPUTestError> {
         run_sprite_hit_test("./tests/roms/sprite_hit_tests/08.double_height.nes")
     }
