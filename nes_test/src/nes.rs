@@ -1,3 +1,4 @@
+use apu2a03::APU2A03;
 use cartridge::{Cartridge, CartridgeError};
 use common::{Bus, Device};
 use controller::{Controller, StandardNESControllerState, StandardNESKey};
@@ -33,6 +34,7 @@ struct CPUBus {
     cartridge: Rc<RefCell<Cartridge>>,
     ram: [u8; 0x800],
     ppu: Rc<RefCell<dyn Bus>>,
+    apu: Rc<RefCell<dyn Bus>>,
     contoller: Controller,
 }
 
@@ -40,12 +42,14 @@ impl CPUBus {
     pub fn new(
         cartridge: Rc<RefCell<Cartridge>>,
         ppu: Rc<RefCell<dyn Bus>>,
+        apu: Rc<RefCell<dyn Bus>>,
         contoller: Controller,
     ) -> Self {
         CPUBus {
             cartridge,
             ram: [0; 0x800],
             ppu,
+            apu,
             contoller,
         }
     }
@@ -87,9 +91,12 @@ impl Bus for CPUBus {
         match address {
             0x0000..=0x1FFF => self.ram[(address & 0x7FF) as usize],
             0x2000..=0x3FFF => self.ppu.borrow().read(0x2000 | (address & 0x7), device),
+            0x4000..=0x4013 => self.apu.borrow().read(address, device),
             0x4014 => self.ppu.borrow().read(address, device),
-            0x8000..=0xFFFF => self.cartridge.borrow().read(address, device),
+            0x4015 => self.apu.borrow().read(address, device),
             0x4016 => self.contoller.read(address, device),
+            0x4017 => self.apu.borrow().read(address, device),
+            0x8000..=0xFFFF => self.cartridge.borrow().read(address, device),
             _ => {
                 println!("unimplemented read cpu from {:04X}", address);
                 0
@@ -103,7 +110,11 @@ impl Bus for CPUBus {
                 .ppu
                 .borrow_mut()
                 .write(0x2000 | (address & 0x7), data, device),
+            0x4000..=0x4013 => self.apu.borrow_mut().write(address, data, device),
             0x4014 => self.ppu.borrow_mut().write(address, data, device),
+            0x4015 => self.apu.borrow_mut().write(address, data, device),
+            0x4016 => self.contoller.write(address, data, device),
+            0x4017 => self.apu.borrow_mut().write(address, data, device),
             0x8000..=0xFFFF => self
                 .cartridge
                 .borrow_mut()
@@ -117,6 +128,7 @@ impl Bus for CPUBus {
 pub struct NES {
     cpu: CPU6502<CPUBus>,
     ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
+    apu: Rc<RefCell<APU2A03>>,
     image: Arc<Mutex<Vec<u8>>>,
     ctrl_state: Arc<Mutex<StandardNESControllerState>>,
 }
@@ -137,16 +149,19 @@ impl NES {
 
         let ppu = Rc::new(RefCell::new(ppu));
 
+        let apu = Rc::new(RefCell::new(APU2A03::new()));
+
         let ctrl = Controller::new();
         let ctrl_state = ctrl.get_primary_controller_state();
 
-        let cpubus = CPUBus::new(cartridge.clone(), ppu.clone(), ctrl);
+        let cpubus = CPUBus::new(cartridge.clone(), ppu.clone(), apu.clone(), ctrl);
 
         let cpu = CPU6502::new(Rc::new(RefCell::new(cpubus)), ppu.clone());
 
         Ok(Self {
             cpu,
-            ppu: ppu.clone(),
+            ppu,
+            apu,
             image,
             ctrl_state,
         })
@@ -154,7 +169,9 @@ impl NES {
 
     pub fn run(&mut self) {
         self.cpu.reset();
-
+        // Run the sound thread
+        self.apu.borrow().play();
+        
         // channel for sending a stop signal for cpu/ppu clock
         let (stop_tx, stop_rx) = std::sync::mpsc::channel::<bool>();
 

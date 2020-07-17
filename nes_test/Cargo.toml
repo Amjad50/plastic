@@ -13,5 +13,6 @@ cpu6502 = { path = "../cpu6502" }
 ppu2c02 = { path = "../ppu2c02" }
 display = { path = "../display" }
 controller = { path = "../controller" }
+apu2a03 = { path = "../apu2a03" }
 
 sfml = "^0.15.1"
