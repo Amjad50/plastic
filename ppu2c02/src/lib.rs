@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate bitflags;
 
+#[macro_use]
+extern crate common;
+
 mod palette;
 mod ppu2c02;
 mod ppu2c02_registers;
