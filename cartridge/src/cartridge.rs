@@ -125,6 +125,7 @@ impl Cartridge {
         let mut mapper: Box<dyn Mapper> = match mapper_id {
             0 => Box::new(Mapper0::new()),
             1 => Box::new(Mapper1::new()),
+            2 => Box::new(Mapper2::new()),
             _ => {
                 unimplemented!("Mapper {} is not yet implemented", mapper_id);
             }
