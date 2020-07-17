@@ -126,6 +126,7 @@ impl Cartridge {
             0 => Box::new(Mapper0::new()),
             1 => Box::new(Mapper1::new()),
             2 => Box::new(Mapper2::new()),
+            3 => Box::new(Mapper3::new()),
             _ => {
                 unimplemented!("Mapper {} is not yet implemented", mapper_id);
             }
