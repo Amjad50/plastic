@@ -14,20 +14,20 @@ memory_mapped_registers! {
         Pulse2_3 = 0x4006,
         Pulse2_4 = 0x4007,
 
-        Triangle_1 = 0x4008,
-        Triangle_2 = 0x4009, // unused
-        Triangle_3 = 0x400A,
-        Triangle_4 = 0x400B,
+        Triangle1 = 0x4008,
+        Triangle2 = 0x4009, // unused
+        Triangle3 = 0x400A,
+        Triangle4 = 0x400B,
 
-        Noise_1 = 0x400C,
-        Noise_2 = 0x400D, // unused
-        Noise_3 = 0x400E,
-        Noise_4 = 0x400F,
+        Noise1 = 0x400C,
+        Noise2 = 0x400D, // unused
+        Noise3 = 0x400E,
+        Noise4 = 0x400F,
 
-        DMC_1 = 0x4010,
-        DMC_2 = 0x4011,
-        DMC_3 = 0x4012,
-        DMC_4 = 0x4013,
+        DMC1 = 0x4010,
+        DMC2 = 0x4011,
+        DMC3 = 0x4012,
+        DMC4 = 0x4013,
 
         Status = 0x4015,
 

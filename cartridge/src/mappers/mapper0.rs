@@ -47,9 +47,7 @@ impl Mapper for Mapper0 {
             }
             Device::PPU => {
                 // it does not matter if its a ram or rom, same array location
-                //
-                // this is just for extra caution
-                if address >= 0x0000 && address < 0x2000 {
+                if address < 0x2000 {
                     // only one fixed memory
                     address as usize
                 } else {

@@ -100,18 +100,18 @@ impl APU2A03 {
 
                 self.update_sqaure_pulse_2_frequency();
             }
-            Register::Triangle_1 => {}
-            Register::Triangle_2 => {}
-            Register::Triangle_3 => {}
-            Register::Triangle_4 => {}
-            Register::Noise_1 => {}
-            Register::Noise_2 => {}
-            Register::Noise_3 => {}
-            Register::Noise_4 => {}
-            Register::DMC_1 => {}
-            Register::DMC_2 => {}
-            Register::DMC_3 => {}
-            Register::DMC_4 => {}
+            Register::Triangle1 => {}
+            Register::Triangle2 => {}
+            Register::Triangle3 => {}
+            Register::Triangle4 => {}
+            Register::Noise1 => {}
+            Register::Noise2 => {}
+            Register::Noise3 => {}
+            Register::Noise4 => {}
+            Register::DMC1 => {}
+            Register::DMC2 => {}
+            Register::DMC3 => {}
+            Register::DMC4 => {}
             Register::Status => {
                 // enable and disable channels
 

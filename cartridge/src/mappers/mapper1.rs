@@ -71,11 +71,11 @@ impl Mapper1 {
         self.control_register & 0b00011
     }
 
-    fn get_PRG_bank(&self) -> u8 {
+    fn get_prg_bank(&self) -> u8 {
         self.prg_bank & 0b1111
     }
 
-    fn is_PRG_32kb_mode(&self) -> bool {
+    fn is_prg_32kb_mode(&self) -> bool {
         self.control_register & 0b01000 == 0
     }
 
@@ -85,15 +85,15 @@ impl Mapper1 {
     /// is switchable, this should return `true`
     /// if the last bank is fixed into 0xC000 and the first chunk of 16kb
     /// is switchable, this should return `false`
-    fn is_first_PRG_chunk_fixed(&self) -> bool {
+    fn is_first_prg_chunk_fixed(&self) -> bool {
         self.control_register & 0b00100 == 0
     }
 
-    fn is_CHR_8kb_mode(&self) -> bool {
+    fn is_chr_8kb_mode(&self) -> bool {
         self.control_register & 0b10000 == 0
     }
 
-    fn is_PRG_RAM_enabled(&self) -> bool {
+    fn is_prg_ram_enabled(&self) -> bool {
         self.prg_bank & 0b10000 != 0
     }
 }
@@ -109,19 +109,19 @@ impl Mapper for Mapper1 {
     fn map_read(&self, address: u16, device: Device) -> usize {
         match device {
             Device::CPU => {
-                let bank = if self.is_PRG_32kb_mode() {
+                let bank = if self.is_prg_32kb_mode() {
                     // ignore last bit
-                    self.get_PRG_bank() & 0b11110
+                    self.get_prg_bank() & 0b11110
                 } else {
                     if address >= 0x8000 && address <= 0xBFFF {
-                        if self.is_first_PRG_chunk_fixed() {
+                        if self.is_first_prg_chunk_fixed() {
                             0
                         } else {
-                            self.get_PRG_bank()
+                            self.get_prg_bank()
                         }
                     } else if address >= 0xC000 {
-                        if self.is_first_PRG_chunk_fixed() {
-                            self.get_PRG_bank()
+                        if self.is_first_prg_chunk_fixed() {
+                            self.get_prg_bank()
                         } else {
                             // last bank
                             self.prg_count - 1
@@ -141,7 +141,7 @@ impl Mapper for Mapper1 {
                 // of bounds, but this solution does mirroring, in case of
                 // a possible out of bounds, but not sure what is the correct
                 // solution
-                let mask = if self.is_PRG_32kb_mode() && start_of_bank != last_bank {
+                let mask = if self.is_prg_32kb_mode() && start_of_bank != last_bank {
                     0x7FFF
                 } else {
                     0x3FFF
@@ -151,7 +151,7 @@ impl Mapper for Mapper1 {
                 start_of_bank + (address & mask) as usize
             }
             Device::PPU => {
-                let bank = if self.is_CHR_8kb_mode() {
+                let bank = if self.is_chr_8kb_mode() {
                     self.chr_0_bank & 0b11110
                 } else {
                     if address <= 0x0FFF {
@@ -168,7 +168,7 @@ impl Mapper for Mapper1 {
 
                 let start_of_bank = 0x1000 * bank;
 
-                let mask = if self.is_CHR_8kb_mode() {
+                let mask = if self.is_chr_8kb_mode() {
                     0x1FFF
                 } else {
                     0xFFF
