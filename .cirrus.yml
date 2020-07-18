@@ -4,7 +4,7 @@ container:
 cpu_test_task:
   env:
     RUST_BACKTRACE: 1
-  before_build_script: if [[ "$OS" == "linux" ]]; then apt-get update -y && apt-get install -y libsfml-dev libcsfml-dev; fi
+  before_build_script: if [[ "$OS" == "linux" ]]; then apt-get update -y && apt-get install -y libsfml-dev libcsfml-dev libasound2-dev; fi
   build_script: cargo build
   test_script: cargo test
   before_cache_script: rm -rf $CARGO_HOME/registry/index
