@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "apu2a03",
     "cartridge",
     "common",
     "controller",
