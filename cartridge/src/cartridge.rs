@@ -51,7 +51,7 @@ impl Cartridge {
         header[7] >>= 1;
         let _playchoice_10_hint = header[7] & 1 != 0;
         header[7] >>= 1;
-        let is_nes_2 = header[7] & 0b11 == 2;
+        let is_nes_2 = (header[7] & 0b11) == 2;
         header[7] >>= 2;
         let upper_mapper = header[7]; // the rest
 
@@ -82,6 +82,15 @@ impl Cartridge {
         } else {
             // use CHR RAM
             chr_data.resize(1 * 8 * 1024, 0);
+        }
+
+        if is_nes_2 {
+            // print a warning message just to know which games need INES2.
+            eprintln!(
+                "[WARN], the cartridge header is in INES2.0 format, but\
+                this emulator only supports INES1.0, the game might work\
+                but mostly it will be buggy"
+            );
         }
 
         // there are missing parts
