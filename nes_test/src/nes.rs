@@ -172,96 +172,89 @@ impl NES {
         self.cpu.reset();
         // Run the sound thread
         self.apu.borrow().play();
-        
-        // channel for sending a stop signal for cpu/ppu clock
-        let (stop_tx, stop_rx) = std::sync::mpsc::channel::<bool>();
 
         let image = self.image.clone();
         let ctrl_state = self.ctrl_state.clone();
 
-        let thread = std::thread::spawn(move || {
-            let mut window = RenderWindow::new(
-                (SCREEN_WIDTH, SCREEN_HEIGHT),
-                "NES test",
-                Style::CLOSE,
-                &Default::default(),
-            );
-            window.set_vertical_sync_enabled(true);
+        let mut window = RenderWindow::new(
+            (SCREEN_WIDTH, SCREEN_HEIGHT),
+            "NES test",
+            Style::CLOSE,
+            &Default::default(),
+        );
+        window.set_vertical_sync_enabled(true);
+        window.set_framerate_limit(60);
 
-            // to scale the view into the window
-            // this view is in the size of the NES TV
-            // but we can scale the window and all the pixels will be scaled
-            // accordingly
-            let view = View::new(
-                Vector2f::new((TV_WIDTH / 2) as f32, (TV_HEIGHT / 2) as f32),
-                Vector2f::new((TV_WIDTH) as f32, (TV_HEIGHT) as f32),
-            );
-            window.set_view(&view);
+        // to scale the view into the window
+        // this view is in the size of the NES TV
+        // but we can scale the window and all the pixels will be scaled
+        // accordingly
+        let view = View::new(
+            Vector2f::new((TV_WIDTH / 2) as f32, (TV_HEIGHT / 2) as f32),
+            Vector2f::new((TV_WIDTH) as f32, (TV_HEIGHT) as f32),
+        );
+        window.set_view(&view);
 
-            let mut texture = Texture::new(TV_WIDTH, TV_HEIGHT).expect("texture");
+        let mut texture = Texture::new(TV_WIDTH, TV_HEIGHT).expect("texture");
 
-            'main: loop {
-                if let Ok(mut ctrl) = ctrl_state.lock() {
-                    while let Some(event) = window.poll_event() {
-                        match event {
-                            Event::Closed => break 'main,
-                            Event::KeyPressed { code: key, .. } => match key {
-                                Key::J => ctrl.press(StandardNESKey::B),
-                                Key::K => ctrl.press(StandardNESKey::A),
-                                Key::U => ctrl.press(StandardNESKey::Select),
-                                Key::I => ctrl.press(StandardNESKey::Start),
-                                Key::W => ctrl.press(StandardNESKey::Up),
-                                Key::S => ctrl.press(StandardNESKey::Down),
-                                Key::A => ctrl.press(StandardNESKey::Left),
-                                Key::D => ctrl.press(StandardNESKey::Right),
-                                _ => {}
-                            },
-                            Event::KeyReleased { code: key, .. } => match key {
-                                Key::J => ctrl.release(StandardNESKey::B),
-                                Key::K => ctrl.release(StandardNESKey::A),
-                                Key::U => ctrl.release(StandardNESKey::Select),
-                                Key::I => ctrl.release(StandardNESKey::Start),
-                                Key::W => ctrl.release(StandardNESKey::Up),
-                                Key::S => ctrl.release(StandardNESKey::Down),
-                                Key::A => ctrl.release(StandardNESKey::Left),
-                                Key::D => ctrl.release(StandardNESKey::Right),
-                                _ => {}
-                            },
-
+        'main: loop {
+            if let Ok(mut ctrl) = ctrl_state.lock() {
+                while let Some(event) = window.poll_event() {
+                    match event {
+                        Event::Closed => break 'main,
+                        Event::KeyPressed { code: key, .. } => match key {
+                            Key::J => ctrl.press(StandardNESKey::B),
+                            Key::K => ctrl.press(StandardNESKey::A),
+                            Key::U => ctrl.press(StandardNESKey::Select),
+                            Key::I => ctrl.press(StandardNESKey::Start),
+                            Key::W => ctrl.press(StandardNESKey::Up),
+                            Key::S => ctrl.press(StandardNESKey::Down),
+                            Key::A => ctrl.press(StandardNESKey::Left),
+                            Key::D => ctrl.press(StandardNESKey::Right),
                             _ => {}
-                        }
+                        },
+                        Event::KeyReleased { code: key, .. } => match key {
+                            Key::J => ctrl.release(StandardNESKey::B),
+                            Key::K => ctrl.release(StandardNESKey::A),
+                            Key::U => ctrl.release(StandardNESKey::Select),
+                            Key::I => ctrl.release(StandardNESKey::Start),
+                            Key::W => ctrl.release(StandardNESKey::Up),
+                            Key::S => ctrl.release(StandardNESKey::Down),
+                            Key::A => ctrl.release(StandardNESKey::Left),
+                            Key::D => ctrl.release(StandardNESKey::Right),
+                            _ => {}
+                        },
+                        _ => {}
                     }
                 }
-
-                window.clear(Color::BLACK);
-
-                let pixels = &image.lock().unwrap();
-
-                let image = Image::create_from_pixels(TV_WIDTH, TV_HEIGHT, pixels).expect("image");
-
-                texture.update_from_image(&image, 0, 0);
-
-                window.draw(&Sprite::with_texture(&texture));
-
-                window.display();
             }
-            // when the window is stopped, stop the ppu/cpu clock
-            stop_tx.send(true).unwrap();
-        });
 
-        loop {
-            self.cpu.run_next();
+            // here we run the emulation in the GUI thread because we can
+            // make SFML run `window.display` in 60 FPS, NTSC also run in 60FPS (almost)
+            // so we can regulat the clock speed to match that, we know that 29780.5
+            // cpu cycles happen in every frame
+            const N: usize = 29780;
+            // run the emulator loop
+            for _ in 0..N {
+                self.cpu.run_next();
 
-            let mut ppu = self.ppu.borrow_mut();
-            ppu.run_cycle();
-            ppu.run_cycle();
-            ppu.run_cycle();
-            if let Ok(value) = stop_rx.recv_timeout(std::time::Duration::from_nanos(1)) {
-                if value {
-                    break;
-                }
+                let mut ppu = self.ppu.borrow_mut();
+                ppu.run_cycle();
+                ppu.run_cycle();
+                ppu.run_cycle();
             }
+
+            window.clear(Color::BLACK);
+
+            let pixels = &image.lock().unwrap();
+
+            let image = Image::create_from_pixels(TV_WIDTH, TV_HEIGHT, pixels).expect("image");
+
+            texture.update_from_image(&image, 0, 0);
+
+            window.draw(&Sprite::with_texture(&texture));
+
+            window.display();
         }
-        thread.join().unwrap();
     }
 }
