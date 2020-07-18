@@ -101,7 +101,7 @@ impl Bus for CPUBus {
             0x6000..=0x7FFF => self.battery_ram[(address & 0x1FFF) as usize],
             0x8000..=0xFFFF => self.cartridge.borrow().read(address, device),
             _ => {
-                println!("unimplemented read cpu from {:04X}", address);
+                // println!("unimplemented read cpu from {:04X}", address);
                 0
             }
         }
@@ -123,8 +123,7 @@ impl Bus for CPUBus {
                 .cartridge
                 .borrow_mut()
                 .write(address, data, Device::CPU),
-            0x4016 => self.contoller.write(address, data, device),
-            _ => println!("unimplemented write cpu to {:04X}", address),
+            _ => {} // println!("unimplemented write cpu to {:04X}", address),
         };
     }
 }
