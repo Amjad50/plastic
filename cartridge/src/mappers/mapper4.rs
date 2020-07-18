@@ -1,5 +1,5 @@
 use crate::mapper::Mapper;
-use common::Device;
+use common::{Device, MirroringMode};
 
 pub struct Mapper4 {
     /// ($8000-$9FFE, even)
@@ -237,6 +237,18 @@ impl Mapper for Mapper4 {
             Device::PPU => {
                 // CHR RAM
             }
+        }
+    }
+
+    fn is_hardwired_mirrored(&self) -> bool {
+        false
+    }
+
+    fn nametable_mirroring(&self) -> MirroringMode {
+        if self.mirroring_vertical {
+            MirroringMode::Vertical
+        } else {
+            MirroringMode::Horizontal
         }
     }
 }

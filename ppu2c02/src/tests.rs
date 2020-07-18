@@ -77,10 +77,10 @@ mod ppu_tests {
     }
 
     impl PPUBus {
-        pub fn new(cartridge: Rc<RefCell<Cartridge>>, is_vertical_mirroring: bool) -> Self {
+        pub fn new(cartridge: Rc<RefCell<Cartridge>>) -> Self {
             PPUBus {
-                cartridge,
-                vram: VRam::new(is_vertical_mirroring),
+                cartridge: cartridge.clone(),
+                vram: VRam::new(cartridge.clone()),
                 palettes: Palette::new(),
             }
         }
@@ -153,10 +153,7 @@ mod ppu_tests {
         fn new(filename: &str) -> Result<Self, CartridgeError> {
             let cartridge = Rc::new(RefCell::new(Cartridge::from_file(File::open(filename)?)?));
 
-            let ppubus = PPUBus::new(
-                cartridge.clone(),
-                cartridge.borrow().is_vertical_mirroring(),
-            );
+            let ppubus = PPUBus::new(cartridge.clone());
 
             let tv = TV::new(TV_WIDTH, TV_HEIGHT);
             let tv_image = tv.get_image_clone();

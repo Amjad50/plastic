@@ -1,5 +1,5 @@
 use super::{error::CartridgeError, mapper::Mapper, mappers::*};
-use common::{Bus, Device};
+use common::{Bus, Device, MirroringMode, MirroringProvider};
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom},
@@ -13,7 +13,7 @@ pub struct Cartridge {
     mirroring_vertical: bool,
     contain_sram: bool,
     contain_trainer: bool,
-    ignore_mirroring: bool,
+    use_4_screen_mirroring: bool,
     vs_unisystem: bool,        // don't know what is this (flag 7)
     _playchoice_10_hint: bool, // not used
     is_nes_2: bool,
@@ -43,7 +43,7 @@ impl Cartridge {
         header[6] >>= 1;
         let contain_trainer = header[6] & 1 != 0;
         header[6] >>= 1;
-        let ignore_mirroring = header[6] & 1 != 0;
+        let use_4_screen_mirroring = header[6] & 1 != 0;
         header[6] >>= 1;
         let lower_mapper = header[6]; // the rest
 
@@ -104,7 +104,7 @@ impl Cartridge {
                 mirroring_vertical,
                 contain_sram,
                 contain_trainer,
-                ignore_mirroring,
+                use_4_screen_mirroring,
                 vs_unisystem,
                 _playchoice_10_hint,
                 is_nes_2,
@@ -184,6 +184,24 @@ impl Bus for Cartridge {
                         .get_mut(address as usize)
                         .expect("CHR out of bounds") = data;
                 }
+            }
+        }
+    }
+}
+
+impl MirroringProvider for Cartridge {
+    fn mirroring_mode(&self) -> MirroringMode {
+        if self.use_4_screen_mirroring {
+            MirroringMode::FourScreen
+        } else {
+            if self.mapper.is_hardwired_mirrored() {
+                if self.mirroring_vertical {
+                    MirroringMode::Vertical
+                } else {
+                    MirroringMode::Horizontal
+                }
+            } else {
+                self.mapper.nametable_mirroring()
             }
         }
     }

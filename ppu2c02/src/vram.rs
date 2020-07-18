@@ -1,26 +1,17 @@
-use common::{Bus, Device};
-
-enum MirroringMode {
-    Vertical,
-    Horizontal,
-    // TODO: add other strange mirroring modes
-}
+use common::{Bus, Device, MirroringMode, MirroringProvider};
+use std::{cell::RefCell, rc::Rc};
 
 pub struct VRam {
     // half of this memory (or depending on mirroring mode) is unused
     vram_data: [u8; 0x1000],
-    mirroring_mode: MirroringMode,
+    mirroring_provider: Rc<RefCell<dyn MirroringProvider>>,
 }
 
 impl VRam {
-    pub fn new(is_vertical_mirroring: bool) -> Self {
+    pub fn new(mirroring_provider: Rc<RefCell<dyn MirroringProvider>>) -> Self {
         Self {
             vram_data: [0; 0x1000],
-            mirroring_mode: if is_vertical_mirroring {
-                MirroringMode::Vertical
-            } else {
-                MirroringMode::Horizontal
-            },
+            mirroring_provider,
         }
     }
 
@@ -40,9 +31,13 @@ impl VRam {
     fn map_address(&self, address: u16) -> u16 {
         assert!(address >= 0x2000 && address < 0x3000);
 
-        match self.mirroring_mode {
+        match self.mirroring_provider.borrow().mirroring_mode() {
             MirroringMode::Vertical => address & 0x7FF,
             MirroringMode::Horizontal => address & 0xBFF,
+            _ => unimplemented!(
+                "mirroring mode {:?}",
+                self.mirroring_provider.borrow().mirroring_mode()
+            ),
         }
     }
 }

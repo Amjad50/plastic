@@ -1,5 +1,5 @@
 use crate::mapper::Mapper;
-use common::Device;
+use common::{Device, MirroringMode};
 
 pub struct Mapper0 {
     has_32kb_prg_rom: bool,
@@ -59,5 +59,13 @@ impl Mapper for Mapper0 {
 
     fn map_write(&mut self, _: u16, _: u8, _: Device) {
         // nothing
+    }
+
+    fn is_hardwired_mirrored(&self) -> bool {
+        true
+    }
+
+    fn nametable_mirroring(&self) -> MirroringMode {
+        unreachable!()
     }
 }

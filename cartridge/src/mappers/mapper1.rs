@@ -1,5 +1,5 @@
 use crate::mapper::Mapper;
-use common::Device;
+use common::{Device, MirroringMode};
 
 // FIXME: add support for 512kb as now only support 256kb
 pub struct Mapper1 {
@@ -66,7 +66,6 @@ impl Mapper1 {
         self.writing_shift_register = 0b10000;
     }
 
-    // FIXME: handle mirroring from here, and add support to switchable mirroring modes
     fn get_mirroring(&self) -> u8 {
         self.control_register & 0b00011
     }
@@ -215,5 +214,18 @@ impl Mapper for Mapper1 {
                 // CHR RAM
             }
         }
+    }
+
+    fn is_hardwired_mirrored(&self) -> bool {
+        false
+    }
+
+    fn nametable_mirroring(&self) -> MirroringMode {
+        [
+            MirroringMode::SingleScreenLowBank,
+            MirroringMode::Horizontal,
+            MirroringMode::Vertical,
+            MirroringMode::Horizontal,
+        ][self.get_mirroring() as usize]
     }
 }
