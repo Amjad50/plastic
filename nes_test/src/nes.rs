@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use sfml::{
     graphics::{Color, Image, RenderTarget, RenderWindow, Sprite, Texture, View},
     system::Vector2f,
-    window::{Event, Key, Style},
+    window::{joystick::Axis, Event, Key, Style},
 };
 
 // NES TV size
@@ -222,6 +222,53 @@ impl NES {
                             Key::S => ctrl.release(StandardNESKey::Down),
                             Key::A => ctrl.release(StandardNESKey::Left),
                             Key::D => ctrl.release(StandardNESKey::Right),
+                            _ => {}
+                        },
+                        Event::JoystickButtonPressed {
+                            joystickid: 0,
+                            button,
+                        } => match button {
+                            0 => ctrl.press(StandardNESKey::B),
+                            1 => ctrl.press(StandardNESKey::A),
+                            8 => ctrl.press(StandardNESKey::Select),
+                            9 => ctrl.press(StandardNESKey::Start),
+                            _ => {}
+                        },
+                        Event::JoystickButtonReleased {
+                            joystickid: 0,
+                            button,
+                        } => match button {
+                            0 => ctrl.release(StandardNESKey::B),
+                            1 => ctrl.release(StandardNESKey::A),
+                            8 => ctrl.release(StandardNESKey::Select),
+                            9 => ctrl.release(StandardNESKey::Start),
+                            _ => {}
+                        },
+                        Event::JoystickMoved {
+                            joystickid: 0,
+                            axis,
+                            position,
+                        } => match axis {
+                            Axis::PovY => {
+                                if position > 0. {
+                                    ctrl.press(StandardNESKey::Down)
+                                } else if position < 0. {
+                                    ctrl.press(StandardNESKey::Up)
+                                } else {
+                                    ctrl.release(StandardNESKey::Down);
+                                    ctrl.release(StandardNESKey::Up);
+                                }
+                            }
+                            Axis::PovX => {
+                                if position > 0. {
+                                    ctrl.press(StandardNESKey::Right)
+                                } else if position < 0. {
+                                    ctrl.press(StandardNESKey::Left)
+                                } else {
+                                    ctrl.release(StandardNESKey::Right);
+                                    ctrl.release(StandardNESKey::Left);
+                                }
+                            }
                             _ => {}
                         },
                         _ => {}
