@@ -120,8 +120,6 @@ impl Mapper for Mapper4 {
     fn init(&mut self, prg_count: u8, chr_count: u8) {
         self.prg_count = prg_count * 2;
         self.chr_count = chr_count * 8;
-
-        println!("{} {}", prg_count, chr_count);
     }
 
     fn map_read(&self, address: u16, device: Device) -> usize {

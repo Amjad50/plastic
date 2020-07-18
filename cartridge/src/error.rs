@@ -9,7 +9,7 @@ use std::{
 pub enum CartridgeError {
     FileError(ioError),
     HeaderError,
-    TooLargeFile,
+    TooLargeFile(u64),
     Others,
 }
 
@@ -18,8 +18,14 @@ impl CartridgeError {
         match self {
             Self::FileError(err) => format!("FileError: {}", err),
             Self::HeaderError => "This is not a valid iNES file".to_owned(),
-            Self::Others => "An unknown error occurred while decoding/reading the cartridge".to_owned(),
-            Self::TooLargeFile => "The cartridge reader read all the data needed, but the file still has some data at the end".to_owned()
+            Self::Others => {
+                "An unknown error occurred while decoding/reading the cartridge".to_owned()
+            }
+            Self::TooLargeFile(size) => format!(
+                "The cartridge reader read all the data needed, but the file \
+                still has some data at the end with size {}-bytes",
+                size
+            ),
         }
     }
 }

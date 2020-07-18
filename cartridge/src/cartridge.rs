@@ -94,8 +94,10 @@ impl Cartridge {
         }
 
         // there are missing parts
-        if file.seek(SeekFrom::Current(0))? != file.seek(SeekFrom::End(0))? {
-            Err(CartridgeError::TooLargeFile)
+        let current = file.seek(SeekFrom::Current(0))?;
+        let end = file.seek(SeekFrom::End(0))?;
+        if current != end {
+            Err(CartridgeError::TooLargeFile(end - current))
         } else {
             Ok(Self {
                 size_prg,
