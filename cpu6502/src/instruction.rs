@@ -76,9 +76,9 @@ pub enum Opcode {
     Txs, // Transfer X to stack_ptr
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub enum AddressingMode {
-    Immediate,      // #$aa
+    Immediate = 0,  // #$aa
     ZeroPage,       // $aa
     ZeroPageIndexX, // $aa, X
     ZeroPageIndexY, // $aa, Y
@@ -95,21 +95,8 @@ pub enum AddressingMode {
 
 impl AddressingMode {
     pub fn get_instruction_len(&self) -> usize {
-        match self {
-            Self::Immediate => 2,
-            Self::ZeroPage => 2,
-            Self::ZeroPageIndexX => 2,
-            Self::ZeroPageIndexY => 2,
-            Self::Indirect => 3,
-            Self::XIndirect => 2,
-            Self::IndirectY => 2,
-            Self::Absolute => 3,
-            Self::AbsoluteX => 3,
-            Self::AbsoluteY => 3,
-            Self::Accumulator => 1,
-            Self::Relative => 2,
-            Self::Implied => 1,
-        }
+        // mapped table for length of each type
+        [2, 2, 2, 2, 3, 2, 2, 3, 3, 3, 1, 2, 1][*self as usize]
     }
 
     pub fn is_operand_address(&self) -> bool {
@@ -278,8 +265,8 @@ impl Instruction {
         Ok(Instruction {
             opcode_byte: byte,
             operand: 0,
-            opcode: opcode,
-            addressing_mode: addressing_mode,
+            opcode,
+            addressing_mode,
         })
     }
 
