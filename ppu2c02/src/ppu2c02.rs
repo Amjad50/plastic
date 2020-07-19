@@ -77,6 +77,18 @@ impl MaskReg {
         self.background_enabled() || self.sprites_enabled()
     }
 
+    /// returns true if the background pixels on the left should not
+    /// be shown, false otherwise
+    pub fn background_left_clipping_enabled(&self) -> bool {
+        !self.intersects(Self::SHOW_BACKGROUND_LEFTMOST_8)
+    }
+
+    /// returns true if the sprite pixels on the left should not
+    /// be shown, false otherwise
+    pub fn sprites_left_clipping_enabled(&self) -> bool {
+        !self.intersects(Self::SHOW_SPRITES_LEFTMOST_8)
+    }
+
     pub fn is_grayscale(&self) -> bool {
         self.intersects(Self::GRAYSCALE_ENABLE)
     }
@@ -780,9 +792,27 @@ where
     +----- Background/Sprite select
     */
     fn get_pixel(&mut self) -> u8 {
-        let (background_color_bits, background_palette) = self.get_background_pixel();
+        // fetch the next background pixel (it must fetch to advance the
+        // shift registers), and then decide if we should clip or not
+        let background_pixel_data = self.get_background_pixel();
+        let (background_color_bits, background_palette) =
+            if self.cycle < 8 && self.reg_mask.background_left_clipping_enabled() {
+                (0, 0)
+            } else {
+                background_pixel_data
+            };
+
+        // fetch the next sprite pixel (it must fetch to advance the
+        // shift registers), and then decide if we should clip or not
+        let sprite_pixel_data = self.get_sprites_first_non_transparent_pixel();
         let (sprite_color_bits, sprite_palette, background_priority, is_sprite_0) =
-            self.get_sprites_first_non_transparent_pixel();
+            if self.cycle < 8 && self.reg_mask.sprites_left_clipping_enabled() {
+                // since the pixel data is `0`, the other data (palette, priority, ..)
+                // are not important
+                (0, 0, false, false)
+            } else {
+                sprite_pixel_data
+            };
 
         // 0 for background, 1 for sprite
         let palette_selector;
