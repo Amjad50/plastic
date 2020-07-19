@@ -805,8 +805,11 @@ where
         // fetch the next sprite pixel (it must fetch to advance the
         // shift registers), and then decide if we should clip or not
         let sprite_pixel_data = self.get_sprites_first_non_transparent_pixel();
+
+        // another special case is when x is 255, the sprite should always miss
         let (sprite_color_bits, sprite_palette, background_priority, is_sprite_0) =
-            if self.cycle < 8 && self.reg_mask.sprites_left_clipping_enabled() {
+            if self.cycle < 8 && self.reg_mask.sprites_left_clipping_enabled() || self.cycle == 255
+            {
                 // since the pixel data is `0`, the other data (palette, priority, ..)
                 // are not important
                 (0, 0, false, false)

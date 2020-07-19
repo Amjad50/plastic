@@ -361,8 +361,7 @@ mod ppu_tests {
         run_sprite_hit_test("./tests/roms/sprite_hit_tests/05.left_clip.nes")
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn sprite_hit_test_06_right_edge() -> Result<(), PPUTestError> {
         run_sprite_hit_test("./tests/roms/sprite_hit_tests/06.right_edge.nes")
     }
