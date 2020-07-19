@@ -2,7 +2,9 @@ use common::{Bus, Device, MirroringMode, MirroringProvider};
 use std::{cell::RefCell, rc::Rc};
 
 pub struct VRam {
-    // half of this memory (or depending on mirroring mode) is unused
+    /// this have 4 blocks, only the first 2 are used for `Vertical`, `Horizontal`,
+    /// and `SingleScreen` mirroring modes. The remaining 2 blocks are used for
+    /// `FourScreen` mode
     vram_data: [u8; 0x1000],
     mirroring_provider: Rc<RefCell<dyn MirroringProvider>>,
 }
@@ -15,30 +17,22 @@ impl VRam {
         }
     }
 
-    /*
-     * When mirroring, each segment is 0x3FF in size, 0x1000 / 4
-     *
-     * When mapping vertical and horizontal mirroring
-     *
-     * Vertical:   0x8 is equal to 0x0 => 0b1000 is equal 0b0000,
-     *             0xc is equal to 0x4 => 0b1100 is equal 0b0100
-     * we can achieve that by ANDing with 0x7 (0b0111) to remove the 4th bit
-     *
-     * Horizontal: 0x4 is equal to 0x0 => 0b0100 is equal 0b0000,
-     *             0xc is equal to 0x8 => 0b1100 is equal 0b1000
-     * we can achieve that by ANDing with 0xB (0b1011) to remove the 3rd bit
-     */
-    fn map_address(&self, address: u16) -> u16 {
-        assert!(address >= 0x2000 && address < 0x3000);
+    fn map_address(&self, address: u16) -> usize {
+        let block_num = match self.mirroring_provider.borrow().mirroring_mode() {
+            MirroringMode::Vertical => (address >> 10) & 1,
+            MirroringMode::Horizontal => (address >> 11) & 1,
+            MirroringMode::SingleScreenLowBank => 0,
+            MirroringMode::SingleScreenHighBank => 1,
+            MirroringMode::FourScreen => {
+                // directly return the address, as there is no mirroring, and
+                // all the vram address is being used
+                return address as usize & 0xFFF;
+            }
+        } as usize;
 
-        match self.mirroring_provider.borrow().mirroring_mode() {
-            MirroringMode::Vertical => address & 0x7FF,
-            MirroringMode::Horizontal => address & 0xBFF,
-            _ => unimplemented!(
-                "mirroring mode {:?}",
-                self.mirroring_provider.borrow().mirroring_mode()
-            ),
-        }
+        let start_address = block_num << 10;
+
+        start_address + (address as usize & 0x3FF)
     }
 }
 
