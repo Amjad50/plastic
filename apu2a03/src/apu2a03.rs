@@ -1,34 +1,47 @@
 use crate::apu2a03_registers::Register;
 use crate::channels::SquarePulse;
+use crate::length_counter::LengthCountedChannel;
 use crate::tone_source::APUChannelPlayer;
 use std::sync::{Arc, Mutex};
 
 pub struct APU2A03 {
-    square_pulse_1: Arc<Mutex<SquarePulse>>,
+    square_pulse_1: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
     square_pulse_1_timer: u16,
-    square_pulse_2: Arc<Mutex<SquarePulse>>,
+    square_pulse_2: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
     square_pulse_2_timer: u16,
 
     reference_clock_frequency: f32,
+
+    is_4_step_squence_mode: bool,
+
+    cycle: u16,
 }
 
 impl APU2A03 {
     pub fn new() -> Self {
         Self {
-            square_pulse_1: Arc::new(Mutex::new(SquarePulse::new(440., 0.5, 20))),
+            square_pulse_1: Arc::new(Mutex::new(LengthCountedChannel::new(SquarePulse::new(
+                440., 0.5, 20,
+            )))),
             square_pulse_1_timer: 0,
-            square_pulse_2: Arc::new(Mutex::new(SquarePulse::new(440., 0.5, 20))),
+            square_pulse_2: Arc::new(Mutex::new(LengthCountedChannel::new(SquarePulse::new(
+                440., 0.5, 20,
+            )))),
             square_pulse_2_timer: 0,
 
             reference_clock_frequency: 1.789773 * 1E6,
+
+            is_4_step_squence_mode: false,
+
+            cycle: 0,
         }
     }
 
-    pub fn get_square_pulse_1_player(&self) -> APUChannelPlayer<SquarePulse> {
+    pub fn get_square_pulse_1_player(&self) -> APUChannelPlayer<LengthCountedChannel<SquarePulse>> {
         APUChannelPlayer::from_clone(self.square_pulse_1.clone())
     }
 
-    pub fn get_square_pulse_2_player(&self) -> APUChannelPlayer<SquarePulse> {
+    pub fn get_square_pulse_2_player(&self) -> APUChannelPlayer<LengthCountedChannel<SquarePulse>> {
         APUChannelPlayer::from_clone(self.square_pulse_2.clone())
     }
 
@@ -38,7 +51,20 @@ impl APU2A03 {
 
     pub(crate) fn read_register(&self, register: Register) -> u8 {
         match register {
-            Register::Status => 0,
+            Register::Status => {
+                let sqr1_length_counter = if let Ok(square_pulse_1) = self.square_pulse_1.lock() {
+                    (square_pulse_1.length_counter().counter() != 0) as u8
+                } else {
+                    0
+                };
+                let sqr2_length_counter = if let Ok(square_pulse_2) = self.square_pulse_2.lock() {
+                    (square_pulse_2.length_counter().counter() != 0) as u8
+                } else {
+                    0
+                };
+
+                sqr2_length_counter << 1 | sqr1_length_counter
+            }
             _ => {
                 // unreadable
                 0
@@ -54,8 +80,8 @@ impl APU2A03 {
                 let use_volume = data & 0x10 != 0;
 
                 if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
-                    square_pulse_1.set_duty_cycle(duty_cycle);
-                    square_pulse_1.set_volume(volume, use_volume);
+                    square_pulse_1.channel_mut().set_duty_cycle(duty_cycle);
+                    square_pulse_1.channel_mut().set_volume(volume, use_volume);
                 }
             }
             Register::Pulse1_2 => {
@@ -73,6 +99,12 @@ impl APU2A03 {
                     (self.square_pulse_1_timer & 0xFF) | ((data as u16 & 0b111) << 8);
 
                 self.update_sqaure_pulse_1_frequency();
+
+                if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
+                    square_pulse_1
+                        .length_counter_mut()
+                        .reload_counter(data >> 3);
+                }
             }
             Register::Pulse2_1 => {
                 let duty_cycle = [0.125, 0.25, 0.5, 0.75][data as usize >> 6];
@@ -80,8 +112,8 @@ impl APU2A03 {
                 let use_volume = data & 0x10 != 0;
 
                 if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
-                    square_pulse_2.set_duty_cycle(duty_cycle);
-                    square_pulse_2.set_volume(volume, use_volume);
+                    square_pulse_2.channel_mut().set_duty_cycle(duty_cycle);
+                    square_pulse_2.channel_mut().set_volume(volume, use_volume);
                 }
             }
             Register::Pulse2_2 => {
@@ -99,6 +131,12 @@ impl APU2A03 {
                     (self.square_pulse_2_timer & 0xFF) | ((data as u16 & 0b111) << 8);
 
                 self.update_sqaure_pulse_2_frequency();
+
+                if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
+                    square_pulse_2
+                        .length_counter_mut()
+                        .reload_counter(data >> 3);
+                }
             }
             Register::Triangle1 => {}
             Register::Triangle2 => {}
@@ -113,24 +151,27 @@ impl APU2A03 {
             Register::DMC3 => {}
             Register::DMC4 => {}
             Register::Status => {
-                // enable and disable channels
-
-                self.square_pulse_1
-                    .lock()
-                    .unwrap()
-                    .set_enable((data >> 0 & 1) != 0);
-                self.square_pulse_2
-                    .lock()
-                    .unwrap()
-                    .set_enable((data >> 1 & 1) != 0);
+                // enable and disable length counters
+                if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
+                    square_pulse_1
+                        .length_counter_mut()
+                        .set_enabled((data >> 0 & 1) != 0);
+                }
+                if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
+                    square_pulse_2
+                        .length_counter_mut()
+                        .set_enabled((data >> 1 & 1) != 0);
+                }
             }
-            Register::FrameCounter => {}
+            Register::FrameCounter => {
+                self.is_4_step_squence_mode = data & 0x80 == 0;
+            }
         }
     }
 
     fn update_sqaure_pulse_1_frequency(&mut self) {
         if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
-            square_pulse_1.set_freq(
+            square_pulse_1.channel_mut().set_freq(
                 self.reference_clock_frequency / (16 * (self.square_pulse_1_timer + 1)) as f32,
             );
         }
@@ -138,7 +179,7 @@ impl APU2A03 {
 
     fn update_sqaure_pulse_2_frequency(&mut self) {
         if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
-            square_pulse_2.set_freq(
+            square_pulse_2.channel_mut().set_freq(
                 self.reference_clock_frequency / (16 * (self.square_pulse_2_timer + 1)) as f32,
             );
         }
@@ -163,5 +204,41 @@ impl APU2A03 {
         sink.detach();
     }
 
-    pub fn clock(&mut self) {}
+    fn square_pulse_1_length_counter_decrement(&mut self) {
+        if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
+            square_pulse_1.length_counter_mut().decrement();
+        }
+    }
+
+    fn square_pulse_2_length_counter_decrement(&mut self) {
+        if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
+            square_pulse_2.length_counter_mut().decrement();
+        }
+    }
+
+    pub fn clock(&mut self) {
+        self.cycle += 1;
+
+        match self.cycle {
+            3729 => {}
+            7457 => {
+                self.square_pulse_1_length_counter_decrement();
+                self.square_pulse_2_length_counter_decrement();
+            }
+            11186 => {}
+            14915 if self.is_4_step_squence_mode => {
+                self.square_pulse_1_length_counter_decrement();
+                self.square_pulse_2_length_counter_decrement();
+                self.cycle = 0;
+            }
+            18641 if !self.is_4_step_squence_mode => {
+                self.square_pulse_1_length_counter_decrement();
+                self.square_pulse_2_length_counter_decrement();
+                self.cycle = 0;
+            }
+            _ => {
+                // ignore
+            }
+        }
+    }
 }

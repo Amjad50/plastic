@@ -6,7 +6,6 @@ pub struct SquarePulse {
     n_harmonics: u8,
     volume: u8,
     use_volume: bool,
-    enabled: bool,
     sample_num: usize,
 }
 
@@ -18,7 +17,6 @@ impl SquarePulse {
             n_harmonics,
             volume: 0,
             use_volume: true,
-            enabled: true,
             sample_num: 0,
         }
     }
@@ -32,10 +30,6 @@ impl SquarePulse {
 
         self.volume = vol;
         self.use_volume = use_vol;
-    }
-
-    pub(crate) fn set_enable(&mut self, enabled: bool) {
-        self.enabled = enabled;
     }
 
     pub(crate) fn set_duty_cycle(&mut self, duty_cycle: f32) {
@@ -70,18 +64,14 @@ impl SquarePulse {
 impl Iterator for SquarePulse {
     type Item = f32;
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.enabled {
-            Some(0.)
+        self.sample_num = self.sample_num.wrapping_add(1);
+
+        let result = self.sin_next(self.sample_num);
+
+        if self.use_volume {
+            Some(self.volume as f32 / 0xF as f32 * result)
         } else {
-            self.sample_num = self.sample_num.wrapping_add(1);
-
-            let result = self.sin_next(self.sample_num);
-
-            if self.use_volume {
-                Some(self.volume as f32 / 0xF as f32 * result)
-            } else {
-                Some(result)
-            }
+            Some(result)
         }
     }
 }

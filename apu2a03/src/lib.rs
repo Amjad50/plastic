@@ -4,6 +4,7 @@ extern crate common;
 mod apu2a03;
 mod apu2a03_registers;
 mod channels;
+mod length_counter;
 mod tone_source;
 
 pub use crate::apu2a03::APU2A03;

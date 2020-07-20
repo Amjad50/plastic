@@ -1,7 +1,10 @@
 use rodio::{Sample, Source};
 use std::sync::{Arc, Mutex};
 
-pub trait APUChannel: Iterator {
+pub trait APUChannel: Iterator
+where
+    Self::Item: Sample,
+{
     fn sample_rate(&self) -> u32 {
         crate::SAMPLE_RATE
     }

@@ -280,9 +280,14 @@ impl NES {
             // so we can regulat the clock speed to match that, we know that 29780.5
             // cpu cycles happen in every frame
             const N: usize = 29780;
+            let mut apu_clock = false;
             // run the emulator loop
             for _ in 0..N {
                 self.cpu.run_next();
+                if apu_clock {
+                    self.apu.borrow_mut().clock();
+                }
+                apu_clock = !apu_clock;
 
                 let mut ppu = self.ppu.borrow_mut();
                 ppu.run_cycle();
