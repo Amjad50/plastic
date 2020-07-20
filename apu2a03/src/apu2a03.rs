@@ -87,10 +87,13 @@ impl APU2A03 {
                 let duty_cycle = [0.125, 0.25, 0.5, 0.75][data as usize >> 6];
                 let volume = data & 0xF;
                 let use_volume = data & 0x10 != 0;
+                let halt = data & 0x20 != 0;
 
                 if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
                     square_pulse_1.channel_mut().set_duty_cycle(duty_cycle);
                     square_pulse_1.channel_mut().set_volume(volume, use_volume);
+
+                    square_pulse_1.length_counter_mut().set_halt(halt);
                 }
             }
             Register::Pulse1_2 => {
@@ -125,10 +128,13 @@ impl APU2A03 {
                 let duty_cycle = [0.125, 0.25, 0.5, 0.75][data as usize >> 6];
                 let volume = data & 0xF;
                 let use_volume = data & 0x10 != 0;
+                let halt = data & 0x20 != 0;
 
                 if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
                     square_pulse_2.channel_mut().set_duty_cycle(duty_cycle);
                     square_pulse_2.channel_mut().set_volume(volume, use_volume);
+
+                    square_pulse_2.length_counter_mut().set_halt(halt);
                 }
             }
             Register::Pulse2_2 => {

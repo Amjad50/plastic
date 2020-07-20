@@ -52,6 +52,10 @@ impl LengthCounter {
         }
     }
 
+    pub(crate) fn set_halt(&mut self, halt: bool) {
+        self.halt = halt;
+    }
+
     pub(crate) fn counter(&self) -> u8 {
         self.counter
     }
