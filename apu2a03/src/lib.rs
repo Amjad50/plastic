@@ -4,6 +4,7 @@ extern crate common;
 mod apu2a03;
 mod apu2a03_registers;
 mod channels;
+mod envelope;
 mod length_counter;
 mod sweeper;
 mod tone_source;

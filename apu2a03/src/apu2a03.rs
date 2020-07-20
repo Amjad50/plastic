@@ -1,14 +1,15 @@
 use crate::apu2a03_registers::Register;
 use crate::channels::SquarePulse;
+use crate::envelope::EnvelopeGenerator;
 use crate::length_counter::LengthCountedChannel;
 use crate::sweeper::Sweeper;
 use crate::tone_source::APUChannelPlayer;
 use std::sync::{Arc, Mutex};
 
 pub struct APU2A03 {
-    square_pulse_1: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
+    square_pulse_1: Arc<Mutex<LengthCountedChannel<EnvelopeGenerator<SquarePulse>>>>,
     square_pulse_1_sweeper: Sweeper,
-    square_pulse_2: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
+    square_pulse_2: Arc<Mutex<LengthCountedChannel<EnvelopeGenerator<SquarePulse>>>>,
     square_pulse_2_sweeper: Sweeper,
 
     reference_clock_frequency: f32,
@@ -20,18 +21,12 @@ pub struct APU2A03 {
 
 impl APU2A03 {
     pub fn new() -> Self {
-        let square_pulse_1 = Arc::new(Mutex::new(LengthCountedChannel::new(SquarePulse::new(
-            440.,
-            0.5,
-            20,
-            1.789773 * 1E6,
-        ))));
-        let square_pulse_2 = Arc::new(Mutex::new(LengthCountedChannel::new(SquarePulse::new(
-            440.,
-            0.5,
-            20,
-            1.789773 * 1E6,
-        ))));
+        let square_pulse_1 = Arc::new(Mutex::new(LengthCountedChannel::new(
+            EnvelopeGenerator::new(SquarePulse::new(440., 0.5, 20, 1.789773 * 1E6)),
+        )));
+        let square_pulse_2 = Arc::new(Mutex::new(LengthCountedChannel::new(
+            EnvelopeGenerator::new(SquarePulse::new(440., 0.5, 20, 1.789773 * 1E6)),
+        )));
         Self {
             square_pulse_1: square_pulse_1.clone(),
             square_pulse_1_sweeper: Sweeper::new(square_pulse_1.clone()),
@@ -46,11 +41,15 @@ impl APU2A03 {
         }
     }
 
-    pub fn get_square_pulse_1_player(&self) -> APUChannelPlayer<LengthCountedChannel<SquarePulse>> {
+    pub fn get_square_pulse_1_player(
+        &self,
+    ) -> APUChannelPlayer<LengthCountedChannel<EnvelopeGenerator<SquarePulse>>> {
         APUChannelPlayer::from_clone(self.square_pulse_1.clone())
     }
 
-    pub fn get_square_pulse_2_player(&self) -> APUChannelPlayer<LengthCountedChannel<SquarePulse>> {
+    pub fn get_square_pulse_2_player(
+        &self,
+    ) -> APUChannelPlayer<LengthCountedChannel<EnvelopeGenerator<SquarePulse>>> {
         APUChannelPlayer::from_clone(self.square_pulse_2.clone())
     }
 
@@ -82,6 +81,7 @@ impl APU2A03 {
     }
 
     pub(crate) fn write_register(&mut self, register: Register, data: u8) {
+        // println!("{:?} {:08b}", register, data);
         match register {
             Register::Pulse1_1 => {
                 let duty_cycle = [0.125, 0.25, 0.5, 0.75][data as usize >> 6];
@@ -90,10 +90,16 @@ impl APU2A03 {
                 let halt = data & 0x20 != 0;
 
                 if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
-                    square_pulse_1.channel_mut().set_duty_cycle(duty_cycle);
+                    square_pulse_1
+                        .channel_mut()
+                        .channel_mut()
+                        .set_duty_cycle(duty_cycle);
                     square_pulse_1.channel_mut().set_volume(volume, use_volume);
 
                     square_pulse_1.length_counter_mut().set_halt(halt);
+                    square_pulse_1.channel_mut().set_loop_flag(halt);
+
+                    square_pulse_1.channel_mut().set_start_flag(true);
                 }
             }
             Register::Pulse1_2 => {
@@ -102,10 +108,11 @@ impl APU2A03 {
             }
             Register::Pulse1_3 => {
                 if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
-                    let period = square_pulse_1.channel().get_period();
+                    let period = square_pulse_1.channel().channel().get_period();
 
                     // lower timer bits
                     square_pulse_1
+                        .channel_mut()
                         .channel_mut()
                         .set_period((period & 0xFF00) | data as u16);
                 }
@@ -116,12 +123,15 @@ impl APU2A03 {
                         .length_counter_mut()
                         .reload_counter(data >> 3);
 
-                    let period = square_pulse_1.channel().get_period();
+                    let period = square_pulse_1.channel().channel().get_period();
 
                     // high timer bits
                     square_pulse_1
                         .channel_mut()
-                        .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8))
+                        .channel_mut()
+                        .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8));
+
+                    square_pulse_1.channel_mut().set_start_flag(true);
                 }
             }
             Register::Pulse2_1 => {
@@ -131,10 +141,15 @@ impl APU2A03 {
                 let halt = data & 0x20 != 0;
 
                 if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
-                    square_pulse_2.channel_mut().set_duty_cycle(duty_cycle);
+                    square_pulse_2
+                        .channel_mut()
+                        .channel_mut()
+                        .set_duty_cycle(duty_cycle);
                     square_pulse_2.channel_mut().set_volume(volume, use_volume);
 
                     square_pulse_2.length_counter_mut().set_halt(halt);
+                    square_pulse_2.channel_mut().set_loop_flag(halt);
+                    square_pulse_2.channel_mut().set_start_flag(true);
                 }
             }
             Register::Pulse2_2 => {
@@ -143,10 +158,11 @@ impl APU2A03 {
             }
             Register::Pulse2_3 => {
                 if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
-                    let period = square_pulse_2.channel().get_period();
+                    let period = square_pulse_2.channel().channel().get_period();
 
                     // lower timer bits
                     square_pulse_2
+                        .channel_mut()
                         .channel_mut()
                         .set_period((period & 0xFF00) | data as u16);
                 }
@@ -157,12 +173,15 @@ impl APU2A03 {
                         .length_counter_mut()
                         .reload_counter(data >> 3);
 
-                    let period = square_pulse_2.channel().get_period();
+                    let period = square_pulse_2.channel().channel().get_period();
 
                     // high timer bits
                     square_pulse_2
                         .channel_mut()
+                        .channel_mut()
                         .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8));
+
+                    square_pulse_2.channel_mut().set_start_flag(true);
                 }
             }
             Register::Triangle1 => {}
@@ -227,23 +246,45 @@ impl APU2A03 {
         }
     }
 
+    fn square_pulse_1_envelope_clock(&mut self) {
+        if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
+            square_pulse_1.channel_mut().clock();
+        }
+    }
+
+    fn square_pulse_2_envelope_clock(&mut self) {
+        if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
+            square_pulse_2.channel_mut().clock();
+        }
+    }
+
     pub fn clock(&mut self) {
         self.cycle += 1;
 
         match self.cycle {
-            3729 => {}
+            3729 => {
+                self.square_pulse_1_envelope_clock();
+                self.square_pulse_2_envelope_clock();
+            }
             7457 => {
                 self.square_pulse_1_length_counter_decrement();
                 self.square_pulse_1_sweeper.clock();
                 self.square_pulse_2_length_counter_decrement();
                 self.square_pulse_2_sweeper.clock();
+                self.square_pulse_1_envelope_clock();
+                self.square_pulse_2_envelope_clock();
             }
-            11186 => {}
+            11186 => {
+                self.square_pulse_1_envelope_clock();
+                self.square_pulse_2_envelope_clock();
+            }
             14915 if self.is_4_step_squence_mode => {
                 self.square_pulse_1_length_counter_decrement();
                 self.square_pulse_1_sweeper.clock();
                 self.square_pulse_2_length_counter_decrement();
                 self.square_pulse_2_sweeper.clock();
+                self.square_pulse_1_envelope_clock();
+                self.square_pulse_2_envelope_clock();
                 self.cycle = 0;
             }
             18641 if !self.is_4_step_squence_mode => {
@@ -251,6 +292,8 @@ impl APU2A03 {
                 self.square_pulse_1_sweeper.clock();
                 self.square_pulse_2_length_counter_decrement();
                 self.square_pulse_2_sweeper.clock();
+                self.square_pulse_1_envelope_clock();
+                self.square_pulse_2_envelope_clock();
                 self.cycle = 0;
             }
             _ => {
