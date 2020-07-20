@@ -7,10 +7,16 @@ pub struct SquarePulse {
     volume: u8,
     use_volume: bool,
     sample_num: usize,
+
+    period: u16,
+    // TODO: add a method to stay in sync with one reference stored in APU
+    reference_frequency: f32,
+
+    muted: bool,
 }
 
 impl SquarePulse {
-    pub fn new(freq: f32, duty_cycle: f32, n_harmonics: u8) -> Self {
+    pub fn new(freq: f32, duty_cycle: f32, n_harmonics: u8, reference_frequency: f32) -> Self {
         Self {
             freq,
             duty_cycle,
@@ -18,6 +24,11 @@ impl SquarePulse {
             volume: 0,
             use_volume: true,
             sample_num: 0,
+
+            period: 0,
+            reference_frequency,
+
+            muted: false,
         }
     }
 
@@ -44,6 +55,24 @@ impl SquarePulse {
         };
     }
 
+    pub(crate) fn get_period(&self) -> u16 {
+        self.period
+    }
+
+    pub(crate) fn set_period(&mut self, period: u16) {
+        self.period = period;
+
+        self.update_frequency();
+    }
+
+    pub(crate) fn set_muted(&mut self, muted: bool) {
+        self.muted = muted;
+    }
+
+    fn update_frequency(&mut self) {
+        self.freq = self.reference_frequency / (16 * (self.period + 1)) as f32;
+    }
+
     /// returns a square function using sum of sines
     fn sin_next(&self, time: usize) -> f32 {
         let mut a: f32 = 0.;
@@ -64,14 +93,18 @@ impl SquarePulse {
 impl Iterator for SquarePulse {
     type Item = f32;
     fn next(&mut self) -> Option<Self::Item> {
-        self.sample_num = self.sample_num.wrapping_add(1);
-
-        let result = self.sin_next(self.sample_num);
-
-        if self.use_volume {
-            Some(self.volume as f32 / 0xF as f32 * result)
+        if self.muted {
+            Some(0.)
         } else {
-            Some(result)
+            self.sample_num = self.sample_num.wrapping_add(1);
+
+            let result = self.sin_next(self.sample_num);
+
+            if self.use_volume {
+                Some(self.volume as f32 / 0xF as f32 * result)
+            } else {
+                Some(result)
+            }
         }
     }
 }

@@ -1,14 +1,15 @@
 use crate::apu2a03_registers::Register;
 use crate::channels::SquarePulse;
 use crate::length_counter::LengthCountedChannel;
+use crate::sweeper::Sweeper;
 use crate::tone_source::APUChannelPlayer;
 use std::sync::{Arc, Mutex};
 
 pub struct APU2A03 {
     square_pulse_1: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
-    square_pulse_1_timer: u16,
+    square_pulse_1_sweeper: Sweeper,
     square_pulse_2: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
-    square_pulse_2_timer: u16,
+    square_pulse_2_sweeper: Sweeper,
 
     reference_clock_frequency: f32,
 
@@ -19,15 +20,23 @@ pub struct APU2A03 {
 
 impl APU2A03 {
     pub fn new() -> Self {
+        let square_pulse_1 = Arc::new(Mutex::new(LengthCountedChannel::new(SquarePulse::new(
+            440.,
+            0.5,
+            20,
+            1.789773 * 1E6,
+        ))));
+        let square_pulse_2 = Arc::new(Mutex::new(LengthCountedChannel::new(SquarePulse::new(
+            440.,
+            0.5,
+            20,
+            1.789773 * 1E6,
+        ))));
         Self {
-            square_pulse_1: Arc::new(Mutex::new(LengthCountedChannel::new(SquarePulse::new(
-                440., 0.5, 20,
-            )))),
-            square_pulse_1_timer: 0,
-            square_pulse_2: Arc::new(Mutex::new(LengthCountedChannel::new(SquarePulse::new(
-                440., 0.5, 20,
-            )))),
-            square_pulse_2_timer: 0,
+            square_pulse_1: square_pulse_1.clone(),
+            square_pulse_1_sweeper: Sweeper::new(square_pulse_1.clone()),
+            square_pulse_2: square_pulse_2.clone(),
+            square_pulse_2_sweeper: Sweeper::new(square_pulse_2.clone()),
 
             reference_clock_frequency: 1.789773 * 1E6,
 
@@ -86,24 +95,30 @@ impl APU2A03 {
             }
             Register::Pulse1_2 => {
                 // sweep
+                self.square_pulse_1_sweeper.set_from_data_byte(data);
             }
             Register::Pulse1_3 => {
-                // low timer bits
-                self.square_pulse_1_timer = (self.square_pulse_1_timer & 0xFF00) | data as u16;
+                if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
+                    let period = square_pulse_1.channel().get_period();
 
-                self.update_sqaure_pulse_1_frequency();
+                    // lower timer bits
+                    square_pulse_1
+                        .channel_mut()
+                        .set_period((period & 0xFF00) | data as u16);
+                }
             }
             Register::Pulse1_4 => {
-                // high timer bits
-                self.square_pulse_1_timer =
-                    (self.square_pulse_1_timer & 0xFF) | ((data as u16 & 0b111) << 8);
-
-                self.update_sqaure_pulse_1_frequency();
-
                 if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
                     square_pulse_1
                         .length_counter_mut()
                         .reload_counter(data >> 3);
+
+                    let period = square_pulse_1.channel().get_period();
+
+                    // high timer bits
+                    square_pulse_1
+                        .channel_mut()
+                        .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8))
                 }
             }
             Register::Pulse2_1 => {
@@ -118,24 +133,30 @@ impl APU2A03 {
             }
             Register::Pulse2_2 => {
                 // sweep
+                self.square_pulse_2_sweeper.set_from_data_byte(data);
             }
             Register::Pulse2_3 => {
-                // low timer bits
-                self.square_pulse_2_timer = (self.square_pulse_2_timer & 0xFF00) | data as u16;
+                if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
+                    let period = square_pulse_2.channel().get_period();
 
-                self.update_sqaure_pulse_2_frequency();
+                    // lower timer bits
+                    square_pulse_2
+                        .channel_mut()
+                        .set_period((period & 0xFF00) | data as u16);
+                }
             }
             Register::Pulse2_4 => {
-                // high timer bits
-                self.square_pulse_2_timer =
-                    (self.square_pulse_2_timer & 0xFF) | ((data as u16 & 0b111) << 8);
-
-                self.update_sqaure_pulse_2_frequency();
-
                 if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
                     square_pulse_2
                         .length_counter_mut()
                         .reload_counter(data >> 3);
+
+                    let period = square_pulse_2.channel().get_period();
+
+                    // high timer bits
+                    square_pulse_2
+                        .channel_mut()
+                        .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8));
                 }
             }
             Register::Triangle1 => {}
@@ -166,22 +187,6 @@ impl APU2A03 {
             Register::FrameCounter => {
                 self.is_4_step_squence_mode = data & 0x80 == 0;
             }
-        }
-    }
-
-    fn update_sqaure_pulse_1_frequency(&mut self) {
-        if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
-            square_pulse_1.channel_mut().set_freq(
-                self.reference_clock_frequency / (16 * (self.square_pulse_1_timer + 1)) as f32,
-            );
-        }
-    }
-
-    fn update_sqaure_pulse_2_frequency(&mut self) {
-        if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
-            square_pulse_2.channel_mut().set_freq(
-                self.reference_clock_frequency / (16 * (self.square_pulse_2_timer + 1)) as f32,
-            );
         }
     }
 
@@ -223,17 +228,23 @@ impl APU2A03 {
             3729 => {}
             7457 => {
                 self.square_pulse_1_length_counter_decrement();
+                self.square_pulse_1_sweeper.clock();
                 self.square_pulse_2_length_counter_decrement();
+                self.square_pulse_2_sweeper.clock();
             }
             11186 => {}
             14915 if self.is_4_step_squence_mode => {
                 self.square_pulse_1_length_counter_decrement();
+                self.square_pulse_1_sweeper.clock();
                 self.square_pulse_2_length_counter_decrement();
+                self.square_pulse_2_sweeper.clock();
                 self.cycle = 0;
             }
             18641 if !self.is_4_step_squence_mode => {
                 self.square_pulse_1_length_counter_decrement();
+                self.square_pulse_1_sweeper.clock();
                 self.square_pulse_2_length_counter_decrement();
+                self.square_pulse_2_sweeper.clock();
                 self.cycle = 0;
             }
             _ => {
