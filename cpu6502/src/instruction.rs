@@ -316,6 +316,7 @@ impl Instruction {
     }
 }
 
+#[cfg(not(tarpaulin_include))]
 impl Display for Opcode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         use Opcode::*;
@@ -391,6 +392,7 @@ impl Display for Opcode {
     }
 }
 
+#[cfg(not(tarpaulin_include))]
 impl Display for Instruction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         use AddressingMode::*;

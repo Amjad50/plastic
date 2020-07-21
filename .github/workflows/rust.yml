@@ -31,5 +31,5 @@ jobs:
   # - name: Run tests
   #   run: cargo test --verbose
     - name: Run test cargo-tarpaulin
-      run: cargo tarpaulin --workspace -v --lib -o Xml
+      run: cargo tarpaulin --workspace -e nes_test -v -o Xml
     - uses: codecov/codecov-action@v1.0.11
