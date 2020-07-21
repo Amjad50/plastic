@@ -3,8 +3,12 @@ container:
 
 cpu_test_task:
   env:
+    CODECOV_TOKEN: ENCRYPTED[d6e2ceceb5090cac65689ff8eddda560bf32c16d223e10e07615e15f72f2e035bbb17120c51e65098a59828ab5666d40]
     RUST_BACKTRACE: 1
-  before_build_script: if [[ "$OS" == "linux" ]]; then apt-get update -y && apt-get install -y libsfml-dev libcsfml-dev libasound2-dev; fi
+  before_build_script: >
+      if [[ "$OS" == "linux" ]]; then apt-get update -y && apt-get install -y libsfml-dev libcsfml-dev libasound2-dev; fi;
+      cargo install cargo-tarpaulin
   build_script: cargo build
-  test_script: cargo test
+  # test_script: cargo test
+  test_and_coverage_script: cargo tarpaulin --out Xml; bash <(curl -s https://codecov.io/bash)
   before_cache_script: rm -rf $CARGO_HOME/registry/index
