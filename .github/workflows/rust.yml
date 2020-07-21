@@ -16,13 +16,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: download apt packages
+    - name: Download apt packages
       run: |
         sudo apt-get update -y && sudo apt-get install -y libsfml-dev libcsfml-dev libasound2-dev
+    - name: Install cargo-tarpaulin
+      uses: actions-rs/install@v0.1
+      with:
+        crate: cargo-tarpaulin
+        version: latest
+        use-tool-cache: true
     - uses: actions/checkout@v2
     - name: Build
       run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
-    - uses: actions-rs/tarpaulin@v0.1.0
+  # - name: Run tests
+  #   run: cargo test --verbose
+    - name: Run test cargo-tarpaulin
+      run: cargo tarpaulin --workspace -v --lib -o Xml
     - uses: codecov/codecov-action@v1.0.11
