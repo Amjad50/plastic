@@ -17,6 +17,8 @@ pub struct APU2A03 {
     is_4_step_squence_mode: bool,
 
     cycle: u16,
+
+    wait_reset: i8,
 }
 
 impl APU2A03 {
@@ -38,6 +40,8 @@ impl APU2A03 {
             is_4_step_squence_mode: false,
 
             cycle: 0,
+
+            wait_reset: 0,
         }
     }
 
@@ -211,6 +215,9 @@ impl APU2A03 {
             }
             Register::FrameCounter => {
                 self.is_4_step_squence_mode = data & 0x80 == 0;
+
+                // reset(side effect)
+                self.wait_reset = 2; // after 4 CPU clocks
             }
         }
     }
@@ -258,42 +265,53 @@ impl APU2A03 {
         }
     }
 
+    fn generate_quarter_frame_clock(&mut self) {
+        self.square_pulse_1_envelope_clock();
+        self.square_pulse_2_envelope_clock();
+    }
+
+    fn generate_half_frame_clock(&mut self) {
+        self.square_pulse_1_length_counter_decrement();
+        self.square_pulse_1_sweeper.clock();
+        self.square_pulse_2_length_counter_decrement();
+        self.square_pulse_2_sweeper.clock();
+    }
+
     pub fn clock(&mut self) {
+        if self.wait_reset > 0 {
+            self.wait_reset -= 1;
+        } else if self.wait_reset == 0 {
+            self.cycle = 0;
+            self.wait_reset = -1;
+
+            // mode bit is set
+            if !self.is_4_step_squence_mode {
+                self.generate_quarter_frame_clock();
+                self.generate_half_frame_clock();
+            }
+        }
+
         self.cycle += 1;
 
         match self.cycle {
             3729 => {
-                self.square_pulse_1_envelope_clock();
-                self.square_pulse_2_envelope_clock();
+                self.generate_quarter_frame_clock();
             }
             7457 => {
-                self.square_pulse_1_length_counter_decrement();
-                self.square_pulse_1_sweeper.clock();
-                self.square_pulse_2_length_counter_decrement();
-                self.square_pulse_2_sweeper.clock();
-                self.square_pulse_1_envelope_clock();
-                self.square_pulse_2_envelope_clock();
+                self.generate_quarter_frame_clock();
+                self.generate_half_frame_clock();
             }
             11186 => {
-                self.square_pulse_1_envelope_clock();
-                self.square_pulse_2_envelope_clock();
+                self.generate_quarter_frame_clock();
             }
             14915 if self.is_4_step_squence_mode => {
-                self.square_pulse_1_length_counter_decrement();
-                self.square_pulse_1_sweeper.clock();
-                self.square_pulse_2_length_counter_decrement();
-                self.square_pulse_2_sweeper.clock();
-                self.square_pulse_1_envelope_clock();
-                self.square_pulse_2_envelope_clock();
+                self.generate_quarter_frame_clock();
+                self.generate_half_frame_clock();
                 self.cycle = 0;
             }
             18641 if !self.is_4_step_squence_mode => {
-                self.square_pulse_1_length_counter_decrement();
-                self.square_pulse_1_sweeper.clock();
-                self.square_pulse_2_length_counter_decrement();
-                self.square_pulse_2_sweeper.clock();
-                self.square_pulse_1_envelope_clock();
-                self.square_pulse_2_envelope_clock();
+                self.generate_quarter_frame_clock();
+                self.generate_half_frame_clock();
                 self.cycle = 0;
             }
             _ => {
