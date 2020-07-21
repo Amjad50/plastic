@@ -6,4 +6,5 @@ coverage:
 ignore:
   - "nes_test"
   - "tests.rs"
+  - "**/tests.rs"
   - "tests"
