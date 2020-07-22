@@ -87,8 +87,8 @@ impl Cartridge {
         if is_nes_2 {
             // print a warning message just to know which games need INES2.
             eprintln!(
-                "[WARN], the cartridge header is in INES2.0 format, but\
-                this emulator only supports INES1.0, the game might work\
+                "[WARN], the cartridge header is in INES2.0 format, but \
+                this emulator only supports INES1.0, the game might work \
                 but mostly it will be buggy"
             );
         }
