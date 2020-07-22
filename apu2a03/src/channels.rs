@@ -58,7 +58,12 @@ impl SquarePulse {
         self.muted = muted;
     }
 
+    pub(crate) fn reset(&mut self) {
+        self.sample_num = 0;
+    }
+
     fn update_frequency(&mut self) {
+        self.muted = self.period > 0x7FF || self.period < 8;
         self.freq = self.reference_frequency / (16 * (self.period + 1)) as f32;
     }
 

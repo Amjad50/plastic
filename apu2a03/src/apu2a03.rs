@@ -136,6 +136,9 @@ impl APU2A03 {
                         .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8));
 
                     square_pulse_1.channel_mut().set_start_flag(true);
+
+                    // reset pulse
+                    square_pulse_1.channel_mut().channel_mut().reset();
                 }
             }
             Register::Pulse2_1 => {
@@ -186,6 +189,9 @@ impl APU2A03 {
                         .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8));
 
                     square_pulse_2.channel_mut().set_start_flag(true);
+
+                    // reset pulse
+                    square_pulse_2.channel_mut().channel_mut().reset();
                 }
             }
             Register::Triangle1 => {}

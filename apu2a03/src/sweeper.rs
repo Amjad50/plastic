@@ -54,16 +54,11 @@ impl Sweeper {
                         current_period.saturating_add(change_amount)
                     };
 
-                    if target_period > 0x7FF || target_period < 8 {
-                        // sweep muting
-                        channel.channel_mut().channel_mut().set_muted(true);
-                    } else {
-                        channel
-                            .channel_mut()
-                            .channel_mut()
-                            .set_period(target_period);
-                        channel.channel_mut().channel_mut().set_muted(false);
-                    }
+                    // muting is done in the square pulse
+                    channel
+                        .channel_mut()
+                        .channel_mut()
+                        .set_period(target_period);
                 }
 
                 self.divider_period_counter = self.divider_period_reload_value;
