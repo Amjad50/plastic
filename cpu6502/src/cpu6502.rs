@@ -354,12 +354,12 @@ where
                 self.dma_remaining -= 1;
                 {
                     // send one byte at a time
-                    let mut ppu = self.ppu.borrow_mut();
                     let oma_address = (255 - self.dma_remaining) & 0xFF;
                     let cpu_address = (self.dma_address as u16) << 8 | oma_address;
 
                     let data = self.read_bus(cpu_address);
-                    ppu.send_oam_data(oma_address as u8, data);
+
+                    self.ppu.borrow_mut().send_oam_data(oma_address as u8, data);
                 }
 
                 // since it should read in one cycle and write in the other cycle
