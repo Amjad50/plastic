@@ -641,7 +641,7 @@ where
 
             // handle flipping vertically
             if sprite.get_attribute().is_flip_vertical() {
-                fine_y = (sprite_height - 1) - fine_y;
+                fine_y = (sprite_height - 1).wrapping_sub(fine_y);
             }
 
             self.sprite_counters[i] = sprite.get_x();
