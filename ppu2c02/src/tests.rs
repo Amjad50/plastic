@@ -162,7 +162,7 @@ mod ppu_tests {
 
             let cpubus = Rc::new(RefCell::new(CPUBus::new(cartridge.clone(), ppu.clone())));
 
-            let cpu = CPU6502::new(cpubus.clone(), ppu.clone());
+            let cpu = CPU6502::new(cpubus.clone(), ppu.clone(), cartridge.clone());
 
             Ok(Self {
                 cpu,
