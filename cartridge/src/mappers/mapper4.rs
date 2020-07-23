@@ -1,5 +1,6 @@
 use crate::mapper::Mapper;
 use common::{Device, MirroringMode};
+use std::cell::Cell;
 
 pub struct Mapper4 {
     /// ($8000-$9FFE, even)
@@ -79,17 +80,26 @@ pub struct Mapper4 {
 
     /// counter will be decremented, and when reached zero and `irq_enabled`
     /// `true` it should trigger an **IRQ** interrupt
-    irq_counter: u8,
+    irq_counter: Cell<u8>,
+
+    /// reload IRQ counter at the NEXT clocking of the IRQ
+    reload_irq_counter_flag: Cell<bool>,
 
     /// denotes if an **IRQ** interrupt should occur on `irq_counter` reaching
     /// zero or not
     irq_enabled: bool,
+
+    irq_pin: Cell<bool>,
 
     /// in 1kb units
     chr_count: u8,
 
     /// in 8kb units
     prg_count: u8,
+
+    /// false if the last accessed pattern table address is $0000
+    /// true  if the last accessed pattern table address is $1000
+    last_pattern_table: Cell<bool>,
 }
 
 impl Mapper4 {
@@ -108,11 +118,36 @@ impl Mapper4 {
             chr_bank_r5: 0,
             mirroring_vertical: false,
             irq_latch: 0,
-            irq_counter: 0,
+            irq_counter: Cell::new(0),
+            reload_irq_counter_flag: Cell::new(false),
             irq_enabled: false,
+            irq_pin: Cell::new(false),
             chr_count: 0,
             prg_count: 0,
+            last_pattern_table: Cell::new(false),
         }
+    }
+
+    fn handle_irq_counter(&self, address: u16) {
+        let current_pattern_table = address & (1 << 12) != 0;
+
+        // transition from 0 to 1
+        if !self.last_pattern_table.get() && current_pattern_table {
+            if self.irq_counter.get() == 0 && self.irq_enabled {
+                // trigger IRQ
+                self.irq_pin.set(true);
+            }
+
+            if self.irq_counter.get() == 0 || self.reload_irq_counter_flag.get() {
+                self.reload_irq_counter_flag.set(false);
+                self.irq_counter.set(self.irq_latch);
+            } else {
+                self.irq_counter
+                    .set(self.irq_counter.get().saturating_sub(1));
+            }
+        }
+
+        self.last_pattern_table.set(current_pattern_table);
     }
 }
 
@@ -152,6 +187,8 @@ impl Mapper for Mapper4 {
                 start_of_bank + (address & 0x1FFF) as usize
             }
             Device::PPU => {
+                self.handle_irq_counter(address);
+
                 let is_2k = (address & 0x1000 == 0) ^ self.chr_bank_2k_1000;
 
                 let bank = if is_2k {
@@ -222,7 +259,7 @@ impl Mapper for Mapper4 {
                             self.irq_latch = data;
                         } else {
                             // odd
-                            self.irq_counter = self.irq_latch;
+                            self.reload_irq_counter_flag.set(true);
                         }
                     }
                     0xE000..=0xFFFF => {
@@ -248,5 +285,13 @@ impl Mapper for Mapper4 {
         } else {
             MirroringMode::Horizontal
         }
+    }
+
+    fn is_irq_requested(&self) -> bool {
+        self.irq_pin.get()
+    }
+
+    fn clear_irq_request_pin(&mut self) {
+        self.irq_pin.set(false);
     }
 }

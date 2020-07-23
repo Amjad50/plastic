@@ -6,3 +6,8 @@ pub trait PPUCPUConnection {
     fn dma_address(&mut self) -> u8;
     fn send_oam_data(&mut self, address: u8, data: u8);
 }
+
+pub trait CartridgeCPUConnection {
+    fn is_irq_requested(&self) -> bool;
+    fn clear_irq_request_pin(&mut self);
+}

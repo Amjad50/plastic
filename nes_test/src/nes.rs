@@ -156,7 +156,11 @@ impl NES {
 
         let cpubus = CPUBus::new(cartridge.clone(), ppu.clone(), apu.clone(), ctrl);
 
-        let cpu = CPU6502::new(Rc::new(RefCell::new(cpubus)), ppu.clone());
+        let cpu = CPU6502::new(
+            Rc::new(RefCell::new(cpubus)),
+            ppu.clone(),
+            cartridge.clone(),
+        );
 
         Ok(Self {
             cpu,

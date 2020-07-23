@@ -228,4 +228,10 @@ impl Mapper for Mapper1 {
             MirroringMode::Horizontal,
         ][self.get_mirroring() as usize]
     }
+
+    fn is_irq_requested(&self) -> bool {
+        false
+    }
+
+    fn clear_irq_request_pin(&mut self) {}
 }

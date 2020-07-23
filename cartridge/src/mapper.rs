@@ -6,4 +6,6 @@ pub trait Mapper {
     fn map_write(&mut self, address: u16, data: u8, device: Device);
     fn is_hardwired_mirrored(&self) -> bool;
     fn nametable_mirroring(&self) -> MirroringMode;
+    fn is_irq_requested(&self) -> bool;
+    fn clear_irq_request_pin(&mut self);
 }

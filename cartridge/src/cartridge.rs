@@ -1,5 +1,7 @@
 use super::{error::CartridgeError, mapper::Mapper, mappers::*};
-use common::{Bus, Device, MirroringMode, MirroringProvider};
+use common::{
+    interconnection::CartridgeCPUConnection, Bus, Device, MirroringMode, MirroringProvider,
+};
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom},
@@ -206,5 +208,15 @@ impl MirroringProvider for Cartridge {
                 self.mapper.nametable_mirroring()
             }
         }
+    }
+}
+
+impl CartridgeCPUConnection for Cartridge {
+    fn is_irq_requested(&self) -> bool {
+        self.mapper.is_irq_requested()
+    }
+
+    fn clear_irq_request_pin(&mut self) {
+        self.mapper.clear_irq_request_pin();
     }
 }

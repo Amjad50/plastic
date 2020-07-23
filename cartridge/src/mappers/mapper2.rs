@@ -73,4 +73,10 @@ impl Mapper for Mapper2 {
     fn nametable_mirroring(&self) -> MirroringMode {
         unreachable!()
     }
+
+    fn is_irq_requested(&self) -> bool {
+        false
+    }
+
+    fn clear_irq_request_pin(&mut self) {}
 }

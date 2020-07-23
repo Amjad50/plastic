@@ -630,10 +630,10 @@ where
 
         let next_y = self.get_next_scroll_y_render();
 
-        // must not exceed 8
-        assert!(self.secondary_oam_counter <= 8);
-
-        for i in 0..self.secondary_oam_counter as usize {
+        // loop through all secondary_oam, even the empty ones (0xFF)
+        // a write to the cartridge MUST be done here even if no sprites
+        // are drawn
+        for i in 0..8 as usize {
             let sprite = self.secondary_oam[i];
             let mut fine_y = next_y.wrapping_sub(sprite.get_y());
 
@@ -670,15 +670,6 @@ where
                 self.sprite_pattern_shift_registers[i][1] = tmp_high;
             }
 
-            self.sprite_attribute_registers[i] = sprite.get_attribute();
-        }
-        // fill the remianing bytes with empty patterns, x and attributes
-        // should be equal to 0xFF
-        for i in self.secondary_oam_counter as usize..8 {
-            let sprite = self.secondary_oam[i];
-            self.sprite_counters[i] = sprite.get_x();
-            // empty shift registers
-            self.sprite_pattern_shift_registers[i] = [0; 2];
             self.sprite_attribute_registers[i] = sprite.get_attribute();
         }
     }
@@ -921,7 +912,7 @@ where
                     }
                 }
                 // reload all of them in one go
-                if self.cycle == 257 && self.reg_mask.sprites_enabled() {
+                if self.cycle == 257 {
                     self.reload_sprite_shift_registers();
                 }
             }

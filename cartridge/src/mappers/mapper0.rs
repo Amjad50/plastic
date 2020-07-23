@@ -28,8 +28,7 @@ impl Mapper for Mapper0 {
     fn map_read(&self, address: u16, device: Device) -> usize {
         match device {
             Device::CPU => {
-                // this is just for extra caution
-                if address >= 0x8000 && address <= 0xFFFF {
+                if address >= 0x8000 {
                     // 0x7FFF is for mapping 0x8000-0xFFFF to 0x0000-0x7FFF
                     // which is the range of the array
                     (if self.has_32kb_prg_rom {
@@ -68,4 +67,10 @@ impl Mapper for Mapper0 {
     fn nametable_mirroring(&self) -> MirroringMode {
         unreachable!()
     }
+
+    fn is_irq_requested(&self) -> bool {
+        false
+    }
+
+    fn clear_irq_request_pin(&mut self) {}
 }

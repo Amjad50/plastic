@@ -1,5 +1,8 @@
 use super::instruction::{AddressingMode, Instruction, Opcode};
-use common::{interconnection::PPUCPUConnection, Bus, Device};
+use common::{
+    interconnection::{CartridgeCPUConnection, PPUCPUConnection},
+    Bus, Device,
+};
 use std::{cell::RefCell, rc::Rc};
 
 const NMI_VECTOR_ADDRESS: u16 = 0xFFFA;
@@ -50,13 +53,18 @@ pub struct CPU6502<T: Bus> {
 
     bus: Rc<RefCell<T>>,
     ppu: Rc<RefCell<dyn PPUCPUConnection>>,
+    cartridge: Rc<RefCell<dyn CartridgeCPUConnection>>,
 }
 
 impl<T> CPU6502<T>
 where
     T: Bus,
 {
-    pub fn new(bus: Rc<RefCell<T>>, ppu: Rc<RefCell<dyn PPUCPUConnection>>) -> Self {
+    pub fn new(
+        bus: Rc<RefCell<T>>,
+        ppu: Rc<RefCell<dyn PPUCPUConnection>>,
+        cartridge: Rc<RefCell<dyn CartridgeCPUConnection>>,
+    ) -> Self {
         CPU6502 {
             reg_pc: 0,
             reg_sp: 0xFD, // FIXME: not 100% about this
@@ -75,6 +83,7 @@ where
 
             bus,
             ppu,
+            cartridge,
         }
     }
 
@@ -316,6 +325,8 @@ where
         if is_nmi {
             // disable after execution, not to stuck in a infinite loop here
             self.nmi_pin_status = false;
+        } else {
+            self.irq_pin_status = false;
         }
 
         self.set_flag(StatusFlag::InterruptDisable);
@@ -342,6 +353,15 @@ where
             self.dma_address = ppu.dma_address();
             self.dma_remaining = 256;
             ppu.clear_dma_request();
+        }
+    }
+
+    fn check_for_cartridge_irq(&mut self) {
+        let mut cartridge = self.cartridge.borrow_mut();
+
+        if cartridge.is_irq_requested() {
+            self.irq_pin_status = true;
+            cartridge.clear_irq_request_pin();
         }
     }
 
@@ -378,6 +398,8 @@ where
                     // check for NMI and DMA and apply them only after the next
                     // instruction
                     self.check_for_nmi_dma();
+                    // check if there is pending IRQs from cartridge
+                    self.check_for_cartridge_irq();
 
                     // fetch
                     let instruction = self.fetch_next_instruction();
