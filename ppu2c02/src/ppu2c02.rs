@@ -112,6 +112,11 @@ pub struct PPU2C02<T: Bus> {
     scanline: u16,
     cycle: u16,
 
+    /// ## PPU VRAM top 12-bit address ## (v and t)
+    /// NN YYYYY XXXXX
+    /// || ||||| +++++-- coarse X scroll
+    /// || +++++-------- coarse Y scroll
+    /// ++-------------- nametable select
     vram_address_cur: Cell<u16>,
     vram_address_top_left: u16,
 
@@ -378,6 +383,8 @@ where
         self.fine_x_scroll
     }
 
+    // this is just for completion, and mostly it will not be ever used
+    #[allow(unused)]
     fn set_current_fine_x_scroll(&mut self, fine_x: u8) {
         self.fine_x_scroll = fine_x & 0b111;
     }
@@ -540,7 +547,8 @@ where
         }
     }
 
-    fn reload_shift_registers(&mut self) {
+    fn reload_background_shift_registers(&mut self) {
+        // tile address = 0x2000 | (v & 0x0FFF)
         let nametable_tile = self.read_bus(0x2000 | self.vram_address_cur.get() & 0xFFF);
 
         let tile_pattern = self.fetch_pattern_background(nametable_tile);
@@ -548,12 +556,19 @@ where
         // fetch and prepare the palette
         let attribute_byte = self.fetch_attribute_byte();
 
+        // Each byte controls the palette of a 32×32 pixel or 4×4 tile part of the
+        // nametable and is divided into four 2-bit areas. Each area covers 16×16
+        // pixels or 2×2 tiles. Given palette numbers topleft, topright,
+        // bottomleft, bottomright, each in the range 0 to 3, the value of
+        // the byte is
+        // `value = (bottomright << 6) | (bottomleft << 4) | (topright << 2) | (topleft << 0)`
         let coarse_x = self.current_coarse_x_scroll();
         let coarse_y = self.current_coarse_y_scroll();
-
         let attribute_location_x = (coarse_x >> 1) & 0x1;
         let attribute_location_y = (coarse_y >> 1) & 0x1;
 
+        // `attribute_location_x`: 0 => left, 1 => right
+        // `attribute_location_y`: 0 => top, 1 => bottom
         let attribute_location = attribute_location_y << 1 | attribute_location_x;
 
         // 00: top-left, 01: top-right, 10: bottom-left, 11: bottom-right
@@ -562,6 +577,7 @@ where
 
         // update th shift registers
         for i in 0..=1 {
+            // clear the bottom value
             self.bg_pattern_shift_registers[i] &= 0xFF00;
 
             // in this stage, because we reload in dots (8, 16, 24...)
@@ -569,7 +585,7 @@ where
             // meaning, it will be shifted 8 times
             self.bg_pattern_shift_registers[i] |= tile_pattern[i] as u16;
 
-            // palette
+            // clear the bottom value
             self.bg_palette_shift_registers[i] &= 0xFF00;
 
             // as palettes are two bits, we store the first bit in index 0 and
@@ -580,23 +596,18 @@ where
         }
     }
 
-    /*
-    ## PPU pattern table addressing ##
-    DCBA98 76543210
-    ---------------
-    0HRRRR CCCCPTTT
-    |||||| |||||+++- T: Fine Y offset, the row number within a tile
-    |||||| ||||+---- P: Bit plane (0: "lower"; 1: "upper")
-    |||||| ++++----- C: Tile column
-    ||++++---------- R: Tile row
-    |+-------------- H: Half of sprite table (0: "left"; 1: "right")
-    +--------------- 0: Pattern table is at $0000-$1FFF
-    */
-    fn fetch_pattern_background(&self, location: u8) -> [u8; 2] {
-        let fine_y = self.current_fine_y_scroll() as u16;
-
-        // for background
-        let pattern_table = self.reg_control.background_pattern_address();
+    /// ## PPU pattern table addressing ##
+    /// DCBA98 76543210
+    /// ---------------
+    /// 0HRRRR CCCCPTTT
+    /// |||||| |||||+++- T: Fine Y offset, the row number within a tile
+    /// |||||| ||||+---- P: Bit plane (0: "lower"; 1: "upper")
+    /// |||||| ++++----- C: Tile column
+    /// ||++++---------- R: Tile row
+    /// |+-------------- H: Half of sprite table (0: "left"; 1: "right")
+    /// +--------------- 0: Pattern table is at $0000-$1FFF
+    fn fetch_pattern(&self, pattern_table: u16, location: u8, fine_y: u8) -> [u8; 2] {
+        let fine_y = fine_y as u16;
 
         let low_plane_pattern =
             self.read_bus(pattern_table | (location as u16) << 4 | 0 << 3 | fine_y);
@@ -607,14 +618,26 @@ where
         [low_plane_pattern, high_plane_pattern]
     }
 
-    /*
-    ## Attribute address ##
-    NN 1111 YYY XXX
-    || |||| ||| +++-- high 3 bits of coarse X (x/4)
-    || |||| +++------ high 3 bits of coarse Y (y/4)
-    || ++++---------- attribute offset (960 bytes)
-    ++--------------- nametable select
-    */
+    fn fetch_pattern_background(&self, location: u8) -> [u8; 2] {
+        let fine_y = self.current_fine_y_scroll();
+
+        // for background
+        let pattern_table = self.reg_control.background_pattern_address();
+
+        self.fetch_pattern(pattern_table, location, fine_y)
+    }
+
+    /// ## Attribute address ##
+    /// NN 1111 YYY XXX
+    /// || |||| ||| +++-- high 3 bits of coarse X (x/4)
+    /// || |||| +++------ high 3 bits of coarse Y (y/4)
+    /// || ++++---------- attribute offset (960 bytes)
+    /// ++--------------- nametable select
+    ///
+    /// or
+    ///
+    /// `attribute address = 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07)`
+    /// where x, y and nametable are used from `vram_address_cur`
     fn fetch_attribute_byte(&self) -> u8 {
         let x = (self.current_coarse_x_scroll() >> 2) as u16;
         let y = (self.current_coarse_y_scroll() >> 2) as u16;
@@ -652,6 +675,13 @@ where
             if sprite.get_attribute().is_flip_horizontal() {
                 let mut tmp_low = 0;
                 let mut tmp_high = 0;
+
+                // this whole loop and the bit after it is just to rotate the bits
+                // of the `sprite_pattern_shift_registers`, such that bits
+                // `0,1,2,...,n` would become bits `n,...,2,1,0`
+                //
+                // it does not look very efficient to me, but not sure if there
+                // is a faster method
                 for _ in 0..7 {
                     tmp_low |= self.sprite_pattern_shift_registers[i][0] & 0b1;
                     tmp_high |= self.sprite_pattern_shift_registers[i][1] & 0b1;
@@ -691,45 +721,38 @@ where
             location = location.wrapping_add(1);
         }
 
-        let low_plane_pattern =
-            self.read_bus(pattern_table | (location as u16) << 4 | 0 << 3 | fine_y as u16);
-
-        let high_plane_pattern =
-            self.read_bus(pattern_table | (location as u16) << 4 | 1 << 3 | fine_y as u16);
-
-        [low_plane_pattern, high_plane_pattern]
+        self.fetch_pattern(pattern_table, location, fine_y)
     }
 
     fn get_background_pixel(&self) -> (u8, u8) {
-        // skip all this, if the background is disabled
-        if !self.reg_mask.background_enabled() {
-            return (0, 0);
-        }
-
         let fine_x = self.current_fine_x_scroll();
+
+        // select the bit using `fine_x` from the left
+        let bit_location = 15 - fine_x;
+
         let low_plane_bit =
-            ((self.bg_pattern_shift_registers[0] >> (15 - fine_x) as u16) & 0x1) as u8;
+            ((self.bg_pattern_shift_registers[0] >> bit_location as u16) & 0x1) as u8;
         let high_plane_bit =
-            ((self.bg_pattern_shift_registers[1] >> (15 - fine_x) as u16) & 0x1) as u8;
+            ((self.bg_pattern_shift_registers[1] >> bit_location as u16) & 0x1) as u8;
 
         let color_bit = high_plane_bit << 1 | low_plane_bit;
 
         let low_palette_bit =
-            ((self.bg_palette_shift_registers[0] >> (15 - fine_x) as u16) & 0x1) as u8;
+            ((self.bg_palette_shift_registers[0] >> bit_location as u16) & 0x1) as u8;
         let high_palette_bit =
-            ((self.bg_palette_shift_registers[1] >> (15 - fine_x) as u16) & 0x1) as u8;
+            ((self.bg_palette_shift_registers[1] >> bit_location as u16) & 0x1) as u8;
 
         let palette = high_palette_bit << 1 | low_palette_bit;
 
-        (color_bit, palette)
+        // if background is not enabled, return NONE, but still shift the registers
+        if !self.reg_mask.background_enabled() {
+            (0, 0)
+        } else {
+            (color_bit, palette)
+        }
     }
 
     fn get_sprites_first_non_transparent_pixel(&mut self) -> (u8, u8, bool, bool) {
-        // skip all this, if the sprites is disabled
-        if !self.reg_mask.sprites_enabled() {
-            return (0, 0, false, false);
-        }
-
         let mut color_bits = 0;
         let mut palette = 0;
         let mut background_priority = false;
@@ -771,18 +794,25 @@ where
             }
         }
 
-        (color_bits, palette, background_priority, is_sprite_0)
+        // if sprites is not enabled, return NONE, but still shift the registers
+        if !self.reg_mask.sprites_enabled() {
+            (0, 0, false, false)
+        } else {
+            (color_bits, palette, background_priority, is_sprite_0)
+        }
     }
 
-    /*
-    ## color location offset 0x3F00 ##
-    43210
-    |||||
-    |||++- Pixel value from tile data
-    |++--- Palette number from attribute table or OAM
-    +----- Background/Sprite select
-    */
-    fn get_pixel(&mut self) -> u8 {
+    /// this method fetches background and sprite pixels, check overflow for
+    /// sprite_0 and priority, and handles the left 8-pixel clipping
+    /// and then outputs a color index
+    ///
+    /// ## color location offset 0x3F00 ##
+    /// 43210
+    /// |||||
+    /// |||++- Pixel value from tile data
+    /// |++--- Palette number from attribute table or OAM
+    /// +----- Background/Sprite select
+    fn generate_pixel(&mut self) -> u8 {
         // fetch the next background pixel (it must fetch to advance the
         // shift registers), and then decide if we should clip or not
         let background_pixel_data = self.get_background_pixel();
@@ -858,7 +888,7 @@ where
     }
 
     fn render_pixel(&mut self) {
-        let mut color = self.get_pixel();
+        let mut color = self.generate_pixel();
 
         if self.reg_mask.is_grayscale() {
             // select from the gray column (0x00, 0x10, 0x20, 0x30)
@@ -874,7 +904,7 @@ where
     }
 
     // run one cycle, this should be fed from Master clock
-    pub fn run_cycle(&mut self) {
+    pub fn clock(&mut self) {
         // current scanline
         match self.scanline {
             261 => {
@@ -906,7 +936,7 @@ where
                                 self.bg_palette_shift_registers[i] =
                                     self.bg_palette_shift_registers[i].wrapping_shl(8);
                             }
-                            self.reload_shift_registers();
+                            self.reload_background_shift_registers();
                             self.increment_coarse_x_scroll();
                         }
                     }
@@ -970,7 +1000,7 @@ where
             1..=256 => {
                 // fetch and reload shift registers
                 if self.cycle % 8 == 0 {
-                    self.reload_shift_registers();
+                    self.reload_background_shift_registers();
 
                     if self.cycle != 256 {
                         // increment scrolling X in current VRAM address
@@ -1051,7 +1081,7 @@ where
                             self.bg_palette_shift_registers[i] =
                                 self.bg_palette_shift_registers[i].wrapping_shl(8);
                         }
-                        self.reload_shift_registers();
+                        self.reload_background_shift_registers();
                         self.increment_coarse_x_scroll();
                     }
                 }
@@ -1067,18 +1097,6 @@ where
             self.render_pixel();
         }
     }
-
-    /*
-    ## PPU VRAM top 12-bit address ## (v and t)
-    NN YYYYY XXXXX
-    || ||||| +++++-- coarse X scroll
-    || +++++-------- coarse Y scroll
-    ++-------------- nametable select
-
-
-    tile address      = 0x2000 | (v & 0x0FFF)
-    attribute address = 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07)
-    */
 }
 
 impl<T> PPUCPUConnection for PPU2C02<T>

@@ -176,9 +176,9 @@ mod ppu_tests {
             {
                 let mut ppu = self.ppu.borrow_mut();
 
-                ppu.run_cycle();
-                ppu.run_cycle();
-                ppu.run_cycle();
+                ppu.clock();
+                ppu.clock();
+                ppu.clock();
             }
 
             self.cpu.run_next()

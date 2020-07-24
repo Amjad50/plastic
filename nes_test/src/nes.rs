@@ -294,9 +294,9 @@ impl NES {
                 apu_clock = !apu_clock;
 
                 let mut ppu = self.ppu.borrow_mut();
-                ppu.run_cycle();
-                ppu.run_cycle();
-                ppu.run_cycle();
+                ppu.clock();
+                ppu.clock();
+                ppu.clock();
             }
 
             window.clear(Color::BLACK);
