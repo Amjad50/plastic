@@ -12,5 +12,5 @@
 # 6502 assembler
 as65_142/
 
-# vscode workspace settings
-.vscode
+# nes roms/games for testing
+nes_test/roms
