@@ -212,8 +212,12 @@ impl MirroringProvider for Cartridge {
 }
 
 impl CartridgeCPUConnection for Cartridge {
-    fn is_irq_requested(&self) -> bool {
-        self.mapper.is_irq_requested()
+    fn is_irq_change_requested(&self) -> bool {
+        self.mapper.is_irq_pin_state_changed_requested()
+    }
+
+    fn irq_pin_state(&self) -> bool {
+        self.mapper.irq_pin_state()
     }
 
     fn clear_irq_request_pin(&mut self) {

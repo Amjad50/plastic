@@ -8,6 +8,7 @@ pub trait PPUCPUConnection {
 }
 
 pub trait CartridgeCPUConnection {
-    fn is_irq_requested(&self) -> bool;
+    fn is_irq_change_requested(&self) -> bool;
+    fn irq_pin_state(&self) -> bool;
     fn clear_irq_request_pin(&mut self);
 }

@@ -303,6 +303,10 @@ where
                     // set the data from the parameters
                     self.vram_address_top_left |= data as u16;
 
+                    // a dummy read to the cartridge as some mappers rely
+                    // on PPU address pins for operations
+                    let _ = self.read_bus(self.vram_address_top_left);
+
                     // copy to the current vram address
                     *self.vram_address_cur.get_mut() = self.vram_address_top_left;
                 } else {
@@ -492,6 +496,10 @@ where
         if self.scanline > 240 || !self.reg_mask.rendering_enabled() {
             self.vram_address_cur
                 .set(self.vram_address_cur.get() + self.reg_control.vram_increment());
+
+            // dummy read to update the cartridge, which mappers rely on some
+            // address pins from the PPU
+            let _ = self.read_bus(self.vram_address_cur.get());
         }
     }
 

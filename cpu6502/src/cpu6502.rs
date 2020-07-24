@@ -359,8 +359,8 @@ where
     fn check_for_cartridge_irq(&mut self) {
         let mut cartridge = self.cartridge.borrow_mut();
 
-        if cartridge.is_irq_requested() {
-            self.irq_pin_status = true;
+        if cartridge.is_irq_change_requested() {
+            self.irq_pin_status = cartridge.irq_pin_state();
             cartridge.clear_irq_request_pin();
         }
     }

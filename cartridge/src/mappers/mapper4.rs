@@ -89,7 +89,17 @@ pub struct Mapper4 {
     /// zero or not
     irq_enabled: bool,
 
+    /// the status of the IRQ pin, should be used with `is_irq_pin_changed`
     irq_pin: Cell<bool>,
+
+    /// indicate whether there is a change that the CPU should be notified of
+    /// in the IRQ line, since the IRQ does not happen immediatly like NMI,
+    /// it can be disabled when the `irq_pin` is set and then it is cleared
+    ///
+    /// in the NES, this is a wire connection directly from `irq_pin` to the CPU,
+    /// but in this emulator, the CPU has its own copy of `irq_pin` so it should
+    /// be notified if any changes happened from this side
+    is_irq_pin_changed: Cell<bool>,
 
     /// in 1kb units
     chr_count: u8,
@@ -122,6 +132,7 @@ impl Mapper4 {
             reload_irq_counter_flag: Cell::new(false),
             irq_enabled: false,
             irq_pin: Cell::new(false),
+            is_irq_pin_changed: Cell::new(false),
             chr_count: 0,
             prg_count: 0,
             last_pattern_table: Cell::new(false),
@@ -133,17 +144,18 @@ impl Mapper4 {
 
         // transition from 0 to 1
         if !self.last_pattern_table.get() && current_pattern_table {
-            if self.irq_counter.get() == 0 && self.irq_enabled {
-                // trigger IRQ
-                self.irq_pin.set(true);
-            }
-
-            if self.irq_counter.get() == 0 || self.reload_irq_counter_flag.get() {
+            if self.reload_irq_counter_flag.get() || self.irq_counter.get() == 0 {
                 self.reload_irq_counter_flag.set(false);
                 self.irq_counter.set(self.irq_latch);
             } else {
                 self.irq_counter
                     .set(self.irq_counter.get().saturating_sub(1));
+            }
+
+            if self.irq_counter.get() == 0 && self.irq_enabled {
+                // trigger IRQ
+                self.irq_pin.set(true);
+                self.is_irq_pin_changed.set(true);
             }
         }
 
@@ -265,6 +277,13 @@ impl Mapper for Mapper4 {
                     0xE000..=0xFFFF => {
                         // enable on odd addresses, disable on even addresses
                         self.irq_enabled = address & 1 != 0;
+
+                        // if cleared, then clear the pin as well if it is set
+                        // and notify the CPU
+                        if !self.irq_enabled {
+                            self.irq_pin.set(false);
+                            self.is_irq_pin_changed.set(true);
+                        }
                     }
                     _ => {}
                 }
@@ -287,11 +306,16 @@ impl Mapper for Mapper4 {
         }
     }
 
-    fn is_irq_requested(&self) -> bool {
+    fn is_irq_pin_state_changed_requested(&self) -> bool {
+        self.is_irq_pin_changed.get()
+    }
+
+    fn irq_pin_state(&self) -> bool {
         self.irq_pin.get()
     }
 
     fn clear_irq_request_pin(&mut self) {
         self.irq_pin.set(false);
+        self.is_irq_pin_changed.set(false);
     }
 }
