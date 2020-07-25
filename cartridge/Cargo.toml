@@ -8,3 +8,6 @@ edition = "2018"
 
 [dependencies]
 common = { path = "../common" }
+
+[dev-dependencies]
+nes_tester = { path = "../nes_tester" }
