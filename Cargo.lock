@@ -250,6 +250,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nes_tester"
+version = "0.1.0"
+dependencies = [
+ "cartridge",
+ "common",
+ "cpu6502",
+ "display",
+ "ppu2c02",
+]
+
+[[package]]
 name = "nom"
 version = "5.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -285,10 +296,9 @@ name = "ppu2c02"
 version = "0.1.0"
 dependencies = [
  "bitflags",
- "cartridge",
  "common",
- "cpu6502",
  "display",
+ "nes_tester",
 ]
 
 [[package]]
