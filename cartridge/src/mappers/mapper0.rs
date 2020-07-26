@@ -1,5 +1,5 @@
 use crate::mapper::{Mapper, MappingResult};
-use common::{Device, MirroringMode};
+use common::Device;
 
 pub struct Mapper0 {
     has_32kb_prg_rom: bool,
@@ -96,22 +96,4 @@ impl Mapper for Mapper0 {
             }
         }
     }
-
-    fn is_hardwired_mirrored(&self) -> bool {
-        true
-    }
-
-    fn nametable_mirroring(&self) -> MirroringMode {
-        unreachable!()
-    }
-
-    fn is_irq_pin_state_changed_requested(&self) -> bool {
-        false
-    }
-
-    fn irq_pin_state(&self) -> bool {
-        unreachable!()
-    }
-
-    fn clear_irq_request_pin(&mut self) {}
 }
