@@ -6,6 +6,8 @@ pub struct Mapper2 {
 
     /// in 16kb units
     prg_count: u8,
+
+    is_chr_ram: bool,
 }
 
 impl Mapper2 {
@@ -13,38 +15,55 @@ impl Mapper2 {
         Self {
             prg_top_bank: 0,
             prg_count: 0,
+            is_chr_ram: false,
         }
     }
 }
 
 impl Mapper for Mapper2 {
-    fn init(&mut self, prg_count: u8, _chr_count: u8) {
+    fn init(
+        &mut self,
+        prg_count: u8,
+        is_chr_ram: bool,
+        chr_count: u8,
+        contain_sram: bool,
+        _sram_count: u8,
+    ) {
+        assert!(!contain_sram, "Mapper 2 cannot have PRG ram");
+
         self.prg_count = prg_count;
+        self.is_chr_ram = is_chr_ram;
     }
 
-    fn map_read(&self, address: u16, device: Device) -> usize {
+    fn map_read(&self, address: u16, device: Device) -> (bool, usize) {
         match device {
             Device::CPU => {
-                let bank = if address >= 0x8000 && address <= 0xBFFF {
-                    self.prg_top_bank & 0xF
-                } else if address >= 0xC000 {
-                    self.prg_count - 1
-                } else {
-                    unreachable!();
-                } as usize;
+                match address {
+                    0x6000..=0x7FFF => (false, 0),
+                    0x8000..=0xFFFF => {
+                        let bank = if address >= 0x8000 && address <= 0xBFFF {
+                            self.prg_top_bank & 0xF
+                        } else if address >= 0xC000 {
+                            self.prg_count - 1
+                        } else {
+                            unreachable!();
+                        } as usize;
 
-                assert!(bank <= self.prg_count as usize);
+                        assert!(bank <= self.prg_count as usize);
 
-                let start_of_bank = 0x4000 * bank;
+                        let start_of_bank = 0x4000 * bank;
 
-                // add the offset
-                start_of_bank + (address & 0x3FFF) as usize
+                        // add the offset
+                        (true, start_of_bank + (address & 0x3FFF) as usize)
+                    }
+                    _ => unreachable!(),
+                }
             }
             Device::PPU => {
                 // it does not matter if its a ram or rom, same array location
                 if address < 0x2000 {
                     // only one fixed memory
-                    address as usize
+                    (true, address as usize)
                 } else {
                     unreachable!()
                 }
@@ -52,16 +71,22 @@ impl Mapper for Mapper2 {
         }
     }
 
-    fn map_write(&mut self, address: u16, data: u8, device: Device) {
+    fn map_write(&mut self, address: u16, data: u8, device: Device) -> (bool, usize) {
         match device {
             Device::CPU => {
                 // only accepts writes from CPU
                 if address >= 0x8000 {
                     self.prg_top_bank = data;
                 }
+                (false, 0)
             }
             Device::PPU => {
                 // CHR RAM
+                if self.is_chr_ram && address >= 0x0000 && address <= 0x1FFF {
+                    (true, address as usize)
+                } else {
+                    (false, 0)
+                }
             }
         }
     }

@@ -101,6 +101,9 @@ pub struct Mapper4 {
     /// be notified if any changes happened from this side
     is_irq_pin_changed: Cell<bool>,
 
+    /// is using CHR RAM?
+    is_chr_ram: bool,
+
     /// in 1kb units
     chr_count: u8,
 
@@ -110,6 +113,9 @@ pub struct Mapper4 {
     /// false if the last accessed pattern table address is $0000
     /// true  if the last accessed pattern table address is $1000
     last_pattern_table: Cell<bool>,
+
+    /// does it have SRAM?
+    contain_sram: bool,
 }
 
 impl Mapper4 {
@@ -133,9 +139,11 @@ impl Mapper4 {
             irq_enabled: false,
             irq_pin: Cell::new(false),
             is_irq_pin_changed: Cell::new(false),
+            is_chr_ram: false,
             chr_count: 0,
             prg_count: 0,
             last_pattern_table: Cell::new(false),
+            contain_sram: false,
         }
     }
 
@@ -164,77 +172,109 @@ impl Mapper4 {
 }
 
 impl Mapper for Mapper4 {
-    fn init(&mut self, prg_count: u8, chr_count: u8) {
+    fn init(
+        &mut self,
+        prg_count: u8,
+        is_chr_ram: bool,
+        chr_count: u8,
+        contain_sram: bool,
+        sram_count: u8,
+    ) {
         self.prg_count = prg_count * 2;
         self.chr_count = chr_count * 8;
+
+        self.is_chr_ram = is_chr_ram;
+        self.contain_sram = contain_sram;
     }
 
-    fn map_read(&self, address: u16, device: Device) -> usize {
+    fn map_read(&self, address: u16, device: Device) -> (bool, usize) {
         match device {
             Device::CPU => {
-                let bank = match address {
-                    0x8000..=0x9FFF => {
-                        if self.prg_rom_bank_fix_8000 {
-                            // second to last
-                            self.prg_count - 2
+                match address {
+                    0x6000..=0x7FFF => {
+                        if self.contain_sram {
+                            (true, address as usize & 0x1FFF)
                         } else {
-                            self.prg_bank_8000_c000
+                            (false, 0)
                         }
                     }
-                    0xA000..=0xBFFF => self.prg_bank_a000,
-                    0xC000..=0xDFFF => {
-                        if !self.prg_rom_bank_fix_8000 {
-                            // second to last
-                            self.prg_count - 2
-                        } else {
-                            self.prg_bank_8000_c000
-                        }
+                    0x8000..=0xFFFF => {
+                        let bank = match address {
+                            0x8000..=0x9FFF => {
+                                if self.prg_rom_bank_fix_8000 {
+                                    // second to last
+                                    self.prg_count - 2
+                                } else {
+                                    self.prg_bank_8000_c000
+                                }
+                            }
+                            0xA000..=0xBFFF => self.prg_bank_a000,
+                            0xC000..=0xDFFF => {
+                                if !self.prg_rom_bank_fix_8000 {
+                                    // second to last
+                                    self.prg_count - 2
+                                } else {
+                                    self.prg_bank_8000_c000
+                                }
+                            }
+                            0xE000..=0xFFFF => self.prg_count - 1,
+                            _ => unreachable!(),
+                        } as usize;
+
+                        let start_of_bank = bank * 0x2000;
+
+                        (true, start_of_bank + (address & 0x1FFF) as usize)
                     }
-                    0xE000..=0xFFFF => self.prg_count - 1,
                     _ => unreachable!(),
-                } as usize;
-
-                let start_of_bank = bank * 0x2000;
-
-                start_of_bank + (address & 0x1FFF) as usize
+                }
             }
             Device::PPU => {
-                self.handle_irq_counter(address);
+                if address < 0x2000 {
+                    self.handle_irq_counter(address);
 
-                let is_2k = (address & 0x1000 == 0) ^ self.chr_bank_2k_1000;
+                    let is_2k = (address & 0x1000 == 0) ^ self.chr_bank_2k_1000;
 
-                let bank = if is_2k {
-                    if address & 0x0800 == 0 {
-                        self.chr_bank_r0
+                    let bank = if is_2k {
+                        if address & 0x0800 == 0 {
+                            self.chr_bank_r0
+                        } else {
+                            self.chr_bank_r1
+                        }
                     } else {
-                        self.chr_bank_r1
-                    }
+                        match (address >> 10) & 0b11 {
+                            0 => self.chr_bank_r2,
+                            1 => self.chr_bank_r3,
+                            2 => self.chr_bank_r4,
+                            3 => self.chr_bank_r5,
+                            _ => unreachable!(),
+                        }
+                    } as usize;
+
+                    assert!(bank <= self.chr_count as usize);
+
+                    let mask = if is_2k { 0x7FF } else { 0x3FF };
+
+                    let start_of_bank = bank * 0x400;
+
+                    (true, start_of_bank + (address & mask) as usize)
                 } else {
-                    match (address >> 10) & 0b11 {
-                        0 => self.chr_bank_r2,
-                        1 => self.chr_bank_r3,
-                        2 => self.chr_bank_r4,
-                        3 => self.chr_bank_r5,
-                        _ => unreachable!(),
-                    }
-                } as usize;
-
-                assert!(bank <= self.chr_count as usize);
-
-                let mask = if is_2k { 0x7FF } else { 0x3FF };
-
-                let start_of_bank = bank * 0x400;
-
-                start_of_bank + (address & mask) as usize
+                    unreachable!();
+                }
             }
         }
     }
 
-    fn map_write(&mut self, address: u16, data: u8, device: Device) {
+    fn map_write(&mut self, address: u16, data: u8, device: Device) -> (bool, usize) {
         match device {
             Device::CPU => {
-                // only accepts writes from CPU
                 match address {
+                    0x6000..=0x7FFF => {
+                        if self.contain_sram {
+                            (true, address as usize & 0x1FFF)
+                        } else {
+                            (false, 0)
+                        }
+                    }
                     0x8000..=0x9FFF => {
                         if address & 1 == 0 {
                             // even
@@ -255,6 +295,7 @@ impl Mapper for Mapper4 {
                                 _ => unreachable!(),
                             }
                         }
+                        (false, 0)
                     }
                     0xA000..=0xBFFF => {
                         if address & 1 == 0 {
@@ -264,6 +305,7 @@ impl Mapper for Mapper4 {
                             // odd
                             // PRG RAM stuff
                         }
+                        (false, 0)
                     }
                     0xC000..=0xDFFF => {
                         if address & 1 == 0 {
@@ -273,6 +315,7 @@ impl Mapper for Mapper4 {
                             // odd
                             self.reload_irq_counter_flag.set(true);
                         }
+                        (false, 0)
                     }
                     0xE000..=0xFFFF => {
                         // enable on odd addresses, disable on even addresses
@@ -284,12 +327,19 @@ impl Mapper for Mapper4 {
                             self.irq_pin.set(false);
                             self.is_irq_pin_changed.set(true);
                         }
+
+                        (false, 0)
                     }
-                    _ => {}
+                    _ => unreachable!(),
                 }
             }
             Device::PPU => {
                 // CHR RAM
+                if self.is_chr_ram && address >= 0x0000 && address <= 0x1FFF {
+                    (true, address as usize)
+                } else {
+                    (false, 0)
+                }
             }
         }
     }

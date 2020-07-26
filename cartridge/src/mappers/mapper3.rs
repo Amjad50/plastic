@@ -7,6 +7,8 @@ pub struct Mapper3 {
     chr_bank: u8,
 
     chr_count: u8,
+
+    is_chr_ram: bool,
 }
 
 impl Mapper3 {
@@ -15,35 +17,50 @@ impl Mapper3 {
             has_32kb_prg_rom: false,
             chr_bank: 0,
             chr_count: 0,
+            is_chr_ram: false,
         }
     }
 }
 
 impl Mapper for Mapper3 {
-    fn init(&mut self, prg_count: u8, chr_count: u8) {
+    fn init(
+        &mut self,
+        prg_count: u8,
+        is_chr_ram: bool,
+        chr_count: u8,
+        contain_sram: bool,
+        _sram_count: u8,
+    ) {
         assert!(prg_count == 1 || prg_count == 2);
+        assert!(!contain_sram, "Mapper 3 cannot have PRG ram");
 
         self.has_32kb_prg_rom = prg_count == 2;
         self.chr_count = chr_count;
+        self.is_chr_ram = is_chr_ram;
     }
 
-    fn map_read(&self, address: u16, device: Device) -> usize {
+    fn map_read(&self, address: u16, device: Device) -> (bool, usize) {
         match device {
             Device::CPU => {
-                if address >= 0x8000 {
-                    // 0x7FFF is for mapping 0x8000-0xFFFF to 0x0000-0x7FFF
-                    // which is the range of the array
-                    (if self.has_32kb_prg_rom {
-                        address & 0x7FFF
-                    } else {
-                        // in case of the array being half of the size (i.e.
-                        // not 32KB, then the range of the address will be only
-                        // 0x8000-0xBFFF, and 0xC000-0xFFFF will mirror the
-                        // previous range
-                        address & 0xBFFF & 0x7FFF
-                    }) as usize
-                } else {
-                    unreachable!()
+                match address {
+                    0x6000..=0x7FFF => (false, 0),
+                    0x8000..=0xFFFF => {
+                        // 0x7FFF is for mapping 0x8000-0xFFFF to 0x0000-0x7FFF
+                        // which is the range of the array
+                        (
+                            true,
+                            (if self.has_32kb_prg_rom {
+                                address & 0x7FFF
+                            } else {
+                                // in case of the array being half of the size (i.e.
+                                // not 32KB, then the range of the address will be only
+                                // 0x8000-0xBFFF, and 0xC000-0xFFFF will mirror the
+                                // previous range
+                                address & 0xBFFF & 0x7FFF
+                            }) as usize,
+                        )
+                    }
+                    _ => unreachable!(),
                 }
             }
             Device::PPU => {
@@ -52,7 +69,7 @@ impl Mapper for Mapper3 {
 
                     let start_of_bank = 0x2000 * self.chr_bank as usize;
 
-                    start_of_bank + (address & 0x1FFF) as usize
+                    (true, start_of_bank + (address & 0x1FFF) as usize)
                 } else {
                     unreachable!()
                 }
@@ -60,7 +77,7 @@ impl Mapper for Mapper3 {
         }
     }
 
-    fn map_write(&mut self, address: u16, data: u8, device: Device) {
+    fn map_write(&mut self, address: u16, data: u8, device: Device) -> (bool, usize) {
         match device {
             Device::CPU => {
                 // only accepts writes from CPU
@@ -74,9 +91,15 @@ impl Mapper for Mapper3 {
                         self.chr_bank = data;
                     }
                 }
+                (false, 0)
             }
             Device::PPU => {
                 // CHR RAM
+                if self.is_chr_ram && address >= 0x0000 && address <= 0x1FFF {
+                    (true, address as usize)
+                } else {
+                    (false, 0)
+                }
             }
         }
     }

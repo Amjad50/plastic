@@ -39,11 +39,17 @@ pub struct Mapper1 {
     /// +----- PRG RAM chip enable (0: enabled; 1: disabled; ignored on MMC1A)
     prg_bank: u8,
 
+    /// is using CHR ram
+    is_chr_ram: bool,
+
     /// in 4kb units
     chr_count: u8,
 
     /// in 16kb units
     prg_count: u8,
+
+    /// does this cartridge has sram?
+    contain_sram: bool,
 }
 
 impl Mapper1 {
@@ -55,8 +61,12 @@ impl Mapper1 {
             chr_1_bank: 0,
             prg_bank: 0,
 
+            is_chr_ram: false,
+
             chr_count: 0,
             prg_count: 0,
+
+            contain_sram: false,
         }
     }
 
@@ -98,120 +108,160 @@ impl Mapper1 {
 }
 
 impl Mapper for Mapper1 {
-    fn init(&mut self, prg_count: u8, chr_count: u8) {
+    fn init(
+        &mut self,
+        prg_count: u8,
+        is_chr_ram: bool,
+        chr_count: u8,
+        contain_sram: bool,
+        _sram_count: u8,
+    ) {
         self.prg_count = prg_count;
         self.chr_count = chr_count * 2; // since this passed as the number of 8kb banks
+        self.contain_sram = contain_sram;
+        self.is_chr_ram = is_chr_ram;
 
         self.reset_shift_register();
     }
 
-    fn map_read(&self, address: u16, device: Device) -> usize {
+    fn map_read(&self, address: u16, device: Device) -> (bool, usize) {
         match device {
             Device::CPU => {
-                let bank = if self.is_prg_32kb_mode() {
-                    // ignore last bit
-                    self.get_prg_bank() & 0b11110
-                } else {
-                    if address >= 0x8000 && address <= 0xBFFF {
-                        if self.is_first_prg_chunk_fixed() {
-                            0
+                match address {
+                    0x6000..=0x7FFF => {
+                        if self.contain_sram {
+                            (true, address as usize & 0x1FFF)
                         } else {
-                            self.get_prg_bank()
+                            (false, 0)
                         }
-                    } else if address >= 0xC000 {
-                        if self.is_first_prg_chunk_fixed() {
-                            self.get_prg_bank()
-                        } else {
-                            // last bank
-                            self.prg_count - 1
-                        }
-                    } else {
-                        unreachable!();
                     }
-                } as usize;
+                    0x8000..=0xFFFF => {
+                        let bank = if self.is_prg_32kb_mode() {
+                            // ignore last bit
+                            self.get_prg_bank() & 0b11110
+                        } else {
+                            if address >= 0x8000 && address <= 0xBFFF {
+                                if self.is_first_prg_chunk_fixed() {
+                                    0
+                                } else {
+                                    self.get_prg_bank()
+                                }
+                            } else if address >= 0xC000 {
+                                if self.is_first_prg_chunk_fixed() {
+                                    self.get_prg_bank()
+                                } else {
+                                    // last bank
+                                    self.prg_count - 1
+                                }
+                            } else {
+                                unreachable!();
+                            }
+                        } as usize;
 
-                assert!(bank <= self.prg_count as usize);
+                        assert!(bank <= self.prg_count as usize);
 
-                let start_of_bank = 0x4000 * bank;
+                        let start_of_bank = 0x4000 * bank;
 
-                let last_bank = 0x4000 * (self.prg_count - 1) as usize;
+                        let last_bank = 0x4000 * (self.prg_count - 1) as usize;
 
-                // since banks can be odd in number, we don't want to go out
-                // of bounds, but this solution does mirroring, in case of
-                // a possible out of bounds, but not sure what is the correct
-                // solution
-                let mask = if self.is_prg_32kb_mode() && start_of_bank != last_bank {
-                    0x7FFF
-                } else {
-                    0x3FFF
-                };
+                        // since banks can be odd in number, we don't want to go out
+                        // of bounds, but this solution does mirroring, in case of
+                        // a possible out of bounds, but not sure what is the correct
+                        // solution
+                        let mask = if self.is_prg_32kb_mode() && start_of_bank != last_bank {
+                            0x7FFF
+                        } else {
+                            0x3FFF
+                        };
 
-                // add the offset
-                start_of_bank + (address & mask) as usize
+                        // add the offset
+                        (true, start_of_bank + (address & mask) as usize)
+                    }
+                    _ => unreachable!(),
+                }
             }
             Device::PPU => {
-                let bank = if self.is_chr_8kb_mode() {
-                    self.chr_0_bank & 0b11110
-                } else {
-                    if address <= 0x0FFF {
-                        self.chr_0_bank
-                    } else if address >= 0x1000 && address <= 0x1FFF {
-                        self.chr_1_bank
+                if address < 0x2000 {
+                    let bank = if self.is_chr_8kb_mode() {
+                        self.chr_0_bank & 0b11110
                     } else {
-                        unreachable!()
-                    }
-                } as usize;
+                        if address <= 0x0FFF {
+                            self.chr_0_bank
+                        } else if address >= 0x1000 && address <= 0x1FFF {
+                            self.chr_1_bank
+                        } else {
+                            unreachable!()
+                        }
+                    } as usize;
 
-                // let bank = bank & (self.chr_count - 1) as usize;
-                assert!(bank <= self.chr_count as usize);
+                    // let bank = bank & (self.chr_count - 1) as usize;
+                    assert!(bank <= self.chr_count as usize);
 
-                let start_of_bank = 0x1000 * bank;
+                    let start_of_bank = 0x1000 * bank;
 
-                let mask = if self.is_chr_8kb_mode() {
-                    0x1FFF
+                    let mask = if self.is_chr_8kb_mode() {
+                        0x1FFF
+                    } else {
+                        0xFFF
+                    };
+
+                    // add the offset
+                    (true, start_of_bank + (address & mask) as usize)
                 } else {
-                    0xFFF
-                };
-
-                // add the offset
-                start_of_bank + (address & mask) as usize
+                    unreachable!()
+                }
             }
         }
     }
 
-    fn map_write(&mut self, address: u16, data: u8, device: Device) {
+    fn map_write(&mut self, address: u16, data: u8, device: Device) -> (bool, usize) {
         match device {
             Device::CPU => {
-                // only accepts writes from CPU
-                if address >= 0x8000 {
-                    if data & 0x80 != 0 {
-                        self.reset_shift_register();
-                    } else {
-                        let should_save = self.writing_shift_register & 1 != 0;
-                        // shift
-                        self.writing_shift_register >>= 1;
-                        self.writing_shift_register |= (data & 1) << 4;
-
-                        // reached the end, then save
-                        if should_save {
-                            let result = self.writing_shift_register & 0b11111;
-                            match address {
-                                0x8000..=0x9FFF => self.control_register = result,
-                                0xA000..=0xBFFF => self.chr_0_bank = result,
-                                0xC000..=0xDFFF => self.chr_1_bank = result,
-                                0xE000..=0xFFFF => self.prg_bank = result,
-                                _ => {
-                                    unreachable!();
-                                }
-                            }
-
-                            self.reset_shift_register();
+                match address {
+                    0x6000..=0x7FFF => {
+                        if self.contain_sram {
+                            (true, address as usize & 0x1FFF)
+                        } else {
+                            (false, 0)
                         }
                     }
+                    0x8000..=0xFFFF => {
+                        if data & 0x80 != 0 {
+                            self.reset_shift_register();
+                        } else {
+                            let should_save = self.writing_shift_register & 1 != 0;
+                            // shift
+                            self.writing_shift_register >>= 1;
+                            self.writing_shift_register |= (data & 1) << 4;
+
+                            // reached the end, then save
+                            if should_save {
+                                let result = self.writing_shift_register & 0b11111;
+                                match address {
+                                    0x8000..=0x9FFF => self.control_register = result,
+                                    0xA000..=0xBFFF => self.chr_0_bank = result,
+                                    0xC000..=0xDFFF => self.chr_1_bank = result,
+                                    0xE000..=0xFFFF => self.prg_bank = result,
+                                    _ => {
+                                        unreachable!();
+                                    }
+                                }
+
+                                self.reset_shift_register();
+                            }
+                        }
+                        (false, 0)
+                    }
+                    _ => unreachable!(),
                 }
             }
             Device::PPU => {
                 // CHR RAM
+                if self.is_chr_ram && address >= 0x0000 && address <= 0x1FFF {
+                    (true, address as usize)
+                } else {
+                    (false, 0)
+                }
             }
         }
     }

@@ -14,15 +14,17 @@ pub struct Cartridge {
     mapper_id: u8,
     mirroring_vertical: bool,
     contain_sram: bool,
+    sram_size: u8,
     contain_trainer: bool,
     use_4_screen_mirroring: bool,
     vs_unisystem: bool,        // don't know what is this (flag 7)
     _playchoice_10_hint: bool, // not used
     is_nes_2: bool,
 
-    pub trainer_data: Vec<u8>,
-    pub prg_data: Vec<u8>,
-    pub chr_data: Vec<u8>,
+    trainer_data: Vec<u8>,
+    pub(crate) prg_data: Vec<u8>,
+    pub(crate) chr_data: Vec<u8>,
+    sram_data: Vec<u8>,
 
     mapper: Box<dyn Mapper>,
 }
@@ -57,11 +59,20 @@ impl Cartridge {
         header[7] >>= 2;
         let upper_mapper = header[7]; // the rest
 
+        // in 8kb units
+        let sram_size = if header[8] == 0 { 1 } else { header[8] };
+        let sram_data = if contain_sram {
+            vec![0; sram_size as usize * 1024 * 8]
+        } else {
+            // no sram, should handle errors and wrong accesses
+            Vec::new()
+        };
+
         let mapper_id = upper_mapper << 4 | lower_mapper;
 
         // initialize the mapper first, so that if it is not supported yet,
         // panic
-        let mapper = Self::get_mapper(mapper_id, size_prg, size_chr);
+        let mapper = Self::get_mapper(mapper_id, size_prg, size_chr, contain_sram, sram_size);
 
         let mut trainer_data = Vec::new();
 
@@ -72,8 +83,7 @@ impl Cartridge {
         }
 
         // read PRG data
-        let mut prg_data = Vec::new();
-        prg_data.resize((size_prg as usize) * 16 * 1024, 0);
+        let mut prg_data = vec![0; (size_prg as usize) * 16 * 1024];
         file.read_exact(&mut prg_data)?;
 
         // read CHR data
@@ -107,6 +117,7 @@ impl Cartridge {
                 mapper_id,
                 mirroring_vertical,
                 contain_sram,
+                sram_size,
                 contain_trainer,
                 use_4_screen_mirroring,
                 vs_unisystem,
@@ -115,6 +126,7 @@ impl Cartridge {
                 trainer_data,
                 prg_data,
                 chr_data,
+                sram_data,
                 mapper,
             })
         }
@@ -134,7 +146,13 @@ impl Cartridge {
         }
     }
 
-    fn get_mapper(mapper_id: u8, prg_count: u8, chr_count: u8) -> Box<dyn Mapper> {
+    fn get_mapper(
+        mapper_id: u8,
+        prg_count: u8,
+        chr_count: u8,
+        contain_sram: bool,
+        sram_size: u8,
+    ) -> Box<dyn Mapper> {
         let mut mapper: Box<dyn Mapper> = match mapper_id {
             0 => Box::new(Mapper0::new()),
             1 => Box::new(Mapper1::new()),
@@ -148,7 +166,13 @@ impl Cartridge {
 
         // should always call init in a new mapper, as it is the only way
         // they share a constructor
-        mapper.init(prg_count, chr_count);
+        mapper.init(
+            prg_count,
+            chr_count == 0,
+            chr_count,
+            contain_sram,
+            sram_size,
+        );
 
         mapper
     }
@@ -160,33 +184,63 @@ impl Cartridge {
 
 impl Bus for Cartridge {
     fn read(&self, address: u16, device: Device) -> u8 {
-        let address = self.mapper.map_read(address, device);
+        let (allow_read, new_address) = self.mapper.map_read(address, device);
 
-        match device {
-            // CPU is reading PRG only
-            Device::CPU => *self.prg_data.get(address).expect("PRG out of bounds"),
-            // PPU is reading CHR data
-            Device::PPU => *self.chr_data.get(address).expect("CHR out of bounds"),
+        if allow_read {
+            match device {
+                Device::CPU => match address {
+                    0x6000..=0x7FFF => {
+                        *self.sram_data.get(new_address).expect("SRAM out of bounds")
+                    }
+                    0x8000..=0xFFFF => *self.prg_data.get(new_address).expect("PRG out of bounds"),
+                    _ => {
+                        unreachable!();
+                    }
+                },
+                Device::PPU => {
+                    if address <= 0x1FFF {
+                        *self.chr_data.get(new_address).expect("CHR out of bounds")
+                    } else {
+                        unreachable!();
+                    }
+                }
+            }
+        } else {
+            0
         }
     }
     fn write(&mut self, address: u16, data: u8, device: Device) {
         // send the write signal, this might trigger bank change
-        self.mapper.map_write(address, data, device);
+        let (allor_write, new_address) = self.mapper.map_write(address, data, device);
 
-        match device {
-            Device::CPU => {
-                // ## This is only a ROM data (read only) ##
-                // *self
-                //     .prg_data
-                //     .get_mut(address as usize)
-                //     .expect("PRG out of bounds") = data;
-            }
-            Device::PPU => {
-                if self.is_chr_ram() {
-                    *self
-                        .chr_data
-                        .get_mut(address as usize)
-                        .expect("CHR out of bounds") = data;
+        if allor_write {
+            match device {
+                Device::CPU => match address {
+                    0x6000..=0x7FFF => {
+                        *self
+                            .sram_data
+                            .get_mut(new_address)
+                            .expect("SRAM out of bounds") = data;
+                    }
+                    0x8000..=0xFFFF => {
+                        *self
+                            .prg_data
+                            .get_mut(new_address)
+                            .expect("PRG out of bounds") = data;
+                    }
+                    _ => {
+                        unreachable!();
+                    }
+                },
+                Device::PPU => {
+                    if address <= 0x1FFF {
+                        *self
+                            .chr_data
+                            .get_mut(new_address)
+                            .expect("CHR out of bounds") = data;
+                    } else {
+                        unreachable!();
+                    }
                 }
             }
         }

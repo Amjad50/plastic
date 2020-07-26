@@ -59,7 +59,6 @@ struct PPUBus {
 struct CPUBus {
     cartridge: Rc<RefCell<Cartridge>>,
     ram: [u8; 0x800],
-    battery_ram: [u8; 0x2000],
     ppu: Rc<RefCell<dyn Bus>>,
 }
 
@@ -68,7 +67,6 @@ impl CPUBus {
         CPUBus {
             cartridge,
             ram: [0; 0x800],
-            battery_ram: [0; 0x2000],
             ppu,
         }
     }
@@ -111,8 +109,7 @@ impl Bus for CPUBus {
             0x0000..=0x1FFF => self.ram[(address & 0x7FF) as usize],
             0x2000..=0x3FFF => self.ppu.borrow().read(0x2000 | (address & 0x7), device),
             0x4014 => self.ppu.borrow().read(address, device),
-            0x6000..=0x7FFF => self.battery_ram[(address & 0x1FFF) as usize],
-            0x8000..=0xFFFF => self.cartridge.borrow().read(address, device),
+            0x6000..=0xFFFF => self.cartridge.borrow().read(address, device),
             _ => {
                 // ignored
                 0
@@ -127,8 +124,7 @@ impl Bus for CPUBus {
                 .borrow_mut()
                 .write(0x2000 | (address & 0x7), data, device),
             0x4014 => self.ppu.borrow_mut().write(address, data, device),
-            0x6000..=0x7FFF => self.battery_ram[(address & 0x1FFF) as usize] = data,
-            0x8000..=0xFFFF => self
+            0x6000..=0xFFFF => self
                 .cartridge
                 .borrow_mut()
                 .write(address, data, Device::CPU),

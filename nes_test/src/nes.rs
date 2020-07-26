@@ -33,7 +33,6 @@ struct PPUBus {
 struct CPUBus {
     cartridge: Rc<RefCell<Cartridge>>,
     ram: [u8; 0x800],
-    battery_ram: [u8; 0x2000],
     ppu: Rc<RefCell<dyn Bus>>,
     apu: Rc<RefCell<dyn Bus>>,
     contoller: Controller,
@@ -49,7 +48,6 @@ impl CPUBus {
         CPUBus {
             cartridge,
             ram: [0; 0x800],
-            battery_ram: [0; 0x2000],
             ppu,
             apu,
             contoller,
@@ -98,8 +96,7 @@ impl Bus for CPUBus {
             0x4015 => self.apu.borrow().read(address, device),
             0x4016 => self.contoller.read(address, device),
             0x4017 => self.apu.borrow().read(address, device),
-            0x6000..=0x7FFF => self.battery_ram[(address & 0x1FFF) as usize],
-            0x8000..=0xFFFF => self.cartridge.borrow().read(address, device),
+            0x6000..=0xFFFF => self.cartridge.borrow().read(address, device),
             _ => {
                 // println!("unimplemented read cpu from {:04X}", address);
                 0
@@ -118,8 +115,7 @@ impl Bus for CPUBus {
             0x4015 => self.apu.borrow_mut().write(address, data, device),
             0x4016 => self.contoller.write(address, data, device),
             0x4017 => self.apu.borrow_mut().write(address, data, device),
-            0x6000..=0x7FFF => self.battery_ram[(address & 0x1FFF) as usize] = data,
-            0x8000..=0xFFFF => self
+            0x6000..=0xFFFF => self
                 .cartridge
                 .borrow_mut()
                 .write(address, data, Device::CPU),
