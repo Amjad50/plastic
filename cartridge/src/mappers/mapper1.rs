@@ -1,4 +1,4 @@
-use crate::mapper::Mapper;
+use crate::mapper::{Mapper, MappingResult};
 use common::{Device, MirroringMode};
 
 // FIXME: add support for 512kb as now only support 256kb
@@ -124,15 +124,15 @@ impl Mapper for Mapper1 {
         self.reset_shift_register();
     }
 
-    fn map_read(&self, address: u16, device: Device) -> (bool, usize) {
+    fn map_read(&self, address: u16, device: Device) -> MappingResult {
         match device {
             Device::CPU => {
                 match address {
                     0x6000..=0x7FFF => {
                         if self.contain_sram {
-                            (true, address as usize & 0x1FFF)
+                            MappingResult::Allowed(address as usize & 0x1FFF)
                         } else {
-                            (false, 0)
+                            MappingResult::Denied
                         }
                     }
                     0x8000..=0xFFFF => {
@@ -175,7 +175,7 @@ impl Mapper for Mapper1 {
                         };
 
                         // add the offset
-                        (true, start_of_bank + (address & mask) as usize)
+                        MappingResult::Allowed(start_of_bank + (address & mask) as usize)
                     }
                     _ => unreachable!(),
                 }
@@ -206,7 +206,7 @@ impl Mapper for Mapper1 {
                     };
 
                     // add the offset
-                    (true, start_of_bank + (address & mask) as usize)
+                    MappingResult::Allowed(start_of_bank + (address & mask) as usize)
                 } else {
                     unreachable!()
                 }
@@ -214,15 +214,15 @@ impl Mapper for Mapper1 {
         }
     }
 
-    fn map_write(&mut self, address: u16, data: u8, device: Device) -> (bool, usize) {
+    fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult {
         match device {
             Device::CPU => {
                 match address {
                     0x6000..=0x7FFF => {
                         if self.contain_sram {
-                            (true, address as usize & 0x1FFF)
+                            MappingResult::Allowed(address as usize & 0x1FFF)
                         } else {
-                            (false, 0)
+                            MappingResult::Denied
                         }
                     }
                     0x8000..=0xFFFF => {
@@ -250,17 +250,17 @@ impl Mapper for Mapper1 {
                                 self.reset_shift_register();
                             }
                         }
-                        (false, 0)
+                        MappingResult::Denied
                     }
                     _ => unreachable!(),
                 }
             }
             Device::PPU => {
                 // CHR RAM
-                if self.is_chr_ram && address >= 0x0000 && address <= 0x1FFF {
-                    (true, address as usize)
+                if self.is_chr_ram && address <= 0x1FFF {
+                    MappingResult::Allowed(address as usize)
                 } else {
-                    (false, 0)
+                    MappingResult::Denied
                 }
             }
         }

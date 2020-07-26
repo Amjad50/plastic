@@ -1,4 +1,4 @@
-use crate::mapper::Mapper;
+use crate::mapper::{Mapper, MappingResult};
 use common::{Device, MirroringMode};
 
 pub struct Mapper3 {
@@ -39,16 +39,16 @@ impl Mapper for Mapper3 {
         self.is_chr_ram = is_chr_ram;
     }
 
-    fn map_read(&self, address: u16, device: Device) -> (bool, usize) {
+    fn map_read(&self, address: u16, device: Device) -> MappingResult {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => (false, 0),
+                    0x6000..=0x7FFF => MappingResult::Denied,
                     0x8000..=0xFFFF => {
                         // 0x7FFF is for mapping 0x8000-0xFFFF to 0x0000-0x7FFF
                         // which is the range of the array
-                        (
-                            true,
+
+                        MappingResult::Allowed(
                             (if self.has_32kb_prg_rom {
                                 address & 0x7FFF
                             } else {
@@ -69,7 +69,7 @@ impl Mapper for Mapper3 {
 
                     let start_of_bank = 0x2000 * self.chr_bank as usize;
 
-                    (true, start_of_bank + (address & 0x1FFF) as usize)
+                    MappingResult::Allowed(start_of_bank + (address & 0x1FFF) as usize)
                 } else {
                     unreachable!()
                 }
@@ -77,7 +77,7 @@ impl Mapper for Mapper3 {
         }
     }
 
-    fn map_write(&mut self, address: u16, data: u8, device: Device) -> (bool, usize) {
+    fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult {
         match device {
             Device::CPU => {
                 // only accepts writes from CPU
@@ -91,14 +91,14 @@ impl Mapper for Mapper3 {
                         self.chr_bank = data;
                     }
                 }
-                (false, 0)
+                MappingResult::Denied
             }
             Device::PPU => {
                 // CHR RAM
-                if self.is_chr_ram && address >= 0x0000 && address <= 0x1FFF {
-                    (true, address as usize)
+                if self.is_chr_ram && address <= 0x1FFF {
+                    MappingResult::Allowed(address as usize)
                 } else {
-                    (false, 0)
+                    MappingResult::Denied
                 }
             }
         }

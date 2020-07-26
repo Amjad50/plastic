@@ -1,5 +1,10 @@
 use common::{Device, MirroringMode};
 
+pub enum MappingResult {
+    Allowed(usize),
+    Denied,
+}
+
 pub trait Mapper {
     fn init(
         &mut self,
@@ -10,23 +15,17 @@ pub trait Mapper {
         sram_count: u8,
     );
 
-    /// takes `address` to map from and `device`, then return
-    /// (`allow_read`, `real_address`), where `real_address` is the address
-    /// to read from in the data array stored by the cartidge class or any class
-    /// using this trait
-    ///
-    /// in case of `allow_read` is false, `real_address` MUST be ignored as it
-    /// has undefined address
-    fn map_read(&self, address: u16, device: Device) -> (bool, usize);
+    /// takes `address` to map from and `device`, then return `result`
+    /// if `result` is `MappingResult::Allowed`, then the `real_address` is
+    /// the `usize` value, but if `result` is `MappingResult::Denied`, then there
+    /// is no address to read from
+    fn map_read(&self, address: u16, device: Device) -> MappingResult;
 
-    /// takes `address` to map from and `device`, then return
-    /// (`allow_write`, `real_address`), where `real_address` is the address
-    /// to write `data` to in the data array stored by the cartidge class or any class
-    /// using this trait
-    ///
-    /// in case of `allow_write` is false, `real_address` MUST be ignored as it
-    /// has undefined address
-    fn map_write(&mut self, address: u16, data: u8, device: Device) -> (bool, usize);
+    /// takes `address` to map from and `device`, then return `result`
+    /// if `result` is `MappingResult::Allowed`, then the `real_address` is
+    /// the `usize` value, but if `result` is `MappingResult::Denied`, then there
+    /// is no address to write to
+    fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult;
     fn is_hardwired_mirrored(&self) -> bool;
     fn nametable_mirroring(&self) -> MirroringMode;
     fn is_irq_pin_state_changed_requested(&self) -> bool;

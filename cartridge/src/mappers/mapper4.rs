@@ -1,4 +1,4 @@
-use crate::mapper::Mapper;
+use crate::mapper::{Mapper, MappingResult};
 use common::{Device, MirroringMode};
 use std::cell::Cell;
 
@@ -178,7 +178,7 @@ impl Mapper for Mapper4 {
         is_chr_ram: bool,
         chr_count: u8,
         contain_sram: bool,
-        sram_count: u8,
+        _sram_count: u8,
     ) {
         self.prg_count = prg_count * 2;
         self.chr_count = chr_count * 8;
@@ -187,15 +187,15 @@ impl Mapper for Mapper4 {
         self.contain_sram = contain_sram;
     }
 
-    fn map_read(&self, address: u16, device: Device) -> (bool, usize) {
+    fn map_read(&self, address: u16, device: Device) -> MappingResult {
         match device {
             Device::CPU => {
                 match address {
                     0x6000..=0x7FFF => {
                         if self.contain_sram {
-                            (true, address as usize & 0x1FFF)
+                            MappingResult::Allowed(address as usize & 0x1FFF)
                         } else {
-                            (false, 0)
+                            MappingResult::Denied
                         }
                     }
                     0x8000..=0xFFFF => {
@@ -223,7 +223,7 @@ impl Mapper for Mapper4 {
 
                         let start_of_bank = bank * 0x2000;
 
-                        (true, start_of_bank + (address & 0x1FFF) as usize)
+                        MappingResult::Allowed(start_of_bank + (address & 0x1FFF) as usize)
                     }
                     _ => unreachable!(),
                 }
@@ -256,7 +256,7 @@ impl Mapper for Mapper4 {
 
                     let start_of_bank = bank * 0x400;
 
-                    (true, start_of_bank + (address & mask) as usize)
+                    MappingResult::Allowed(start_of_bank + (address & mask) as usize)
                 } else {
                     unreachable!();
                 }
@@ -264,81 +264,83 @@ impl Mapper for Mapper4 {
         }
     }
 
-    fn map_write(&mut self, address: u16, data: u8, device: Device) -> (bool, usize) {
+    fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult {
         match device {
             Device::CPU => {
                 match address {
                     0x6000..=0x7FFF => {
                         if self.contain_sram {
-                            (true, address as usize & 0x1FFF)
+                            MappingResult::Allowed(address as usize & 0x1FFF)
                         } else {
-                            (false, 0)
+                            MappingResult::Denied
                         }
                     }
-                    0x8000..=0x9FFF => {
-                        if address & 1 == 0 {
-                            // even
-                            self.bank_select = data & 0b111;
-                            self.prg_rom_bank_fix_8000 = data & 0x40 != 0;
-                            self.chr_bank_2k_1000 = data & 0x80 != 0;
-                        } else {
-                            // odd
-                            match self.bank_select {
-                                0 => self.chr_bank_r0 = data & !(1), // store as even number
-                                1 => self.chr_bank_r1 = data & !(1), // store as even number
-                                2 => self.chr_bank_r2 = data,
-                                3 => self.chr_bank_r3 = data,
-                                4 => self.chr_bank_r4 = data,
-                                5 => self.chr_bank_r5 = data,
-                                6 => self.prg_bank_8000_c000 = data,
-                                7 => self.prg_bank_a000 = data,
-                                _ => unreachable!(),
+                    0x8000..=0xFFFF => {
+                        match address {
+                            0x8000..=0x9FFF => {
+                                if address & 1 == 0 {
+                                    // even
+                                    self.bank_select = data & 0b111;
+                                    self.prg_rom_bank_fix_8000 = data & 0x40 != 0;
+                                    self.chr_bank_2k_1000 = data & 0x80 != 0;
+                                } else {
+                                    // odd
+                                    match self.bank_select {
+                                        0 => self.chr_bank_r0 = data & !(1), // store as even number
+                                        1 => self.chr_bank_r1 = data & !(1), // store as even number
+                                        2 => self.chr_bank_r2 = data,
+                                        3 => self.chr_bank_r3 = data,
+                                        4 => self.chr_bank_r4 = data,
+                                        5 => self.chr_bank_r5 = data,
+                                        6 => self.prg_bank_8000_c000 = data,
+                                        7 => self.prg_bank_a000 = data,
+                                        _ => unreachable!(),
+                                    }
+                                }
                             }
-                        }
-                        (false, 0)
-                    }
-                    0xA000..=0xBFFF => {
-                        if address & 1 == 0 {
-                            // even
-                            self.mirroring_vertical = data & 1 == 0;
-                        } else {
-                            // odd
-                            // PRG RAM stuff
-                        }
-                        (false, 0)
-                    }
-                    0xC000..=0xDFFF => {
-                        if address & 1 == 0 {
-                            // even
-                            self.irq_latch = data;
-                        } else {
-                            // odd
-                            self.reload_irq_counter_flag.set(true);
-                        }
-                        (false, 0)
-                    }
-                    0xE000..=0xFFFF => {
-                        // enable on odd addresses, disable on even addresses
-                        self.irq_enabled = address & 1 != 0;
+                            0xA000..=0xBFFF => {
+                                if address & 1 == 0 {
+                                    // even
+                                    self.mirroring_vertical = data & 1 == 0;
+                                } else {
+                                    // odd
+                                    // PRG RAM stuff
+                                }
+                            }
+                            0xC000..=0xDFFF => {
+                                if address & 1 == 0 {
+                                    // even
+                                    self.irq_latch = data;
+                                } else {
+                                    // odd
+                                    self.reload_irq_counter_flag.set(true);
+                                }
+                            }
+                            0xE000..=0xFFFF => {
+                                // enable on odd addresses, disable on even addresses
+                                self.irq_enabled = address & 1 != 0;
 
-                        // if cleared, then clear the pin as well if it is set
-                        // and notify the CPU
-                        if !self.irq_enabled {
-                            self.irq_pin.set(false);
-                            self.is_irq_pin_changed.set(true);
+                                // if cleared, then clear the pin as well if it is set
+                                // and notify the CPU
+                                if !self.irq_enabled {
+                                    self.irq_pin.set(false);
+                                    self.is_irq_pin_changed.set(true);
+                                }
+                            }
+                            _ => unreachable!(),
                         }
 
-                        (false, 0)
+                        MappingResult::Denied
                     }
                     _ => unreachable!(),
                 }
             }
             Device::PPU => {
                 // CHR RAM
-                if self.is_chr_ram && address >= 0x0000 && address <= 0x1FFF {
-                    (true, address as usize)
+                if self.is_chr_ram && address <= 0x1FFF {
+                    MappingResult::Allowed(address as usize)
                 } else {
-                    (false, 0)
+                    MappingResult::Denied
                 }
             }
         }

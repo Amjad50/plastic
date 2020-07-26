@@ -1,4 +1,4 @@
-use crate::mapper::Mapper;
+use crate::mapper::{Mapper, MappingResult};
 use common::{Device, MirroringMode};
 
 pub struct Mapper0 {
@@ -35,22 +35,21 @@ impl Mapper for Mapper0 {
         self.contain_sram = contain_sram;
     }
 
-    fn map_read(&self, address: u16, device: Device) -> (bool, usize) {
+    fn map_read(&self, address: u16, device: Device) -> MappingResult {
         match device {
             Device::CPU => {
                 match address {
                     0x6000..=0x7FFF => {
                         if self.contain_sram {
-                            (true, address as usize & 0x1FFF)
+                            MappingResult::Allowed(address as usize & 0x1FFF)
                         } else {
-                            (false, 0)
+                            MappingResult::Denied
                         }
                     }
                     0x8000..=0xFFFF => {
                         // 0x7FFF is for mapping 0x8000-0xFFFF to 0x0000-0x7FFF
                         // which is the range of the array
-                        (
-                            true,
+                        MappingResult::Allowed(
                             (if self.has_32kb_prg_rom {
                                 address & 0x7FFF
                             } else {
@@ -69,7 +68,7 @@ impl Mapper for Mapper0 {
                 // it does not matter if its a ram or rom, same array location
                 if address < 0x2000 {
                     // only one fixed memory
-                    (true, address as usize)
+                    MappingResult::Allowed(address as usize)
                 } else {
                     unreachable!()
                 }
@@ -77,22 +76,22 @@ impl Mapper for Mapper0 {
         }
     }
 
-    fn map_write(&mut self, address: u16, _: u8, device: Device) -> (bool, usize) {
+    fn map_write(&mut self, address: u16, _: u8, device: Device) -> MappingResult {
         // only for RAMs
 
         match device {
             Device::CPU => {
                 if self.contain_sram && address >= 0x6000 && address <= 0x7FFF {
-                    (true, address as usize & 0x1FFF)
+                    MappingResult::Allowed(address as usize & 0x1FFF)
                 } else {
-                    (false, 0)
+                    MappingResult::Denied
                 }
             }
             Device::PPU => {
-                if self.is_chr_ram && address >= 0x0000 && address <= 0x1FFF {
-                    (true, address as usize)
+                if self.is_chr_ram && address <= 0x1FFF {
+                    MappingResult::Allowed(address as usize)
                 } else {
-                    (false, 0)
+                    MappingResult::Denied
                 }
             }
         }

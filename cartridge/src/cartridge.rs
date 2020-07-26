@@ -1,4 +1,8 @@
-use super::{error::CartridgeError, mapper::Mapper, mappers::*};
+use super::{
+    error::CartridgeError,
+    mapper::{Mapper, MappingResult},
+    mappers::*,
+};
 use common::{
     interconnection::CartridgeCPUConnection, Bus, Device, MirroringMode, MirroringProvider,
 };
@@ -61,12 +65,10 @@ impl Cartridge {
 
         // in 8kb units
         let sram_size = if header[8] == 0 { 1 } else { header[8] };
-        let sram_data = if contain_sram {
-            vec![0; sram_size as usize * 1024 * 8]
-        } else {
-            // no sram, should handle errors and wrong accesses
-            Vec::new()
-        };
+
+        // NOTE: for some games the header does not say that there is `contain_sram`
+        // but it requires it and fails to run correctly otherwise
+        let sram_data = vec![0; sram_size as usize * 1024 * 8];
 
         let mapper_id = upper_mapper << 4 | lower_mapper;
 
@@ -150,7 +152,7 @@ impl Cartridge {
         mapper_id: u8,
         prg_count: u8,
         chr_count: u8,
-        contain_sram: bool,
+        _contain_sram: bool,
         sram_size: u8,
     ) -> Box<dyn Mapper> {
         let mut mapper: Box<dyn Mapper> = match mapper_id {
@@ -164,6 +166,9 @@ impl Cartridge {
             }
         };
 
+        // NOTE: for some games it rquires this but its not stated in INES header
+        let contain_sram = true;
+
         // should always call init in a new mapper, as it is the only way
         // they share a constructor
         mapper.init(
@@ -176,17 +181,13 @@ impl Cartridge {
 
         mapper
     }
-
-    fn is_chr_ram(&self) -> bool {
-        self.size_chr == 0
-    }
 }
 
 impl Bus for Cartridge {
     fn read(&self, address: u16, device: Device) -> u8 {
-        let (allow_read, new_address) = self.mapper.map_read(address, device);
+        let result = self.mapper.map_read(address, device);
 
-        if allow_read {
+        if let MappingResult::Allowed(new_address) = result {
             match device {
                 Device::CPU => match address {
                     0x6000..=0x7FFF => {
@@ -211,9 +212,9 @@ impl Bus for Cartridge {
     }
     fn write(&mut self, address: u16, data: u8, device: Device) {
         // send the write signal, this might trigger bank change
-        let (allor_write, new_address) = self.mapper.map_write(address, data, device);
+        let result = self.mapper.map_write(address, data, device);
 
-        if allor_write {
+        if let MappingResult::Allowed(new_address) = result {
             match device {
                 Device::CPU => match address {
                     0x6000..=0x7FFF => {
