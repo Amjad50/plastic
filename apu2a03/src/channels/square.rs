@@ -28,10 +28,6 @@ impl SquarePulse {
         }
     }
 
-    pub(crate) fn set_freq(&mut self, freq: f32) {
-        self.freq = freq;
-    }
-
     pub(crate) fn set_duty_cycle(&mut self, duty_cycle: f32) {
         // FIXME: very ineffecient, since it will mostly not happen, but we still
         // check 2 times
@@ -52,10 +48,6 @@ impl SquarePulse {
         self.period = period;
 
         self.update_frequency();
-    }
-
-    pub(crate) fn set_muted(&mut self, muted: bool) {
-        self.muted = muted;
     }
 
     pub(crate) fn reset(&mut self) {

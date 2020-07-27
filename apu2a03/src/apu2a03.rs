@@ -1,9 +1,9 @@
 use crate::apu2a03_registers::Register;
-use crate::channels::SquarePulse;
+use crate::channels::{SquarePulse, TriangleWave};
 use crate::envelope::EnvelopeGenerator;
 use crate::length_counter::LengthCountedChannel;
 use crate::sweeper::Sweeper;
-use crate::tone_source::APUChannelPlayer;
+use crate::tone_source::{APUChannel, APUChannelPlayer};
 use std::sync::{Arc, Mutex};
 
 pub struct APU2A03 {
@@ -11,6 +11,8 @@ pub struct APU2A03 {
     square_pulse_1_sweeper: Sweeper,
     square_pulse_2: Arc<Mutex<LengthCountedChannel<EnvelopeGenerator<SquarePulse>>>>,
     square_pulse_2_sweeper: Sweeper,
+
+    triangle: Arc<Mutex<LengthCountedChannel<TriangleWave>>>,
 
     reference_clock_frequency: f32,
 
@@ -35,6 +37,12 @@ impl APU2A03 {
             square_pulse_2: square_pulse_2.clone(),
             square_pulse_2_sweeper: Sweeper::new(square_pulse_2.clone()),
 
+            triangle: Arc::new(Mutex::new(LengthCountedChannel::new(TriangleWave::new(
+                440.,
+                20,
+                1.789773 * 1E6,
+            )))),
+
             reference_clock_frequency: 1.789773 * 1E6,
 
             is_4_step_squence_mode: false,
@@ -43,18 +51,6 @@ impl APU2A03 {
 
             wait_reset: 0,
         }
-    }
-
-    pub fn get_square_pulse_1_player(
-        &self,
-    ) -> APUChannelPlayer<LengthCountedChannel<EnvelopeGenerator<SquarePulse>>> {
-        APUChannelPlayer::from_clone(self.square_pulse_1.clone())
-    }
-
-    pub fn get_square_pulse_2_player(
-        &self,
-    ) -> APUChannelPlayer<LengthCountedChannel<EnvelopeGenerator<SquarePulse>>> {
-        APUChannelPlayer::from_clone(self.square_pulse_2.clone())
     }
 
     pub fn update_reference_frequency(&mut self, freq: f32) {
@@ -74,8 +70,13 @@ impl APU2A03 {
                 } else {
                     0
                 };
+                let triangle_length_counter = if let Ok(triangle) = self.triangle.lock() {
+                    (triangle.length_counter().counter() != 0) as u8
+                } else {
+                    0
+                };
 
-                sqr2_length_counter << 1 | sqr1_length_counter
+                triangle_length_counter << 2 | sqr2_length_counter << 1 | sqr1_length_counter
             }
             _ => {
                 // unreadable
@@ -85,7 +86,6 @@ impl APU2A03 {
     }
 
     pub(crate) fn write_register(&mut self, register: Register, data: u8) {
-        // println!("{:?} {:08b}", register, data);
         match register {
             Register::Pulse1_1 => {
                 let duty_cycle = [0.125, 0.25, 0.5, 0.75][data as usize >> 6];
@@ -194,10 +194,45 @@ impl APU2A03 {
                     square_pulse_2.channel_mut().channel_mut().reset();
                 }
             }
-            Register::Triangle1 => {}
-            Register::Triangle2 => {}
-            Register::Triangle3 => {}
-            Register::Triangle4 => {}
+            Register::Triangle1 => {
+                if let Ok(mut triangle) = self.triangle.lock() {
+                    triangle
+                        .channel_mut()
+                        .set_linear_counter_reload_value(data & 0x7F);
+                    triangle
+                        .channel_mut()
+                        .set_linear_counter_control_flag(data & 0x80 != 0);
+
+                    triangle.length_counter_mut().set_halt(data & 0x80 != 0);
+                }
+            }
+            Register::Triangle2 => {
+                // unused
+            }
+            Register::Triangle3 => {
+                if let Ok(mut triangle) = self.triangle.lock() {
+                    let period = triangle.channel().get_period();
+
+                    // lower timer bits
+                    triangle
+                        .channel_mut()
+                        .set_period((period & 0xFF00) | data as u16);
+                }
+            }
+            Register::Triangle4 => {
+                if let Ok(mut triangle) = self.triangle.lock() {
+                    triangle.length_counter_mut().reload_counter(data >> 3);
+
+                    let period = triangle.channel().get_period();
+
+                    // high timer bits
+                    triangle
+                        .channel_mut()
+                        .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8));
+
+                    triangle.channel_mut().set_linear_counter_reload_flag(true);
+                }
+            }
             Register::Noise1 => {}
             Register::Noise2 => {}
             Register::Noise3 => {}
@@ -218,6 +253,11 @@ impl APU2A03 {
                         .length_counter_mut()
                         .set_enabled((data >> 1 & 1) != 0);
                 }
+                if let Ok(mut triangle) = self.triangle.lock() {
+                    triangle
+                        .length_counter_mut()
+                        .set_enabled((data >> 2 & 1) != 0);
+                }
             }
             Register::FrameCounter => {
                 self.is_4_step_squence_mode = data & 0x80 == 0;
@@ -232,13 +272,15 @@ impl APU2A03 {
         let device = rodio::default_output_device().unwrap();
         let sink = rodio::Sink::new(&device);
 
-        let sqr1 = self.get_square_pulse_1_player();
-        let sqr2 = self.get_square_pulse_2_player();
+        let sqr1 = APUChannelPlayer::from_clone(self.square_pulse_1.clone());
+        let sqr2 = APUChannelPlayer::from_clone(self.square_pulse_2.clone());
+        let triangle = APUChannelPlayer::from_clone(self.triangle.clone());
 
         let (controller, mixer) = rodio::dynamic_mixer::mixer::<f32>(5, crate::SAMPLE_RATE);
 
         controller.add(sqr1);
         controller.add(sqr2);
+        controller.add(triangle);
 
         sink.append(mixer);
         sink.set_volume(0.01);
@@ -247,15 +289,12 @@ impl APU2A03 {
         sink.detach();
     }
 
-    fn square_pulse_1_length_counter_decrement(&mut self) {
-        if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
-            square_pulse_1.length_counter_mut().decrement();
-        }
-    }
-
-    fn square_pulse_2_length_counter_decrement(&mut self) {
-        if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
-            square_pulse_2.length_counter_mut().decrement();
+    fn length_counter_decrement<S: APUChannel>(channel: &mut Arc<Mutex<LengthCountedChannel<S>>>)
+    where
+        S::Item: rodio::Sample,
+    {
+        if let Ok(mut channel) = channel.lock() {
+            channel.length_counter_mut().decrement();
         }
     }
 
@@ -271,16 +310,24 @@ impl APU2A03 {
         }
     }
 
+    fn triangle_linear_counter_clock(&mut self) {
+        if let Ok(mut triangle) = self.triangle.lock() {
+            triangle.channel_mut().clock_linear_counter();
+        }
+    }
+
     fn generate_quarter_frame_clock(&mut self) {
         self.square_pulse_1_envelope_clock();
         self.square_pulse_2_envelope_clock();
+        self.triangle_linear_counter_clock();
     }
 
     fn generate_half_frame_clock(&mut self) {
-        self.square_pulse_1_length_counter_decrement();
+        Self::length_counter_decrement(&mut self.square_pulse_1);
         self.square_pulse_1_sweeper.clock();
-        self.square_pulse_2_length_counter_decrement();
+        Self::length_counter_decrement(&mut self.square_pulse_2);
         self.square_pulse_2_sweeper.clock();
+        Self::length_counter_decrement(&mut self.triangle);
     }
 
     pub fn clock(&mut self) {
