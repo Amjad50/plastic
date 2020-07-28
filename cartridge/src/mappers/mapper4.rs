@@ -113,9 +113,6 @@ pub struct Mapper4 {
     /// false if the last accessed pattern table address is $0000
     /// true  if the last accessed pattern table address is $1000
     last_pattern_table: Cell<bool>,
-
-    /// does it have SRAM?
-    contain_sram: bool,
 }
 
 impl Mapper4 {
@@ -143,7 +140,6 @@ impl Mapper4 {
             chr_count: 0,
             prg_count: 0,
             last_pattern_table: Cell::new(false),
-            contain_sram: false,
         }
     }
 
@@ -172,32 +168,18 @@ impl Mapper4 {
 }
 
 impl Mapper for Mapper4 {
-    fn init(
-        &mut self,
-        prg_count: u8,
-        is_chr_ram: bool,
-        chr_count: u8,
-        contain_sram: bool,
-        _sram_count: u8,
-    ) {
+    fn init(&mut self, prg_count: u8, is_chr_ram: bool, chr_count: u8, _sram_count: u8) {
         self.prg_count = prg_count * 2;
         self.chr_count = chr_count * 8;
 
         self.is_chr_ram = is_chr_ram;
-        self.contain_sram = contain_sram;
     }
 
     fn map_read(&self, address: u16, device: Device) -> MappingResult {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => {
-                        if self.contain_sram {
-                            MappingResult::Allowed(address as usize & 0x1FFF)
-                        } else {
-                            MappingResult::Denied
-                        }
-                    }
+                    0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
                     0x8000..=0xFFFF => {
                         let bank = match address {
                             0x8000..=0x9FFF => {
@@ -268,13 +250,7 @@ impl Mapper for Mapper4 {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => {
-                        if self.contain_sram {
-                            MappingResult::Allowed(address as usize & 0x1FFF)
-                        } else {
-                            MappingResult::Denied
-                        }
-                    }
+                    0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
                     0x8000..=0xFFFF => {
                         match address {
                             0x8000..=0x9FFF => {

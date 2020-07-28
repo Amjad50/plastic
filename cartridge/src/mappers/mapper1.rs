@@ -47,9 +47,6 @@ pub struct Mapper1 {
 
     /// in 16kb units
     prg_count: u8,
-
-    /// does this cartridge has sram?
-    contain_sram: bool,
 }
 
 impl Mapper1 {
@@ -65,8 +62,6 @@ impl Mapper1 {
 
             chr_count: 0,
             prg_count: 0,
-
-            contain_sram: false,
         }
     }
 
@@ -108,17 +103,9 @@ impl Mapper1 {
 }
 
 impl Mapper for Mapper1 {
-    fn init(
-        &mut self,
-        prg_count: u8,
-        is_chr_ram: bool,
-        chr_count: u8,
-        contain_sram: bool,
-        _sram_count: u8,
-    ) {
+    fn init(&mut self, prg_count: u8, is_chr_ram: bool, chr_count: u8, _sram_count: u8) {
         self.prg_count = prg_count;
         self.chr_count = chr_count * 2; // since this passed as the number of 8kb banks
-        self.contain_sram = contain_sram;
         self.is_chr_ram = is_chr_ram;
 
         self.reset_shift_register();
@@ -128,13 +115,7 @@ impl Mapper for Mapper1 {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => {
-                        if self.contain_sram {
-                            MappingResult::Allowed(address as usize & 0x1FFF)
-                        } else {
-                            MappingResult::Denied
-                        }
-                    }
+                    0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
                     0x8000..=0xFFFF => {
                         let bank = if self.is_prg_32kb_mode() {
                             // ignore last bit
@@ -218,13 +199,7 @@ impl Mapper for Mapper1 {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => {
-                        if self.contain_sram {
-                            MappingResult::Allowed(address as usize & 0x1FFF)
-                        } else {
-                            MappingResult::Denied
-                        }
-                    }
+                    0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
                     0x8000..=0xFFFF => {
                         if data & 0x80 != 0 {
                             self.reset_shift_register();

@@ -6,14 +6,7 @@ pub enum MappingResult {
 }
 
 pub trait Mapper {
-    fn init(
-        &mut self,
-        pgr_count: u8,
-        is_chr_ram: bool,
-        chr_count: u8,
-        contain_sram: bool,
-        sram_count: u8,
-    );
+    fn init(&mut self, pgr_count: u8, is_chr_ram: bool, chr_count: u8, sram_count: u8);
 
     /// takes `address` to map from and `device`, then return `result`
     /// if `result` is `MappingResult::Allowed`, then the `real_address` is

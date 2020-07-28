@@ -74,7 +74,7 @@ impl Cartridge {
 
         // initialize the mapper first, so that if it is not supported yet,
         // panic
-        let mapper = Self::get_mapper(mapper_id, size_prg, size_chr, contain_sram, sram_size);
+        let mapper = Self::get_mapper(mapper_id, size_prg, size_chr, sram_size);
 
         let mut trainer_data = Vec::new();
 
@@ -148,13 +148,7 @@ impl Cartridge {
         }
     }
 
-    fn get_mapper(
-        mapper_id: u8,
-        prg_count: u8,
-        chr_count: u8,
-        _contain_sram: bool,
-        sram_size: u8,
-    ) -> Box<dyn Mapper> {
+    fn get_mapper(mapper_id: u8, prg_count: u8, chr_count: u8, sram_size: u8) -> Box<dyn Mapper> {
         let mut mapper: Box<dyn Mapper> = match mapper_id {
             0 => Box::new(Mapper0::new()),
             1 => Box::new(Mapper1::new()),
@@ -166,18 +160,9 @@ impl Cartridge {
             }
         };
 
-        // NOTE: for some games it rquires this but its not stated in INES header
-        let contain_sram = true;
-
         // should always call init in a new mapper, as it is the only way
         // they share a constructor
-        mapper.init(
-            prg_count,
-            chr_count == 0,
-            chr_count,
-            contain_sram,
-            sram_size,
-        );
+        mapper.init(prg_count, chr_count == 0, chr_count, sram_size);
 
         mapper
     }

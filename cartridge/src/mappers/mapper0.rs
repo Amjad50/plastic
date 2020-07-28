@@ -4,7 +4,6 @@ use common::Device;
 pub struct Mapper0 {
     has_32kb_prg_rom: bool,
     is_chr_ram: bool,
-    contain_sram: bool,
 }
 
 impl Mapper0 {
@@ -12,40 +11,25 @@ impl Mapper0 {
         Self {
             has_32kb_prg_rom: false,
             is_chr_ram: false,
-            contain_sram: false,
         }
     }
 }
 
 impl Mapper for Mapper0 {
-    fn init(
-        &mut self,
-        prg_count: u8,
-        is_chr_ram: bool,
-        chr_count: u8,
-        contain_sram: bool,
-        _sram_count: u8,
-    ) {
+    fn init(&mut self, prg_count: u8, is_chr_ram: bool, chr_count: u8, _sram_count: u8) {
         // the only allowed options
         assert!(chr_count <= 1);
         assert!(prg_count == 1 || prg_count == 2);
 
         self.has_32kb_prg_rom = prg_count == 2;
         self.is_chr_ram = is_chr_ram;
-        self.contain_sram = contain_sram;
     }
 
     fn map_read(&self, address: u16, device: Device) -> MappingResult {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => {
-                        if self.contain_sram {
-                            MappingResult::Allowed(address as usize & 0x1FFF)
-                        } else {
-                            MappingResult::Denied
-                        }
-                    }
+                    0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
                     0x8000..=0xFFFF => {
                         // 0x7FFF is for mapping 0x8000-0xFFFF to 0x0000-0x7FFF
                         // which is the range of the array
@@ -81,7 +65,7 @@ impl Mapper for Mapper0 {
 
         match device {
             Device::CPU => {
-                if self.contain_sram && address >= 0x6000 && address <= 0x7FFF {
+                if address >= 0x6000 && address <= 0x7FFF {
                     MappingResult::Allowed(address as usize & 0x1FFF)
                 } else {
                     MappingResult::Denied
