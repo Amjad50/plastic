@@ -23,18 +23,8 @@ where
     S: APUChannel,
     S::Item: Sample,
 {
-    pub fn new(source: S) -> Self {
-        Self {
-            source: Arc::new(Mutex::new(source)),
-        }
-    }
-
     pub fn from_clone(source: Arc<Mutex<S>>) -> Self {
         Self { source }
-    }
-
-    pub fn clone_source(&self) -> Arc<Mutex<S>> {
-        self.source.clone()
     }
 }
 
