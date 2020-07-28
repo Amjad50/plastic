@@ -15,19 +15,19 @@ use std::{
 pub struct Cartridge {
     file_path: Box<Path>,
     // header
-    size_prg: u8,
-    size_chr: u8,
-    mapper_id: u8,
+    _size_prg: u8,
+    _size_chr: u8,
+    _mapper_id: u8,
     mirroring_vertical: bool,
     contain_sram: bool,
     sram_size: u8,
-    contain_trainer: bool,
+    _contain_trainer: bool,
     use_4_screen_mirroring: bool,
-    vs_unisystem: bool,        // don't know what is this (flag 7)
+    _vs_unisystem: bool,       // don't know what is this (flag 7)
     _playchoice_10_hint: bool, // not used
-    is_nes_2: bool,
+    _is_nes_2: bool,
 
-    trainer_data: Vec<u8>,
+    _trainer_data: Vec<u8>,
     pub(crate) prg_data: Vec<u8>,
     pub(crate) chr_data: Vec<u8>,
     sram_data: Vec<u8>,
@@ -130,18 +130,18 @@ impl Cartridge {
                 } else {
                     Ok(Self {
                         file_path: file_path.as_ref().to_path_buf().into_boxed_path(),
-                        size_prg,
-                        size_chr,
-                        mapper_id,
+                        _size_prg: size_prg,
+                        _size_chr: size_chr,
+                        _mapper_id: mapper_id,
                         mirroring_vertical,
                         contain_sram,
                         sram_size,
-                        contain_trainer,
+                        _contain_trainer: contain_trainer,
                         use_4_screen_mirroring,
-                        vs_unisystem,
+                        _vs_unisystem: vs_unisystem,
                         _playchoice_10_hint,
-                        is_nes_2,
-                        trainer_data,
+                        _is_nes_2: is_nes_2,
+                        _trainer_data: trainer_data,
                         prg_data,
                         chr_data,
                         sram_data,
@@ -191,10 +191,7 @@ impl Cartridge {
 
     fn load_sram_file<P: AsRef<Path>>(path: P, sram_size: usize) -> Result<Vec<u8>, SramError> {
         let path = path.as_ref().with_extension("nes.sav");
-        println!(
-            "Loading SRAM file data from {}",
-            path.to_str().expect("Could not convert `PathBuf` to str")
-        );
+        println!("Loading SRAM file data from {:?}", path);
 
         let mut file = File::open(path)?;
         let mut result = vec![0; sram_size];
@@ -207,10 +204,7 @@ impl Cartridge {
 
     fn save_sram_file(&self) -> Result<(), SramError> {
         let path = self.file_path.with_extension("nes.sav");
-        println!(
-            "Writing SRAM file data to {}",
-            path.to_str().expect("Could not convert `PathBuf` to str")
-        );
+        println!("Writing SRAM file data to {:?}", path);
 
         let mut file = File::create(&path)?;
 
