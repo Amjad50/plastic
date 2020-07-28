@@ -108,6 +108,9 @@ impl Mapper for Mapper1 {
         self.chr_count = chr_count * 2; // since this passed as the number of 8kb banks
         self.is_chr_ram = is_chr_ram;
 
+        self.prg_bank = prg_count - 1; // power-up, should be all set?
+        self.control_register = 0b01100; // power-up state
+
         self.reset_shift_register();
     }
 
