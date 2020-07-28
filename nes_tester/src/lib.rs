@@ -8,7 +8,6 @@ use std::{
     convert::From,
     error::Error,
     fmt::{Debug, Display, Formatter, Result as fmtResult},
-    fs::File,
     rc::Rc,
     sync::{Arc, Mutex},
 };
@@ -144,7 +143,7 @@ pub struct NES {
 
 impl NES {
     pub fn new(filename: &str) -> Result<Self, CartridgeError> {
-        let cartridge = Rc::new(RefCell::new(Cartridge::from_file(File::open(filename)?)?));
+        let cartridge = Rc::new(RefCell::new(Cartridge::from_file(filename)?));
 
         let ppubus = PPUBus::new(cartridge.clone());
 

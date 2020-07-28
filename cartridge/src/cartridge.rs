@@ -1,5 +1,5 @@
 use super::{
-    error::CartridgeError,
+    error::{CartridgeError, SramError},
     mapper::{Mapper, MappingResult},
     mappers::*,
 };
@@ -8,10 +8,12 @@ use common::{
 };
 use std::{
     fs::File,
-    io::{Read, Seek, SeekFrom},
+    io::{Read, Seek, SeekFrom, Write},
+    path::Path,
 };
 
 pub struct Cartridge {
+    file_path: Box<Path>,
     // header
     size_prg: u8,
     size_chr: u8,
@@ -35,102 +37,122 @@ pub struct Cartridge {
 
 impl Cartridge {
     // TODO: not sure if it should consume the file or not
-    pub fn from_file(mut file: File) -> Result<Self, CartridgeError> {
-        let mut header = [0; 16];
-        file.read_exact(&mut header)?;
+    pub fn from_file<P: AsRef<Path>>(file_path: P) -> Result<Self, CartridgeError> {
+        if let Some(extension) = file_path.as_ref().extension() {
+            if extension == "nes" {
+                let mut file = File::open(file_path.as_ref())?;
 
-        // decode header
-        Cartridge::check_magic(&header[0..4])?;
+                let mut header = [0; 16];
+                file.read_exact(&mut header)?;
 
-        let size_prg = header[4];
-        let size_chr = header[5];
+                // decode header
+                Cartridge::check_magic(&header[0..4])?;
 
-        let mirroring_vertical = header[6] & 1 != 0;
-        header[6] >>= 1;
-        let contain_sram = header[6] & 1 != 0;
-        header[6] >>= 1;
-        let contain_trainer = header[6] & 1 != 0;
-        header[6] >>= 1;
-        let use_4_screen_mirroring = header[6] & 1 != 0;
-        header[6] >>= 1;
-        let lower_mapper = header[6]; // the rest
+                let size_prg = header[4];
+                let size_chr = header[5];
 
-        let vs_unisystem = header[7] & 1 != 0;
-        header[7] >>= 1;
-        let _playchoice_10_hint = header[7] & 1 != 0;
-        header[7] >>= 1;
-        let is_nes_2 = (header[7] & 0b11) == 2;
-        header[7] >>= 2;
-        let upper_mapper = header[7]; // the rest
+                let mirroring_vertical = header[6] & 1 != 0;
+                header[6] >>= 1;
+                let contain_sram = header[6] & 1 != 0;
+                header[6] >>= 1;
+                let contain_trainer = header[6] & 1 != 0;
+                header[6] >>= 1;
+                let use_4_screen_mirroring = header[6] & 1 != 0;
+                header[6] >>= 1;
+                let lower_mapper = header[6]; // the rest
 
-        // in 8kb units
-        let sram_size = if header[8] == 0 { 1 } else { header[8] };
+                let vs_unisystem = header[7] & 1 != 0;
+                header[7] >>= 1;
+                let _playchoice_10_hint = header[7] & 1 != 0;
+                header[7] >>= 1;
+                let is_nes_2 = (header[7] & 0b11) == 2;
+                header[7] >>= 2;
+                let upper_mapper = header[7]; // the rest
 
-        // NOTE: for some games the header does not say that there is `contain_sram`
-        // but it requires it and fails to run correctly otherwise
-        let sram_data = vec![0; sram_size as usize * 1024 * 8];
+                // in 8kb units
+                let sram_size = if header[8] == 0 { 1 } else { header[8] };
 
-        let mapper_id = upper_mapper << 4 | lower_mapper;
+                let sram_data = if contain_sram {
+                    // try to load old save data
+                    if let Ok(data) =
+                        Self::load_sram_file(file_path.as_ref(), sram_size as usize * 1024 * 8)
+                    {
+                        data
+                    } else {
+                        vec![0; sram_size as usize * 1024 * 8]
+                    }
+                } else {
+                    vec![0; sram_size as usize * 1024 * 8]
+                };
 
-        // initialize the mapper first, so that if it is not supported yet,
-        // panic
-        let mapper = Self::get_mapper(mapper_id, size_prg, size_chr, sram_size);
+                let mapper_id = upper_mapper << 4 | lower_mapper;
 
-        let mut trainer_data = Vec::new();
+                // initialize the mapper first, so that if it is not supported yet,
+                // panic
+                let mapper = Self::get_mapper(mapper_id, size_prg, size_chr, sram_size);
 
-        // read training data if present
-        if contain_trainer {
-            trainer_data.resize(512, 0);
-            file.read_exact(&mut trainer_data)?;
-        }
+                let mut trainer_data = Vec::new();
 
-        // read PRG data
-        let mut prg_data = vec![0; (size_prg as usize) * 16 * 1024];
-        file.read_exact(&mut prg_data)?;
+                // read training data if present
+                if contain_trainer {
+                    trainer_data.resize(512, 0);
+                    file.read_exact(&mut trainer_data)?;
+                }
 
-        // read CHR data
-        let mut chr_data = Vec::new();
-        if size_chr != 0 {
-            chr_data.resize((size_chr as usize) * 8 * 1024, 0);
-            file.read_exact(&mut chr_data)?;
-        } else {
-            // use CHR RAM
-            chr_data.resize(1 * 8 * 1024, 0);
-        }
+                // read PRG data
+                let mut prg_data = vec![0; (size_prg as usize) * 16 * 1024];
+                file.read_exact(&mut prg_data)?;
 
-        if is_nes_2 {
-            // print a warning message just to know which games need INES2.
-            eprintln!(
-                "[WARN], the cartridge header is in INES2.0 format, but \
+                // read CHR data
+                let mut chr_data = Vec::new();
+                if size_chr != 0 {
+                    chr_data.resize((size_chr as usize) * 8 * 1024, 0);
+                    file.read_exact(&mut chr_data)?;
+                } else {
+                    // use CHR RAM
+                    chr_data.resize(1 * 8 * 1024, 0);
+                }
+
+                if is_nes_2 {
+                    // print a warning message just to know which games need INES2.
+                    eprintln!(
+                        "[WARN], the cartridge header is in INES2.0 format, but \
                 this emulator only supports INES1.0, the game might work \
                 but mostly it will be buggy"
-            );
-        }
+                    );
+                }
 
-        // there are missing parts
-        let current = file.seek(SeekFrom::Current(0))?;
-        let end = file.seek(SeekFrom::End(0))?;
-        if current != end {
-            Err(CartridgeError::TooLargeFile(end - current))
+                // there are missing parts
+                let current = file.seek(SeekFrom::Current(0))?;
+                let end = file.seek(SeekFrom::End(0))?;
+                if current != end {
+                    Err(CartridgeError::TooLargeFile(end - current))
+                } else {
+                    Ok(Self {
+                        file_path: file_path.as_ref().to_path_buf().into_boxed_path(),
+                        size_prg,
+                        size_chr,
+                        mapper_id,
+                        mirroring_vertical,
+                        contain_sram,
+                        sram_size,
+                        contain_trainer,
+                        use_4_screen_mirroring,
+                        vs_unisystem,
+                        _playchoice_10_hint,
+                        is_nes_2,
+                        trainer_data,
+                        prg_data,
+                        chr_data,
+                        sram_data,
+                        mapper,
+                    })
+                }
+            } else {
+                Err(CartridgeError::ExtensionError)
+            }
         } else {
-            Ok(Self {
-                size_prg,
-                size_chr,
-                mapper_id,
-                mirroring_vertical,
-                contain_sram,
-                sram_size,
-                contain_trainer,
-                use_4_screen_mirroring,
-                vs_unisystem,
-                _playchoice_10_hint,
-                is_nes_2,
-                trainer_data,
-                prg_data,
-                chr_data,
-                sram_data,
-                mapper,
-            })
+            Err(CartridgeError::ExtensionError)
         }
     }
 
@@ -165,6 +187,43 @@ impl Cartridge {
         mapper.init(prg_count, chr_count == 0, chr_count, sram_size);
 
         mapper
+    }
+
+    fn load_sram_file<P: AsRef<Path>>(path: P, sram_size: usize) -> Result<Vec<u8>, SramError> {
+        let path = path.as_ref().with_extension("nes.sav");
+        println!(
+            "Loading SRAM file data from {}",
+            path.to_str().expect("Could not convert `PathBuf` to str")
+        );
+
+        let mut file = File::open(path)?;
+        let mut result = vec![0; sram_size];
+
+        file.read_exact(&mut result)
+            .map_err(|_| SramError::SramFileSizeDoesNotMatch)?;
+
+        Ok(result)
+    }
+
+    fn save_sram_file(&self) -> Result<(), SramError> {
+        let path = self.file_path.with_extension("nes.sav");
+        println!(
+            "Writing SRAM file data to {}",
+            path.to_str().expect("Could not convert `PathBuf` to str")
+        );
+
+        let mut file = File::create(&path)?;
+
+        let size = file.write(&self.sram_data)?;
+
+        if size != self.sram_size as usize * 1024 * 8 {
+            file.sync_all()?;
+            // remove the file so it will not be loaded next time the game is run
+            std::fs::remove_file(path).expect("Could not remove `nes.sav` file");
+            Err(SramError::FailedToSaveSramFile)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -247,6 +306,14 @@ impl MirroringProvider for Cartridge {
             } else {
                 self.mapper.nametable_mirroring()
             }
+        }
+    }
+}
+
+impl Drop for Cartridge {
+    fn drop(&mut self) {
+        if self.contain_sram {
+            self.save_sram_file().unwrap();
         }
     }
 }
