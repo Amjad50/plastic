@@ -420,7 +420,11 @@ where
 
         let mut instruction = match Instruction::from_byte(opcode) {
             Ok(instruction) => instruction,
-            Err(msg) => panic!("{} {}", msg, opcode),
+            Err(_) => panic!(
+                "Invalid instruction {:02X} at {:04X}",
+                opcode,
+                self.reg_pc - 1
+            ),
         };
 
         let mut operand = 0;
