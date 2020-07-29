@@ -993,6 +993,240 @@ where
                 // no need to set flags
                 self.reg_sp = self.reg_x;
             }
+
+            // Unofficial instructions
+            Opcode::Slo => {
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::Asl,
+                    addressing_mode: instruction.addressing_mode,
+                });
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::Ora,
+                    addressing_mode: instruction.addressing_mode,
+                });
+            }
+            Opcode::Sre => {
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::Lsr,
+                    addressing_mode: instruction.addressing_mode,
+                });
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::Eor,
+                    addressing_mode: instruction.addressing_mode,
+                });
+            }
+            Opcode::Rla => {
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::Rol,
+                    addressing_mode: instruction.addressing_mode,
+                });
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::And,
+                    addressing_mode: instruction.addressing_mode,
+                });
+            }
+            Opcode::Rra => {
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::Ror,
+                    addressing_mode: instruction.addressing_mode,
+                });
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::Adc,
+                    addressing_mode: instruction.addressing_mode,
+                });
+            }
+            Opcode::Isc => {
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::Inc,
+                    addressing_mode: instruction.addressing_mode,
+                });
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::Sbc,
+                    addressing_mode: instruction.addressing_mode,
+                });
+            }
+            Opcode::Dcp => {
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::Dec,
+                    addressing_mode: instruction.addressing_mode,
+                });
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::Cmp,
+                    addressing_mode: instruction.addressing_mode,
+                });
+            }
+            Opcode::Sax => {
+                assert!(is_operand_address);
+                self.write_bus(decoded_operand, self.reg_x & self.reg_a);
+            }
+            Opcode::Lax => {
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::Lda,
+                    addressing_mode: instruction.addressing_mode,
+                });
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::Ldx,
+                    addressing_mode: instruction.addressing_mode,
+                });
+            }
+            Opcode::Anc => {
+                assert!(instruction.addressing_mode == AddressingMode::Immediate);
+
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::And,
+                    addressing_mode: instruction.addressing_mode,
+                });
+                self.set_flag_status(
+                    StatusFlag::Carry,
+                    self.reg_status & StatusFlag::Negative as u8 != 0,
+                );
+            }
+            Opcode::Alr => {
+                assert!(instruction.addressing_mode == AddressingMode::Immediate);
+
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::And,
+                    addressing_mode: instruction.addressing_mode,
+                });
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: 0, // unused
+                    opcode: Opcode::Lsr,
+                    addressing_mode: AddressingMode::Accumulator,
+                });
+            }
+            Opcode::Arr => {
+                assert!(instruction.addressing_mode == AddressingMode::Immediate);
+
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::And,
+                    addressing_mode: instruction.addressing_mode,
+                });
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: 0, // unused
+                    opcode: Opcode::Ror,
+                    addressing_mode: AddressingMode::Accumulator,
+                });
+
+                self.set_flag_status(StatusFlag::Carry, (self.reg_a >> 6) & 1 != 0);
+                self.set_flag_status(
+                    StatusFlag::Overflow,
+                    ((self.reg_a >> 6) & 1) ^ ((self.reg_a >> 5) & 1) != 0,
+                );
+            }
+            Opcode::Axs => {
+                assert!(instruction.addressing_mode == AddressingMode::Immediate);
+
+                let (result, overflow) =
+                    (self.reg_x & self.reg_a).overflowing_sub(decoded_operand as u8);
+
+                self.reg_x = self.load(result as u16, false);
+
+                self.set_flag_status(StatusFlag::Carry, !overflow);
+            }
+            Opcode::Xaa => {
+                assert!(instruction.addressing_mode == AddressingMode::Immediate);
+
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: 0, // unused
+                    opcode: Opcode::Txa,
+                    addressing_mode: AddressingMode::Implied,
+                });
+                self.run_instruction(&Instruction {
+                    opcode_byte: 0,
+                    operand: instruction.operand,
+                    opcode: Opcode::And,
+                    addressing_mode: instruction.addressing_mode,
+                });
+            }
+            Opcode::Ahx => {
+                assert!(is_operand_address);
+
+                let high_byte = (decoded_operand >> 8) as u8;
+
+                self.write_bus(decoded_operand, self.reg_a & self.reg_x & high_byte);
+            }
+            Opcode::Shy => {
+                assert!(is_operand_address);
+
+                let low_byte = decoded_operand & 0xFF;
+                let high_byte = (decoded_operand >> 8) as u8;
+
+                let value = self.reg_y & (high_byte + 1);
+
+                self.write_bus((value as u16) << 8 | low_byte, value);
+            }
+            Opcode::Shx => {
+                assert!(is_operand_address);
+
+                let low_byte = decoded_operand & 0xFF;
+                let high_byte = (decoded_operand >> 8) as u8;
+
+                let value = self.reg_x & (high_byte + 1);
+
+                self.write_bus((value as u16) << 8 | low_byte, value);
+            }
+            Opcode::Tas => {
+                assert!(is_operand_address);
+
+                let high_byte = (decoded_operand >> 8) as u8;
+
+                self.reg_sp = self.reg_x & self.reg_a;
+
+                self.write_bus(decoded_operand, self.reg_sp & high_byte);
+            }
+            Opcode::Las => {
+                assert!(is_operand_address);
+
+                let value = self.read_bus(decoded_operand);
+
+                //set the flags
+                let result = self.load((value & self.reg_sp) as u16, false);
+
+                self.reg_a = result;
+                self.reg_x = result;
+                self.reg_sp = result;
+            }
+            Opcode::Kil => {
+                // TODO: implement halt
+                println!("KIL instruction executed, should halt....");
+            }
         };
 
         // minus this cycle

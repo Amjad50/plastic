@@ -74,6 +74,31 @@ pub enum Opcode {
     Sty, // Store Y
     Tsx, // Transfer stack_ptr to X
     Txs, // Transfer X to stack_ptr
+
+    // Unofficial instructions
+    Slo, // Arithmetic shift left, then OR [Asl + Ora]
+    Sre, // Logical shift right, then XOR [Lsr + Eor]
+    Rla, // Rotate left, then And [Rol + And]
+    Rra, // Rotate right, then Add with carry [Ror + Adc]
+    Isc, // Increment memory, then Subtract with carry [Inc + Sbc]
+    Dcp, // Decrement memory, then Compare A [Dec + Cmp]
+    Sax, // Store the value of (A and X)
+    Lax, // Load A and X [Lda + Tax]
+
+    Anc, // And #imm, then set Carry = Negative
+    Alr, // And #imm, then Lsr A
+    Arr, // And #imm, then Ror A
+    Axs, // ((A and X) - #imm) -> X
+    Xaa, // Transfere X to A, then And #imm [Txa + And #imm]
+
+    Ahx, // Store the value of (A and X and {High byte of $addr}) into $addr
+    Shy, // Store the value of (Y and {High byte of $addr}) into $addr
+    Shx, // Store the value of (X and {High byte of $addr}) into $addr
+
+    Tas, // Store the value of (X and A) into (the stack pointer), and store ((the stack pointer) and {High byte of $addr}) into $addr
+    Las, // Store the value of ({value in $addr} & (the stack pointer)) into A, X, and (the stack pointer)
+
+    Kil, // Halt the CPU (CRASH)
 }
 
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -289,8 +314,105 @@ impl Instruction {
             0xCA => (Opcode::Dex, AddressingMode::Implied),
             0xEA => (Opcode::Nop, AddressingMode::Implied),
 
-            _ => {
-                return Err(());
+            // Unofficial instructions
+            0x07 => (Opcode::Slo, AddressingMode::ZeroPage),
+            0x17 => (Opcode::Slo, AddressingMode::ZeroPageIndexX),
+            0x0F => (Opcode::Slo, AddressingMode::Absolute),
+            0x1F => (Opcode::Slo, AddressingMode::AbsoluteX),
+            0x1B => (Opcode::Slo, AddressingMode::AbsoluteY),
+            0x03 => (Opcode::Slo, AddressingMode::XIndirect),
+            0x13 => (Opcode::Slo, AddressingMode::IndirectY),
+
+            0x47 => (Opcode::Sre, AddressingMode::ZeroPage),
+            0x57 => (Opcode::Sre, AddressingMode::ZeroPageIndexX),
+            0x4F => (Opcode::Sre, AddressingMode::Absolute),
+            0x5F => (Opcode::Sre, AddressingMode::AbsoluteX),
+            0x5B => (Opcode::Sre, AddressingMode::AbsoluteY),
+            0x43 => (Opcode::Sre, AddressingMode::XIndirect),
+            0x53 => (Opcode::Sre, AddressingMode::IndirectY),
+
+            0x27 => (Opcode::Rla, AddressingMode::ZeroPage),
+            0x37 => (Opcode::Rla, AddressingMode::ZeroPageIndexX),
+            0x2F => (Opcode::Rla, AddressingMode::Absolute),
+            0x3F => (Opcode::Rla, AddressingMode::AbsoluteX),
+            0x3B => (Opcode::Rla, AddressingMode::AbsoluteY),
+            0x23 => (Opcode::Rla, AddressingMode::XIndirect),
+            0x33 => (Opcode::Rla, AddressingMode::IndirectY),
+
+            0x67 => (Opcode::Rra, AddressingMode::ZeroPage),
+            0x77 => (Opcode::Rra, AddressingMode::ZeroPageIndexX),
+            0x6F => (Opcode::Rra, AddressingMode::Absolute),
+            0x7F => (Opcode::Rra, AddressingMode::AbsoluteX),
+            0x7B => (Opcode::Rra, AddressingMode::AbsoluteY),
+            0x63 => (Opcode::Rra, AddressingMode::XIndirect),
+            0x73 => (Opcode::Rra, AddressingMode::IndirectY),
+
+            0xE7 => (Opcode::Isc, AddressingMode::ZeroPage),
+            0xF7 => (Opcode::Isc, AddressingMode::ZeroPageIndexX),
+            0xEF => (Opcode::Isc, AddressingMode::Absolute),
+            0xFF => (Opcode::Isc, AddressingMode::AbsoluteX),
+            0xFB => (Opcode::Isc, AddressingMode::AbsoluteY),
+            0xE3 => (Opcode::Isc, AddressingMode::XIndirect),
+            0xF3 => (Opcode::Isc, AddressingMode::IndirectY),
+
+            0xC7 => (Opcode::Dcp, AddressingMode::ZeroPage),
+            0xD7 => (Opcode::Dcp, AddressingMode::ZeroPageIndexX),
+            0xCF => (Opcode::Dcp, AddressingMode::Absolute),
+            0xDF => (Opcode::Dcp, AddressingMode::AbsoluteX),
+            0xDB => (Opcode::Dcp, AddressingMode::AbsoluteY),
+            0xC3 => (Opcode::Dcp, AddressingMode::XIndirect),
+            0xD3 => (Opcode::Dcp, AddressingMode::IndirectY),
+
+            0x87 => (Opcode::Sax, AddressingMode::ZeroPage),
+            0x97 => (Opcode::Sax, AddressingMode::ZeroPageIndexY),
+            0x8F => (Opcode::Sax, AddressingMode::Absolute),
+            0x83 => (Opcode::Sax, AddressingMode::XIndirect),
+
+            0xA7 => (Opcode::Lax, AddressingMode::ZeroPage),
+            0xB7 => (Opcode::Lax, AddressingMode::ZeroPageIndexY),
+            0xAF => (Opcode::Lax, AddressingMode::Absolute),
+            0xAB => (Opcode::Lax, AddressingMode::Immediate),
+            0xBF => (Opcode::Lax, AddressingMode::AbsoluteY),
+            0xA3 => (Opcode::Lax, AddressingMode::XIndirect),
+            0xB3 => (Opcode::Lax, AddressingMode::IndirectY),
+
+            0x0B => (Opcode::Anc, AddressingMode::Immediate),
+            0x2B => (Opcode::Anc, AddressingMode::Immediate),
+
+            0x4B => (Opcode::Alr, AddressingMode::Immediate),
+
+            0x6B => (Opcode::Arr, AddressingMode::Immediate),
+
+            0xCB => (Opcode::Axs, AddressingMode::Immediate),
+
+            0x8B => (Opcode::Xaa, AddressingMode::Immediate),
+
+            0x93 => (Opcode::Ahx, AddressingMode::IndirectY),
+            0x9F => (Opcode::Ahx, AddressingMode::AbsoluteY),
+
+            0x9C => (Opcode::Shy, AddressingMode::AbsoluteX),
+
+            0x9E => (Opcode::Shx, AddressingMode::AbsoluteY),
+
+            0x9B => (Opcode::Tas, AddressingMode::AbsoluteY),
+
+            0xBB => (Opcode::Las, AddressingMode::AbsoluteY),
+
+            // duplicate
+            0xEB => (Opcode::Sbc, AddressingMode::Immediate),
+
+            // Nops
+            0x04 | 0x44 | 0x64 => (Opcode::Nop, AddressingMode::ZeroPage),
+            0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => {
+                (Opcode::Nop, AddressingMode::ZeroPageIndexX)
+            }
+            0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => (Opcode::Nop, AddressingMode::Implied),
+            0x80 | 0x82 | 0x89 | 0xC2 | 0xE2 => (Opcode::Nop, AddressingMode::Immediate),
+            0x0C => (Opcode::Nop, AddressingMode::Absolute),
+            0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => (Opcode::Nop, AddressingMode::AbsoluteX),
+
+            0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 | 0x72 | 0x92 | 0xB2 | 0xD2 | 0xF2 => {
+                (Opcode::Kil, AddressingMode::Implied)
             }
         };
 
@@ -400,6 +522,31 @@ impl Display for Opcode {
             Sty => "STY",
             Tsx => "TSX",
             Txs => "TXS",
+
+            // Unofficial instructions
+            Slo => "SLO",
+            Sre => "SRE",
+            Rla => "RLA",
+            Rra => "RRA",
+            Isc => "ISC",
+            Dcp => "DCP",
+            Sax => "SAX",
+            Lax => "LAX",
+
+            Anc => "ANC",
+            Alr => "ALR",
+            Arr => "ARR",
+            Axs => "AXS",
+            Xaa => "XAA",
+
+            Ahx => "AHX",
+            Shy => "SHY",
+            Shx => "SHX",
+
+            Tas => "TAS",
+            Las => "LAS",
+
+            Kil => "KIL",
         };
 
         write!(f, "{}", result)
