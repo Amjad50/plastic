@@ -130,6 +130,12 @@ impl AddressingMode {
             || self == &AddressingMode::Implied
             || self == &AddressingMode::Immediate)
     }
+
+    pub fn can_cross_page(&self) -> bool {
+        self == &AddressingMode::IndirectY
+            || self == &AddressingMode::AbsoluteX
+            || self == &AddressingMode::AbsoluteY
+    }
 }
 
 impl Instruction {

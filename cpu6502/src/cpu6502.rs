@@ -111,21 +111,24 @@ where
         self.bus.borrow_mut().write(address, data, Device::CPU);
     }
 
-    fn decode_operand(&self, instruction: &Instruction) -> (u16, u8) {
+    fn decode_operand(&self, instruction: &Instruction) -> (u16, u8, bool) {
         if instruction.is_operand_address() {
             match instruction.addressing_mode {
                 AddressingMode::ZeroPage => (
                     instruction.operand & 0xff,
                     instruction.get_base_cycle_time(),
+                    false,
                 ),
                 AddressingMode::ZeroPageIndexX => (
                     (instruction.operand + self.reg_x as u16) & 0xff,
                     instruction.get_base_cycle_time(),
+                    false,
                 ),
 
                 AddressingMode::ZeroPageIndexY => (
                     (instruction.operand + self.reg_y as u16) & 0xff,
                     instruction.get_base_cycle_time(),
+                    false,
                 ),
 
                 AddressingMode::Indirect => {
@@ -138,14 +141,14 @@ where
                         instruction.operand + 1
                     }) as u16;
 
-                    (high << 8 | low, instruction.get_base_cycle_time())
+                    (high << 8 | low, instruction.get_base_cycle_time(), false)
                 }
                 AddressingMode::XIndirect => {
                     let location_indirect =
                         instruction.operand.wrapping_add(self.reg_x as u16) & 0xff;
                     let low = self.read_bus(location_indirect) as u16;
                     let high = self.read_bus((location_indirect + 1) & 0xFF) as u16;
-                    (high << 8 | low, instruction.get_base_cycle_time())
+                    (high << 8 | low, instruction.get_base_cycle_time(), false)
                 }
                 AddressingMode::IndirectY => {
                     let location_indirect = instruction.operand & 0xff;
@@ -161,11 +164,17 @@ where
                         1
                     };
 
-                    (result, instruction.get_base_cycle_time() + page_cross)
+                    (
+                        result,
+                        instruction.get_base_cycle_time() + page_cross,
+                        page_cross == 1,
+                    )
                 }
-                AddressingMode::Absolute => {
-                    (instruction.operand, instruction.get_base_cycle_time())
-                }
+                AddressingMode::Absolute => (
+                    instruction.operand,
+                    instruction.get_base_cycle_time(),
+                    false,
+                ),
                 AddressingMode::AbsoluteX => {
                     let result = instruction.operand + self.reg_x as u16;
                     let page_cross = if is_on_same_page(instruction.operand, result) {
@@ -174,7 +183,11 @@ where
                         1
                     };
 
-                    (result, instruction.get_base_cycle_time() + page_cross)
+                    (
+                        result,
+                        instruction.get_base_cycle_time() + page_cross,
+                        page_cross == 1,
+                    )
                 }
                 AddressingMode::AbsoluteY => {
                     let result = instruction.operand + self.reg_y as u16;
@@ -184,7 +197,11 @@ where
                         1
                     };
 
-                    (result, instruction.get_base_cycle_time() + page_cross)
+                    (
+                        result,
+                        instruction.get_base_cycle_time() + page_cross,
+                        page_cross == 1,
+                    )
                 }
                 AddressingMode::Relative => {
                     let sign_extended_operand = instruction.operand
@@ -196,6 +213,7 @@ where
                     (
                         self.reg_pc.wrapping_add(sign_extended_operand),
                         instruction.get_base_cycle_time(),
+                        false,
                     )
                 }
                 AddressingMode::Immediate
@@ -205,7 +223,11 @@ where
                 }
             }
         } else {
-            (instruction.operand, instruction.get_base_cycle_time())
+            (
+                instruction.operand,
+                instruction.get_base_cycle_time(),
+                false,
+            )
         }
     }
 
@@ -445,7 +467,7 @@ where
     }
 
     fn run_instruction(&mut self, instruction: &Instruction) -> CPURunState {
-        let (decoded_operand, cycle_time) = self.decode_operand(instruction);
+        let (decoded_operand, cycle_time, did_page_cross) = self.decode_operand(instruction);
         let mut cycle_time = cycle_time;
 
         let is_operand_address = instruction.is_operand_address();
@@ -963,13 +985,9 @@ where
 
                 // STA has a special timing, these addressing modes add one cycle
                 // in case of page cross, but if its STA, it will always add 1
-                // since in this stage I don't know if there is page cross or not
-                // I put the cycles hardcoded
-                cycle_time = match instruction.addressing_mode {
-                    AddressingMode::IndirectY => 6,
-                    AddressingMode::AbsoluteX | AddressingMode::AbsoluteY => 5,
-                    _ => cycle_time,
-                };
+                if instruction.addressing_mode.can_cross_page() && !did_page_cross {
+                    cycle_time += 1;
+                }
 
                 self.write_bus(decoded_operand, self.reg_a);
             }
@@ -996,6 +1014,7 @@ where
 
             // Unofficial instructions
             Opcode::Slo => {
+                let old_cycles_to_wait = self.cycles_to_wait;
                 self.run_instruction(&Instruction {
                     opcode_byte: 0,
                     operand: instruction.operand,
@@ -1008,8 +1027,15 @@ where
                     opcode: Opcode::Ora,
                     addressing_mode: instruction.addressing_mode,
                 });
+                self.cycles_to_wait = old_cycles_to_wait;
+
+                // its as if the page crossed, even if it did not
+                let page_cross_increment =
+                    (instruction.addressing_mode.can_cross_page() && !did_page_cross) as u8;
+                cycle_time += 2 + page_cross_increment;
             }
             Opcode::Sre => {
+                let old_cycles_to_wait = self.cycles_to_wait;
                 self.run_instruction(&Instruction {
                     opcode_byte: 0,
                     operand: instruction.operand,
@@ -1022,8 +1048,15 @@ where
                     opcode: Opcode::Eor,
                     addressing_mode: instruction.addressing_mode,
                 });
+                self.cycles_to_wait = old_cycles_to_wait;
+
+                // its as if the page crossed, even if it did not
+                let page_cross_increment =
+                    (instruction.addressing_mode.can_cross_page() && !did_page_cross) as u8;
+                cycle_time += 2 + page_cross_increment;
             }
             Opcode::Rla => {
+                let old_cycles_to_wait = self.cycles_to_wait;
                 self.run_instruction(&Instruction {
                     opcode_byte: 0,
                     operand: instruction.operand,
@@ -1036,8 +1069,15 @@ where
                     opcode: Opcode::And,
                     addressing_mode: instruction.addressing_mode,
                 });
+                self.cycles_to_wait = old_cycles_to_wait;
+
+                // its as if the page crossed, even if it did not
+                let page_cross_increment =
+                    (instruction.addressing_mode.can_cross_page() && !did_page_cross) as u8;
+                cycle_time += 2 + page_cross_increment;
             }
             Opcode::Rra => {
+                let old_cycles_to_wait = self.cycles_to_wait;
                 self.run_instruction(&Instruction {
                     opcode_byte: 0,
                     operand: instruction.operand,
@@ -1050,8 +1090,15 @@ where
                     opcode: Opcode::Adc,
                     addressing_mode: instruction.addressing_mode,
                 });
+                self.cycles_to_wait = old_cycles_to_wait;
+
+                // its as if the page crossed, even if it did not
+                let page_cross_increment =
+                    (instruction.addressing_mode.can_cross_page() && !did_page_cross) as u8;
+                cycle_time += 2 + page_cross_increment;
             }
             Opcode::Isc => {
+                let old_cycles_to_wait = self.cycles_to_wait;
                 self.run_instruction(&Instruction {
                     opcode_byte: 0,
                     operand: instruction.operand,
@@ -1064,8 +1111,15 @@ where
                     opcode: Opcode::Sbc,
                     addressing_mode: instruction.addressing_mode,
                 });
+                self.cycles_to_wait = old_cycles_to_wait;
+
+                // its as if the page crossed, even if it did not
+                let page_cross_increment =
+                    (instruction.addressing_mode.can_cross_page() && !did_page_cross) as u8;
+                cycle_time += 2 + page_cross_increment;
             }
             Opcode::Dcp => {
+                let old_cycles_to_wait = self.cycles_to_wait;
                 self.run_instruction(&Instruction {
                     opcode_byte: 0,
                     operand: instruction.operand,
@@ -1078,12 +1132,19 @@ where
                     opcode: Opcode::Cmp,
                     addressing_mode: instruction.addressing_mode,
                 });
+                self.cycles_to_wait = old_cycles_to_wait;
+
+                // its as if the page crossed, even if it did not
+                let page_cross_increment =
+                    (instruction.addressing_mode.can_cross_page() && !did_page_cross) as u8;
+                cycle_time += 2 + page_cross_increment;
             }
             Opcode::Sax => {
                 assert!(is_operand_address);
                 self.write_bus(decoded_operand, self.reg_x & self.reg_a);
             }
             Opcode::Lax => {
+                let old_cycles_to_wait = self.cycles_to_wait;
                 self.run_instruction(&Instruction {
                     opcode_byte: 0,
                     operand: instruction.operand,
@@ -1096,16 +1157,20 @@ where
                     opcode: Opcode::Ldx,
                     addressing_mode: instruction.addressing_mode,
                 });
+                self.cycles_to_wait = old_cycles_to_wait;
             }
             Opcode::Anc => {
                 assert!(instruction.addressing_mode == AddressingMode::Immediate);
 
+                let old_cycles_to_wait = self.cycles_to_wait;
                 self.run_instruction(&Instruction {
                     opcode_byte: 0,
                     operand: instruction.operand,
                     opcode: Opcode::And,
                     addressing_mode: instruction.addressing_mode,
                 });
+                self.cycles_to_wait = old_cycles_to_wait;
+
                 self.set_flag_status(
                     StatusFlag::Carry,
                     self.reg_status & StatusFlag::Negative as u8 != 0,
@@ -1114,6 +1179,7 @@ where
             Opcode::Alr => {
                 assert!(instruction.addressing_mode == AddressingMode::Immediate);
 
+                let old_cycles_to_wait = self.cycles_to_wait;
                 self.run_instruction(&Instruction {
                     opcode_byte: 0,
                     operand: instruction.operand,
@@ -1126,10 +1192,12 @@ where
                     opcode: Opcode::Lsr,
                     addressing_mode: AddressingMode::Accumulator,
                 });
+                self.cycles_to_wait = old_cycles_to_wait;
             }
             Opcode::Arr => {
                 assert!(instruction.addressing_mode == AddressingMode::Immediate);
 
+                let old_cycles_to_wait = self.cycles_to_wait;
                 self.run_instruction(&Instruction {
                     opcode_byte: 0,
                     operand: instruction.operand,
@@ -1142,6 +1210,7 @@ where
                     opcode: Opcode::Ror,
                     addressing_mode: AddressingMode::Accumulator,
                 });
+                self.cycles_to_wait = old_cycles_to_wait;
 
                 self.set_flag_status(StatusFlag::Carry, (self.reg_a >> 6) & 1 != 0);
                 self.set_flag_status(
@@ -1162,6 +1231,7 @@ where
             Opcode::Xaa => {
                 assert!(instruction.addressing_mode == AddressingMode::Immediate);
 
+                let old_cycles_to_wait = self.cycles_to_wait;
                 self.run_instruction(&Instruction {
                     opcode_byte: 0,
                     operand: 0, // unused
@@ -1174,6 +1244,7 @@ where
                     opcode: Opcode::And,
                     addressing_mode: instruction.addressing_mode,
                 });
+                self.cycles_to_wait = old_cycles_to_wait;
             }
             Opcode::Ahx => {
                 assert!(is_operand_address);
@@ -1181,6 +1252,8 @@ where
                 let high_byte = (decoded_operand >> 8) as u8;
 
                 self.write_bus(decoded_operand, self.reg_a & self.reg_x & high_byte);
+
+                cycle_time += !did_page_cross as u8;
             }
             Opcode::Shy => {
                 assert!(is_operand_address);
@@ -1191,6 +1264,8 @@ where
                 let value = self.reg_y & (high_byte + 1);
 
                 self.write_bus((value as u16) << 8 | low_byte, value);
+
+                cycle_time += !did_page_cross as u8;
             }
             Opcode::Shx => {
                 assert!(is_operand_address);
@@ -1201,6 +1276,8 @@ where
                 let value = self.reg_x & (high_byte + 1);
 
                 self.write_bus((value as u16) << 8 | low_byte, value);
+
+                cycle_time += !did_page_cross as u8;
             }
             Opcode::Tas => {
                 assert!(is_operand_address);
@@ -1210,6 +1287,8 @@ where
                 self.reg_sp = self.reg_x & self.reg_a;
 
                 self.write_bus(decoded_operand, self.reg_sp & high_byte);
+
+                cycle_time += !did_page_cross as u8;
             }
             Opcode::Las => {
                 assert!(is_operand_address);
