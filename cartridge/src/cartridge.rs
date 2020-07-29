@@ -17,6 +17,7 @@ pub struct Cartridge {
     // header
     _size_prg: u8,
     _size_chr: u8,
+    _is_chr_ram: bool,
     _mapper_id: u8,
     mirroring_vertical: bool,
     contain_sram: bool,
@@ -49,7 +50,8 @@ impl Cartridge {
                 Cartridge::check_magic(&header[0..4])?;
 
                 let size_prg = header[4];
-                let size_chr = header[5];
+                let is_chr_ram = header[5] == 0;
+                let size_chr = if is_chr_ram { 1 } else { header[5] };
 
                 let mirroring_vertical = header[6] & 1 != 0;
                 header[6] >>= 1;
@@ -89,7 +91,7 @@ impl Cartridge {
 
                 // initialize the mapper first, so that if it is not supported yet,
                 // panic
-                let mapper = Self::get_mapper(mapper_id, size_prg, size_chr, sram_size);
+                let mapper = Self::get_mapper(mapper_id, size_prg, size_chr, is_chr_ram, sram_size);
 
                 let mut trainer_data = Vec::new();
 
@@ -104,13 +106,9 @@ impl Cartridge {
                 file.read_exact(&mut prg_data)?;
 
                 // read CHR data
-                let mut chr_data = Vec::new();
-                if size_chr != 0 {
-                    chr_data.resize((size_chr as usize) * 8 * 1024, 0);
+                let mut chr_data = vec![0; (size_chr as usize) * 8 * 1024];
+                if !is_chr_ram {
                     file.read_exact(&mut chr_data)?;
-                } else {
-                    // use CHR RAM
-                    chr_data.resize(1 * 8 * 1024, 0);
                 }
 
                 if is_nes_2 {
@@ -132,6 +130,7 @@ impl Cartridge {
                         file_path: file_path.as_ref().to_path_buf().into_boxed_path(),
                         _size_prg: size_prg,
                         _size_chr: size_chr,
+                        _is_chr_ram: is_chr_ram,
                         _mapper_id: mapper_id,
                         mirroring_vertical,
                         contain_sram,
@@ -170,7 +169,13 @@ impl Cartridge {
         }
     }
 
-    fn get_mapper(mapper_id: u8, prg_count: u8, chr_count: u8, sram_size: u8) -> Box<dyn Mapper> {
+    fn get_mapper(
+        mapper_id: u8,
+        prg_count: u8,
+        chr_count: u8,
+        is_chr_ram: bool,
+        sram_size: u8,
+    ) -> Box<dyn Mapper> {
         let mut mapper: Box<dyn Mapper> = match mapper_id {
             0 => Box::new(Mapper0::new()),
             1 => Box::new(Mapper1::new()),
@@ -184,7 +189,7 @@ impl Cartridge {
 
         // should always call init in a new mapper, as it is the only way
         // they share a constructor
-        mapper.init(prg_count, chr_count == 0, chr_count, sram_size);
+        mapper.init(prg_count, is_chr_ram, chr_count, sram_size);
 
         mapper
     }
