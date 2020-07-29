@@ -144,13 +144,13 @@ where
                     let location_indirect =
                         instruction.operand.wrapping_add(self.reg_x as u16) & 0xff;
                     let low = self.read_bus(location_indirect) as u16;
-                    let high = self.read_bus(location_indirect + 1) as u16;
+                    let high = self.read_bus((location_indirect + 1) & 0xFF) as u16;
                     (high << 8 | low, instruction.get_base_cycle_time())
                 }
                 AddressingMode::IndirectY => {
                     let location_indirect = instruction.operand & 0xff;
                     let low = self.read_bus(location_indirect) as u16;
-                    let high = self.read_bus(location_indirect + 1) as u16;
+                    let high = self.read_bus((location_indirect + 1) & 0xFF) as u16;
 
                     let unindxed_address = high << 8 | low;
                     let result = unindxed_address + self.reg_y as u16;
