@@ -497,7 +497,6 @@ where
                 if is_operand_address {
                     // save back
                     self.write_bus(decoded_operand, operand);
-                    cycle_time += 2;
 
                     if instruction.addressing_mode == AddressingMode::AbsoluteX {
                         cycle_time = 7; // special case
@@ -668,6 +667,9 @@ where
                 // increment the PC for saving
                 self.reg_pc += 1;
                 self.execute_interrupt(true, self.nmi_pin_status);
+                // execute_interrupt will add 7 and this instruction is implied so 2
+                // but this instruction only takes 7 not 9, so minus 2
+                self.cycles_to_wait -= 2;
             }
             Opcode::Bcc => {
                 let (time, run_state) = self.run_branch_condition(
@@ -954,6 +956,17 @@ where
             }
             Opcode::Sta => {
                 assert!(is_operand_address);
+
+                // STA has a special timing, these addressing modes add one cycle
+                // in case of page cross, but if its STA, it will always add 1
+                // since in this stage I don't know if there is page cross or not
+                // I put the cycles hardcoded
+                cycle_time = match instruction.addressing_mode {
+                    AddressingMode::IndirectY => 6,
+                    AddressingMode::AbsoluteX | AddressingMode::AbsoluteY => 5,
+                    _ => cycle_time,
+                };
+
                 self.write_bus(decoded_operand, self.reg_a);
             }
             Opcode::Stx => {
@@ -979,7 +992,7 @@ where
         };
 
         // minus this cycle
-        self.cycles_to_wait = cycle_time - 1;
+        self.cycles_to_wait += cycle_time - 1;
 
         state
     }

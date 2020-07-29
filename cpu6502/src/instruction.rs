@@ -283,28 +283,10 @@ impl Instruction {
             AddressingMode::ZeroPageIndexY => 4,
             AddressingMode::Indirect => 5,
             AddressingMode::XIndirect => 6,
-            AddressingMode::IndirectY => {
-                if self.opcode == Opcode::Sta {
-                    6
-                } else {
-                    5 // might be 6 in case of page cross
-                }
-            }
-            AddressingMode::Absolute => 4, // 3 for JMP, 6 for memory change and JSR
-            AddressingMode::AbsoluteX => {
-                if self.opcode == Opcode::Sta {
-                    5
-                } else {
-                    4 // might be 5 in case of page cross and 7 in case of memory change
-                }
-            }
-            AddressingMode::AbsoluteY => {
-                if self.opcode == Opcode::Sta {
-                    5
-                } else {
-                    4 // might be 5 in case of page cross
-                }
-            }
+            AddressingMode::IndirectY => 5, // might be 6 in case of page cross and STA
+            AddressingMode::Absolute => 4,  // 3 for JMP, 6 for memory change and JSR
+            AddressingMode::AbsoluteX => 4, // might be 5 in case of page cross and STA, and 7 in case of memory change
+            AddressingMode::AbsoluteY => 4, // might be 5 in case of page cross and STA
             AddressingMode::Accumulator => 2,
             AddressingMode::Relative => 2,
             AddressingMode::Implied => 2, // should be overridden by instructions execution
