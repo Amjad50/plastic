@@ -10,8 +10,8 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use sfml::{
-    graphics::{Color, Image, RenderTarget, RenderWindow, Sprite, Texture, View},
-    system::Vector2f,
+    graphics::{Color, FloatRect, Image, RenderTarget, RenderWindow, Sprite, Texture, View},
+    system::{SfBox, Vector2f},
     window::{joystick::Axis, Event, Key, Style},
 };
 
@@ -20,8 +20,7 @@ use sfml::{
 const TV_WIDTH: u32 = 256;
 const TV_HEIGHT: u32 = 240;
 
-const SCREEN_WIDTH: u32 = TV_WIDTH * 3;
-const SCREEN_HEIGHT: u32 = TV_HEIGHT * 3;
+const SCREEN_SIZE_INCREASE: u32 = 3;
 
 struct PPUBus {
     cartridge: Rc<RefCell<Cartridge>>,
@@ -166,6 +165,36 @@ impl NES {
         })
     }
 
+    /// calculate a new view based on the window size
+    fn get_view(
+        window_width: u32,
+        window_height: u32,
+        target_width: u32,
+        target_height: u32,
+    ) -> SfBox<View> {
+        let mut viewport = FloatRect::new(0., 0., 1., 1.);
+
+        let screen_width = window_width as f32 / target_width as f32;
+        let screen_height = window_height as f32 / target_height as f32;
+
+        if screen_width > screen_height {
+            viewport.width = screen_height / screen_width;
+            viewport.left = (1. - viewport.width) / 2.;
+        } else if screen_height > screen_width {
+            viewport.height = screen_width / screen_height;
+            viewport.top = (1. - viewport.height) / 2.;
+        }
+
+        let mut view = View::new(
+            Vector2f::new((TV_WIDTH / 2) as f32, (TV_HEIGHT / 2) as f32),
+            Vector2f::new((TV_WIDTH) as f32, (TV_HEIGHT) as f32),
+        );
+
+        view.set_viewport(&viewport);
+
+        view
+    }
+
     pub fn run(&mut self) {
         self.cpu.reset();
         // Run the sound thread
@@ -175,9 +204,12 @@ impl NES {
         let ctrl_state = self.ctrl_state.clone();
 
         let mut window = RenderWindow::new(
-            (SCREEN_WIDTH, SCREEN_HEIGHT),
+            (
+                TV_WIDTH * SCREEN_SIZE_INCREASE,
+                TV_HEIGHT * SCREEN_SIZE_INCREASE,
+            ),
             "NES test",
-            Style::CLOSE,
+            Style::CLOSE | Style::RESIZE,
             &Default::default(),
         );
         window.set_vertical_sync_enabled(true);
@@ -187,11 +219,12 @@ impl NES {
         // this view is in the size of the NES TV
         // but we can scale the window and all the pixels will be scaled
         // accordingly
-        let view = View::new(
-            Vector2f::new((TV_WIDTH / 2) as f32, (TV_HEIGHT / 2) as f32),
-            Vector2f::new((TV_WIDTH) as f32, (TV_HEIGHT) as f32),
-        );
-        window.set_view(&view);
+        window.set_view(&Self::get_view(
+            window.size().x,
+            window.size().y,
+            TV_WIDTH,
+            TV_HEIGHT,
+        ));
 
         let mut texture = Texture::new(TV_WIDTH, TV_HEIGHT).expect("texture");
 
@@ -200,6 +233,9 @@ impl NES {
                 while let Some(event) = window.poll_event() {
                     match event {
                         Event::Closed => break 'main,
+                        Event::Resized { width, height } => {
+                            window.set_view(&Self::get_view(width, height, TV_WIDTH, TV_HEIGHT));
+                        }
                         Event::KeyPressed { code: key, .. } => match key {
                             Key::J => ctrl.press(StandardNESKey::B),
                             Key::K => ctrl.press(StandardNESKey::A),
