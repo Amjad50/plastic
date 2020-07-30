@@ -7,8 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-common = { path = "../common" }
-display = { path = "../display" }
+apu2a03 = { path = "../apu2a03" }
 cartridge = { path = "../cartridge" }
+common = { path = "../common" }
 cpu6502 = { path = "../cpu6502" }
+display = { path = "../display" }
 ppu2c02 = { path = "../ppu2c02" }

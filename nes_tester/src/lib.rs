@@ -1,3 +1,4 @@
+use apu2a03::APU2A03;
 use cartridge::{Cartridge, CartridgeError};
 use common::{Bus, Device};
 use cpu6502::{CPURunState, CPU6502};
@@ -59,14 +60,20 @@ struct CPUBus {
     cartridge: Rc<RefCell<Cartridge>>,
     ram: [u8; 0x800],
     ppu: Rc<RefCell<dyn Bus>>,
+    apu: Rc<RefCell<APU2A03>>,
 }
 
 impl CPUBus {
-    pub fn new(cartridge: Rc<RefCell<Cartridge>>, ppu: Rc<RefCell<dyn Bus>>) -> Self {
+    pub fn new(
+        cartridge: Rc<RefCell<Cartridge>>,
+        ppu: Rc<RefCell<dyn Bus>>,
+        apu: Rc<RefCell<APU2A03>>,
+    ) -> Self {
         CPUBus {
             cartridge,
             ram: [0; 0x800],
             ppu,
+            apu,
         }
     }
 }
@@ -107,7 +114,10 @@ impl Bus for CPUBus {
         match address {
             0x0000..=0x1FFF => self.ram[(address & 0x7FF) as usize],
             0x2000..=0x3FFF => self.ppu.borrow().read(0x2000 | (address & 0x7), device),
+            0x4000..=0x4013 => self.apu.borrow().read(address, device),
             0x4014 => self.ppu.borrow().read(address, device),
+            0x4015 => self.apu.borrow().read(address, device),
+            0x4017 => self.apu.borrow().read(address, device),
             0x6000..=0xFFFF => self.cartridge.borrow().read(address, device),
             _ => {
                 // ignored
@@ -122,7 +132,10 @@ impl Bus for CPUBus {
                 .ppu
                 .borrow_mut()
                 .write(0x2000 | (address & 0x7), data, device),
+            0x4000..=0x4013 => self.apu.borrow_mut().write(address, data, device),
             0x4014 => self.ppu.borrow_mut().write(address, data, device),
+            0x4015 => self.apu.borrow_mut().write(address, data, device),
+            0x4017 => self.apu.borrow_mut().write(address, data, device),
             0x6000..=0xFFFF => self
                 .cartridge
                 .borrow_mut()
@@ -139,6 +152,9 @@ pub struct NES {
     ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
     cpubus: Rc<RefCell<CPUBus>>,
     tv_image: Arc<Mutex<Vec<u8>>>,
+    apu: Rc<RefCell<APU2A03>>,
+
+    is_apu_clock: bool,
 }
 
 impl NES {
@@ -152,7 +168,13 @@ impl NES {
 
         let ppu = Rc::new(RefCell::new(PPU2C02::new(ppubus, tv)));
 
-        let cpubus = Rc::new(RefCell::new(CPUBus::new(cartridge.clone(), ppu.clone())));
+        let apu = Rc::new(RefCell::new(APU2A03::new()));
+
+        let cpubus = Rc::new(RefCell::new(CPUBus::new(
+            cartridge.clone(),
+            ppu.clone(),
+            apu.clone(),
+        )));
 
         let cpu = CPU6502::new(cpubus.clone(), ppu.clone(), cartridge.clone());
 
@@ -161,6 +183,9 @@ impl NES {
             ppu: ppu.clone(),
             cpubus: cpubus.clone(),
             tv_image,
+            apu,
+
+            is_apu_clock: false,
         })
     }
 
@@ -180,6 +205,11 @@ impl NES {
             ppu.clock();
             ppu.clock();
         }
+
+        if self.is_apu_clock {
+            self.apu.borrow_mut().clock();
+        }
+        self.is_apu_clock = !self.is_apu_clock;
 
         self.cpu.run_next()
     }
