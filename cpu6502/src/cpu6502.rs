@@ -36,8 +36,8 @@ enum StatusFlag {
 
 // TODO: this CPU does not support BCD mode yet
 pub struct CPU6502<T: Bus> {
-    pub reg_pc: u16, // FIXME: find better way to modify the PC for tests
-    reg_sp: u8,      // stack is in 0x0100 - 0x01FF only
+    reg_pc: u16,
+    reg_sp: u8,
     reg_a: u8,
     reg_x: u8,
     reg_y: u8,
