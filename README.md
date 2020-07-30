@@ -8,7 +8,7 @@
 This is a personal project for fun and to experience emulating hardware and connecting them together.
 
 ### Components
-- [x] 6502 CPU, all official instructions with accurate timing (without BCD mode).
+- [x] 6502 CPU, all official and unofficial instructions with accurate timing (without BCD mode).
 - [x] Picture Processing Unit, almost accurate with some small timing issues that would not effect most games.
 - [x] Cartridge and INES file handling (still missing INES2.0)
 - [x] Mappers:
