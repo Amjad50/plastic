@@ -3,6 +3,7 @@ mod mapper1;
 mod mapper2;
 mod mapper3;
 mod mapper4;
+mod mapper9;
 
 mod tests;
 
@@ -11,3 +12,4 @@ pub use mapper1::Mapper1;
 pub use mapper2::Mapper2;
 pub use mapper3::Mapper3;
 pub use mapper4::Mapper4;
+pub use mapper9::Mapper9;

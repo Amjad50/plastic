@@ -17,6 +17,7 @@ This is a personal project for fun and to experience emulating hardware and conn
   - [x] Mapper 2
   - [x] Mapper 3
   - [x] Mapper 4
+  - [x] Mapper 9
 - [ ] Audio Processing Unit:
   - [x] 2 Pulse wave(square)
   - [x] Triangle
