@@ -203,120 +203,144 @@ impl NES {
         let image = self.image.clone();
         let ctrl_state = self.ctrl_state.clone();
 
-        let mut window = RenderWindow::new(
-            (
-                TV_WIDTH * SCREEN_SIZE_INCREASE,
-                TV_HEIGHT * SCREEN_SIZE_INCREASE,
-            ),
-            "NES test",
-            Style::CLOSE | Style::RESIZE,
-            &Default::default(),
-        );
-        window.set_vertical_sync_enabled(true);
-        window.set_framerate_limit(60);
+        let (tx, rx) = std::sync::mpsc::channel::<bool>();
 
-        // to scale the view into the window
-        // this view is in the size of the NES TV
-        // but we can scale the window and all the pixels will be scaled
-        // accordingly
-        window.set_view(&Self::get_view(
-            window.size().x,
-            window.size().y,
-            TV_WIDTH,
-            TV_HEIGHT,
-        ));
+        std::thread::spawn(move || {
+            let mut window = RenderWindow::new(
+                (
+                    TV_WIDTH * SCREEN_SIZE_INCREASE,
+                    TV_HEIGHT * SCREEN_SIZE_INCREASE,
+                ),
+                "NES test",
+                Style::CLOSE | Style::RESIZE,
+                &Default::default(),
+            );
+            window.set_vertical_sync_enabled(true);
+            window.set_framerate_limit(60);
 
-        let mut texture = Texture::new(TV_WIDTH, TV_HEIGHT).expect("texture");
+            // to scale the view into the window
+            // this view is in the size of the NES TV
+            // but we can scale the window and all the pixels will be scaled
+            // accordingly
+            window.set_view(&Self::get_view(
+                window.size().x,
+                window.size().y,
+                TV_WIDTH,
+                TV_HEIGHT,
+            ));
 
-        'main: loop {
-            if let Ok(mut ctrl) = ctrl_state.lock() {
-                while let Some(event) = window.poll_event() {
-                    match event {
-                        Event::Closed => break 'main,
-                        Event::Resized { width, height } => {
-                            window.set_view(&Self::get_view(width, height, TV_WIDTH, TV_HEIGHT));
+            let mut texture = Texture::new(TV_WIDTH, TV_HEIGHT).expect("texture");
+
+            'main: loop {
+                if let Ok(mut ctrl) = ctrl_state.lock() {
+                    while let Some(event) = window.poll_event() {
+                        match event {
+                            Event::Closed => break 'main,
+                            Event::Resized { width, height } => {
+                                window
+                                    .set_view(&Self::get_view(width, height, TV_WIDTH, TV_HEIGHT));
+                            }
+                            Event::KeyPressed { code: key, .. } => match key {
+                                Key::J => ctrl.press(StandardNESKey::B),
+                                Key::K => ctrl.press(StandardNESKey::A),
+                                Key::U => ctrl.press(StandardNESKey::Select),
+                                Key::I => ctrl.press(StandardNESKey::Start),
+                                Key::W => ctrl.press(StandardNESKey::Up),
+                                Key::S => ctrl.press(StandardNESKey::Down),
+                                Key::A => ctrl.press(StandardNESKey::Left),
+                                Key::D => ctrl.press(StandardNESKey::Right),
+                                _ => {}
+                            },
+                            Event::KeyReleased { code: key, .. } => match key {
+                                Key::J => ctrl.release(StandardNESKey::B),
+                                Key::K => ctrl.release(StandardNESKey::A),
+                                Key::U => ctrl.release(StandardNESKey::Select),
+                                Key::I => ctrl.release(StandardNESKey::Start),
+                                Key::W => ctrl.release(StandardNESKey::Up),
+                                Key::S => ctrl.release(StandardNESKey::Down),
+                                Key::A => ctrl.release(StandardNESKey::Left),
+                                Key::D => ctrl.release(StandardNESKey::Right),
+                                _ => {}
+                            },
+                            Event::JoystickButtonPressed {
+                                joystickid: 0,
+                                button,
+                            } => match button {
+                                0 => ctrl.press(StandardNESKey::B),
+                                1 => ctrl.press(StandardNESKey::A),
+                                8 => ctrl.press(StandardNESKey::Select),
+                                9 => ctrl.press(StandardNESKey::Start),
+                                _ => {}
+                            },
+                            Event::JoystickButtonReleased {
+                                joystickid: 0,
+                                button,
+                            } => match button {
+                                0 => ctrl.release(StandardNESKey::B),
+                                1 => ctrl.release(StandardNESKey::A),
+                                8 => ctrl.release(StandardNESKey::Select),
+                                9 => ctrl.release(StandardNESKey::Start),
+                                _ => {}
+                            },
+                            Event::JoystickMoved {
+                                joystickid: 0,
+                                axis,
+                                position,
+                            } => match axis {
+                                Axis::PovY => {
+                                    if position > 0. {
+                                        ctrl.press(StandardNESKey::Down)
+                                    } else if position < 0. {
+                                        ctrl.press(StandardNESKey::Up)
+                                    } else {
+                                        ctrl.release(StandardNESKey::Down);
+                                        ctrl.release(StandardNESKey::Up);
+                                    }
+                                }
+                                Axis::PovX => {
+                                    if position > 0. {
+                                        ctrl.press(StandardNESKey::Right)
+                                    } else if position < 0. {
+                                        ctrl.press(StandardNESKey::Left)
+                                    } else {
+                                        ctrl.release(StandardNESKey::Right);
+                                        ctrl.release(StandardNESKey::Left);
+                                    }
+                                }
+                                _ => {}
+                            },
+                            _ => {}
                         }
-                        Event::KeyPressed { code: key, .. } => match key {
-                            Key::J => ctrl.press(StandardNESKey::B),
-                            Key::K => ctrl.press(StandardNESKey::A),
-                            Key::U => ctrl.press(StandardNESKey::Select),
-                            Key::I => ctrl.press(StandardNESKey::Start),
-                            Key::W => ctrl.press(StandardNESKey::Up),
-                            Key::S => ctrl.press(StandardNESKey::Down),
-                            Key::A => ctrl.press(StandardNESKey::Left),
-                            Key::D => ctrl.press(StandardNESKey::Right),
-                            _ => {}
-                        },
-                        Event::KeyReleased { code: key, .. } => match key {
-                            Key::J => ctrl.release(StandardNESKey::B),
-                            Key::K => ctrl.release(StandardNESKey::A),
-                            Key::U => ctrl.release(StandardNESKey::Select),
-                            Key::I => ctrl.release(StandardNESKey::Start),
-                            Key::W => ctrl.release(StandardNESKey::Up),
-                            Key::S => ctrl.release(StandardNESKey::Down),
-                            Key::A => ctrl.release(StandardNESKey::Left),
-                            Key::D => ctrl.release(StandardNESKey::Right),
-                            _ => {}
-                        },
-                        Event::JoystickButtonPressed {
-                            joystickid: 0,
-                            button,
-                        } => match button {
-                            0 => ctrl.press(StandardNESKey::B),
-                            1 => ctrl.press(StandardNESKey::A),
-                            8 => ctrl.press(StandardNESKey::Select),
-                            9 => ctrl.press(StandardNESKey::Start),
-                            _ => {}
-                        },
-                        Event::JoystickButtonReleased {
-                            joystickid: 0,
-                            button,
-                        } => match button {
-                            0 => ctrl.release(StandardNESKey::B),
-                            1 => ctrl.release(StandardNESKey::A),
-                            8 => ctrl.release(StandardNESKey::Select),
-                            9 => ctrl.release(StandardNESKey::Start),
-                            _ => {}
-                        },
-                        Event::JoystickMoved {
-                            joystickid: 0,
-                            axis,
-                            position,
-                        } => match axis {
-                            Axis::PovY => {
-                                if position > 0. {
-                                    ctrl.press(StandardNESKey::Down)
-                                } else if position < 0. {
-                                    ctrl.press(StandardNESKey::Up)
-                                } else {
-                                    ctrl.release(StandardNESKey::Down);
-                                    ctrl.release(StandardNESKey::Up);
-                                }
-                            }
-                            Axis::PovX => {
-                                if position > 0. {
-                                    ctrl.press(StandardNESKey::Right)
-                                } else if position < 0. {
-                                    ctrl.press(StandardNESKey::Left)
-                                } else {
-                                    ctrl.release(StandardNESKey::Right);
-                                    ctrl.release(StandardNESKey::Left);
-                                }
-                            }
-                            _ => {}
-                        },
-                        _ => {}
                     }
                 }
+
+                window.clear(Color::BLACK);
+
+                {
+                    let pixels = &image.lock().unwrap();
+
+                    let image =
+                        Image::create_from_pixels(TV_WIDTH, TV_HEIGHT, pixels).expect("image");
+
+                    texture.update_from_image(&image, 0, 0);
+                }
+
+                window.draw(&Sprite::with_texture(&texture));
+
+                window.display();
             }
 
-            // here we run the emulation in the GUI thread because we can
-            // make SFML run `window.display` in 60 FPS, NTSC also run in 60FPS (almost)
-            // so we can regulat the clock speed to match that, we know that 29780.5
-            // cpu cycles happen in every frame
-            const N: usize = 29780;
-            let mut apu_clock = false;
-            // run the emulator loop
+            tx.send(true).unwrap();
+        });
+
+        let mut last = std::time::Instant::now();
+        const CPU_FREQ: f64 = 1.789773 * 1E6;
+        const N: usize = 2000; // number of CPU cycles per loop, lower is smoother
+        const CPU_PER_CYCLE_NANOS: f64 = 1E9 / CPU_FREQ;
+        let mut apu_clock = false;
+
+        // run the emulator loop
+        while let Err(_) = rx.try_recv() {
             for _ in 0..N {
                 self.cpu.run_next();
                 if apu_clock {
@@ -330,17 +354,14 @@ impl NES {
                 ppu.clock();
             }
 
-            window.clear(Color::BLACK);
+            if let Some(d) =
+                std::time::Duration::from_nanos((CPU_PER_CYCLE_NANOS * N as f64) as u64)
+                    .checked_sub(last.elapsed())
+            {
+                std::thread::sleep(d);
+            }
 
-            let pixels = &image.lock().unwrap();
-
-            let image = Image::create_from_pixels(TV_WIDTH, TV_HEIGHT, pixels).expect("image");
-
-            texture.update_from_image(&image, 0, 0);
-
-            window.draw(&Sprite::with_texture(&texture));
-
-            window.display();
+            last = std::time::Instant::now();
         }
     }
 }
