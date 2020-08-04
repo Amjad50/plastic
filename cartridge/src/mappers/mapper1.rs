@@ -109,7 +109,7 @@ impl Mapper for Mapper1 {
         self.is_chr_ram = is_chr_ram;
 
         self.prg_bank = prg_count - 1; // power-up, should be all set?
-        self.control_register = 0b01100; // power-up state
+        self.control_register = 0b11100; // power-up state
 
         self.reset_shift_register();
     }
