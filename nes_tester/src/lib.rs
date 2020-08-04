@@ -163,7 +163,9 @@ impl NES {
 
         let ppubus = PPUBus::new(cartridge.clone());
 
-        let tv = TV::new(TV_WIDTH, TV_HEIGHT);
+        let tv = TV::new(TV_WIDTH, TV_HEIGHT, |color| {
+            [color.r, color.g, color.b, 0xFF]
+        });
         let tv_image = tv.get_image_clone();
 
         let ppu = Rc::new(RefCell::new(PPU2C02::new(ppubus, tv)));

@@ -7,10 +7,12 @@ pub struct TV {
     pixels: Arc<Mutex<Vec<u8>>>,
     width: u32,
     height: u32,
+
+    pixels_handler: fn(&Color) -> [u8; 4],
 }
 
 impl TV {
-    pub fn new(width: u32, height: u32) -> Self {
+    pub fn new(width: u32, height: u32, pixels_handler: fn(&Color) -> [u8; 4]) -> Self {
         let mut vec = Vec::new();
 
         // I'll be using SFML, which has the colors in 4 u8 elements in
@@ -20,6 +22,7 @@ impl TV {
         Self {
             pixels: Arc::new(Mutex::new(vec)),
             width,
+            pixels_handler,
             height,
         }
     }
@@ -37,9 +40,7 @@ impl TV {
 
         let index = (y * self.width + x) as usize * 4;
 
-        pixels[index + 0] = color.r;
-        pixels[index + 1] = color.g;
-        pixels[index + 2] = color.b;
-        pixels[index + 3] = 0xFF; // full opacity
+        let result = (self.pixels_handler)(color);
+        pixels[index..index + 4].copy_from_slice(&result);
     }
 }
