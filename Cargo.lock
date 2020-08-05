@@ -238,16 +238,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3728d817d99e5ac407411fa471ff9800a778d88a24685968b36824eaf4bee400"
 
 [[package]]
-name = "nes_test"
+name = "nes_sfml"
 version = "0.1.0"
 dependencies = [
- "apu2a03",
- "cartridge",
- "common",
- "controller",
- "cpu6502",
- "display",
- "ppu2c02",
+ "nes_ui_base",
  "sfml",
 ]
 
@@ -258,6 +252,19 @@ dependencies = [
  "apu2a03",
  "cartridge",
  "common",
+ "cpu6502",
+ "display",
+ "ppu2c02",
+]
+
+[[package]]
+name = "nes_ui_base"
+version = "0.1.0"
+dependencies = [
+ "apu2a03",
+ "cartridge",
+ "common",
+ "controller",
  "cpu6502",
  "display",
  "ppu2c02",

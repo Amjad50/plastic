@@ -6,7 +6,8 @@ members = [
     "controller",
     "cpu6502",
     "display",
-    "nes_test", # This is for my testing and playing the games, a mess for now
+    "nes_sfml", 
     "nes_tester", # This is for unit testing (headless)
+    "nes_ui_base",
     "ppu2c02",
 ]
