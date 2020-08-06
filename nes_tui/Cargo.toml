@@ -1,0 +1,13 @@
+[package]
+name = "nes_tui"
+version = "0.1.0"
+authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nes_ui_base = { path = "../nes_ui_base" }
+
+tui = "0.10"
+termion = "1.5"

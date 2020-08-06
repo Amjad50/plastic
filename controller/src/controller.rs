@@ -2,6 +2,7 @@ use common::{Bus, Device};
 use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StandardNESKey {
     A = 1 << 0,
     B = 1 << 1,

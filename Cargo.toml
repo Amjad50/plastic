@@ -8,6 +8,7 @@ members = [
     "display",
     "nes_sfml", 
     "nes_gtk",
+    "nes_tui",
     "nes_tester", # This is for unit testing (headless)
     "nes_ui_base",
     "ppu2c02",
