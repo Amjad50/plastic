@@ -14,9 +14,9 @@ use crate::event::{Event as tuiEvent, Events};
 
 use gilrs::{Button, Event, EventType, Gilrs};
 
-use termion::{event::Key, input::MouseTerminal, raw::IntoRawMode, screen::AlternateScreen};
+use crossterm::event::KeyCode;
 use tui::{
-    backend::TermionBackend,
+    backend::CrosstermBackend,
     style::Color,
     symbols::Marker,
     widgets::{
@@ -58,10 +58,8 @@ impl UiProvider for TuiProvider {
         image: Arc<Mutex<Vec<u8>>>,
         ctrl_state: Arc<Mutex<StandardNESControllerState>>,
     ) {
-        let stdout = io::stdout().into_raw_mode().unwrap();
-        let stdout = MouseTerminal::from(stdout);
-        let stdout = AlternateScreen::from(stdout);
-        let backend = TermionBackend::new(stdout);
+        let stdout = io::stdout();
+        let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend).unwrap();
 
         let mut gilrs = Gilrs::new().unwrap();
@@ -104,16 +102,27 @@ impl UiProvider for TuiProvider {
                 while let Ok(event) = keyboard_events.next() {
                     match event {
                         tuiEvent::Input(input) => {
+                            let input = input.code;
                             let possible_button = match input {
-                                Key::Esc => break 'outer,
-                                Key::Char('J') | Key::Char('j') => Some(StandardNESKey::B),
-                                Key::Char('K') | Key::Char('k') => Some(StandardNESKey::A),
-                                Key::Char('U') | Key::Char('u') => Some(StandardNESKey::Select),
-                                Key::Char('I') | Key::Char('i') => Some(StandardNESKey::Start),
-                                Key::Char('W') | Key::Char('w') => Some(StandardNESKey::Up),
-                                Key::Char('S') | Key::Char('s') => Some(StandardNESKey::Down),
-                                Key::Char('A') | Key::Char('a') => Some(StandardNESKey::Left),
-                                Key::Char('D') | Key::Char('d') => Some(StandardNESKey::Right),
+                                KeyCode::Esc => break 'outer,
+                                KeyCode::Char('J') | KeyCode::Char('j') => Some(StandardNESKey::B),
+                                KeyCode::Char('K') | KeyCode::Char('k') => Some(StandardNESKey::A),
+                                KeyCode::Char('U') | KeyCode::Char('u') => {
+                                    Some(StandardNESKey::Select)
+                                }
+                                KeyCode::Char('I') | KeyCode::Char('i') => {
+                                    Some(StandardNESKey::Start)
+                                }
+                                KeyCode::Char('W') | KeyCode::Char('w') => Some(StandardNESKey::Up),
+                                KeyCode::Char('S') | KeyCode::Char('s') => {
+                                    Some(StandardNESKey::Down)
+                                }
+                                KeyCode::Char('A') | KeyCode::Char('a') => {
+                                    Some(StandardNESKey::Left)
+                                }
+                                KeyCode::Char('D') | KeyCode::Char('d') => {
+                                    Some(StandardNESKey::Right)
+                                }
                                 _ => None,
                             };
                             if let Some(button) = possible_button {

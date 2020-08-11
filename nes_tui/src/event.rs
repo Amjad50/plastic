@@ -1,4 +1,3 @@
-use std::io;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc, Arc,
@@ -6,8 +5,10 @@ use std::sync::{
 use std::thread;
 use std::time::Duration;
 
-use termion::event::Key;
-use termion::input::TermRead;
+use crossterm::{
+    event::{poll, read, Event as crosstermEvent, KeyEvent},
+    terminal::{disable_raw_mode, enable_raw_mode},
+};
 
 pub enum Event<I> {
     Input(I),
@@ -16,7 +17,7 @@ pub enum Event<I> {
 /// A small event handler that wrap termion input and tick events. Each event
 /// type is handled in its own thread and returned to a common `Receiver`
 pub struct Events {
-    rx: mpsc::Receiver<Event<Key>>,
+    rx: mpsc::Receiver<Event<KeyEvent>>,
     input_handle: thread::JoinHandle<()>,
     tick_handle: thread::JoinHandle<()>,
     stopped: Arc<AtomicBool>,
@@ -26,19 +27,19 @@ impl Events {
     pub fn new(tick_rate: Duration) -> Events {
         let (tx, rx) = mpsc::channel();
         let stopped = Arc::new(AtomicBool::new(false));
+
+        enable_raw_mode().unwrap();
+
         let input_handle = {
             let tx = tx.clone();
-            thread::spawn(move || {
-                let stdin = io::stdin();
-                for evt in stdin.keys() {
-                    if let Ok(key) = evt {
-                        if let Err(err) = tx.send(Event::Input(key)) {
-                            eprintln!("{}", err);
+            thread::spawn(move || loop {
+                if let Ok(_) = poll(Duration::from_millis(10)) {
+                    if let Ok(crosstermEvent::Key(key)) = read() {
+                        if let Err(_) = tx.send(Event::Input(key)) {
                             return;
                         }
                     }
                 }
-                unreachable!();
             })
         };
         let tick_handle = {
@@ -64,7 +65,13 @@ impl Events {
         self.stopped.store(state, Ordering::Relaxed);
     }
 
-    pub fn next(&self) -> Result<Event<Key>, mpsc::TryRecvError> {
+    pub fn next(&self) -> Result<Event<KeyEvent>, mpsc::TryRecvError> {
         self.rx.try_recv()
+    }
+}
+
+impl Drop for Events {
+    fn drop(&mut self) {
+        disable_raw_mode().unwrap();
     }
 }
