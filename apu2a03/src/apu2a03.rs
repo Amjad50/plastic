@@ -285,8 +285,14 @@ impl APU2A03 {
                     self.request_interrupt_flag_change.set(true);
                 }
 
-                // reset(side effect)
-                self.wait_reset = 2; // after 4 CPU clocks
+                // clock immediately
+                if data & 0x80 != 0 {
+                    self.generate_half_frame_clock();
+                    self.generate_quarter_frame_clock();
+                } else {
+                    // reset(side effect)
+                    self.wait_reset = 2; // after 4 CPU clocks
+                }
             }
         }
     }

@@ -29,7 +29,10 @@ impl LengthCounter {
     pub(crate) fn reload_counter(&mut self, index: u8) {
         assert!(index <= 0x1F);
 
-        self.counter = LEGNTH_COUNTER_TABLE[index as usize];
+        // only reload if enabled
+        if self.enabled {
+            self.counter = LEGNTH_COUNTER_TABLE[index as usize];
+        }
     }
 
     /// decrement if appropriate, it will not decrement when:
