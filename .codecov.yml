@@ -2,6 +2,10 @@ coverage:
   range: 70...100
 ignore:
   - "nes_test"
+  - "nes_ui_base"
+  - "nes_sfml"
+  - "nes_gtk"
+  - "nes_tui"
   - "tests.rs"
   - "**/tests.rs"
   - "tests"
