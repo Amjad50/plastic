@@ -31,5 +31,5 @@ jobs:
   # - name: Run tests
   #   run: cargo test --verbose
     - name: Run test cargo-tarpaulin
-      run: cargo tarpaulin --workspace -e nes_test nes_ui_base nes_sfml nes_gtk nes_tui -v -o Xml
+      run: cargo tarpaulin --workspace -e nes_test nes_ui_base nes_ui_sfml nes_ui_gtk nes_ui_tui -v -o Xml
     - uses: codecov/codecov-action@v1.0.11
