@@ -1,5 +1,5 @@
 [package]
-name = "nes_tui"
+name = "nes_ui_gtk"
 version = "0.1.0"
 authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 edition = "2018"
@@ -9,6 +9,11 @@ edition = "2018"
 [dependencies]
 nes_ui_base = { path = "../nes_ui_base" }
 
-crossterm = "^0.17"
-tui = { git = "https://github.com/fdehau/tui-rs", default-features = false, features = ['crossterm'] }
-gilrs = "^0.7.4"
+gtk = "^0.8.1"
+gio = "^0.8.1"
+glib = "^0.9.3"
+gdk = "^0.12.1"
+
+[dependencies.cairo-rs]
+version = "^0.8.1"
+features = ["v1_14"]

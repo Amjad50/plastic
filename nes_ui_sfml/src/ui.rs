@@ -54,7 +54,7 @@ impl UiProvider for SfmlProvider {
     ) {
         let mut window = RenderWindow::new(
             (TV_WIDTH * 3, TV_HEIGHT * 3),
-            "platic (SFML)",
+            "Plastic",
             Style::CLOSE | Style::RESIZE,
             &Default::default(),
         );

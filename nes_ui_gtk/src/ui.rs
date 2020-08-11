@@ -35,6 +35,8 @@ impl UiProvider for GtkProvider {
 
         let window = Rc::new(RefCell::new(gtk::Window::new(gtk::WindowType::Toplevel)));
 
+        window.borrow_mut().set_title("Plastic");
+
         let window_redraw = window.clone();
         let drawing_area = gtk::DrawingArea::new();
 

@@ -1,5 +1,5 @@
 [package]
-name = "nes_sfml"
+name = "nes_ui_tui"
 version = "0.1.0"
 authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 edition = "2018"
@@ -9,4 +9,6 @@ edition = "2018"
 [dependencies]
 nes_ui_base = { path = "../nes_ui_base" }
 
-sfml = "^0.15.1"
+crossterm = "^0.17"
+tui = { git = "https://github.com/fdehau/tui-rs", default-features = false, features = ['crossterm'] }
+gilrs = "^0.7.4"
