@@ -1,5 +1,8 @@
 use std::io;
-use std::sync::mpsc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc, Arc,
+};
 use std::thread;
 use std::time::Duration;
 
@@ -16,11 +19,13 @@ pub struct Events {
     rx: mpsc::Receiver<Event<Key>>,
     input_handle: thread::JoinHandle<()>,
     tick_handle: thread::JoinHandle<()>,
+    stopped: Arc<AtomicBool>,
 }
 
 impl Events {
     pub fn new(tick_rate: Duration) -> Events {
         let (tx, rx) = mpsc::channel();
+        let stopped = Arc::new(AtomicBool::new(false));
         let input_handle = {
             let tx = tx.clone();
             thread::spawn(move || {
@@ -37,9 +42,12 @@ impl Events {
             })
         };
         let tick_handle = {
+            let stopped = stopped.clone();
             thread::spawn(move || loop {
-                if tx.send(Event::Tick).is_err() {
-                    break;
+                if !stopped.load(Ordering::Relaxed) {
+                    if tx.send(Event::Tick).is_err() {
+                        break;
+                    }
                 }
                 thread::sleep(tick_rate);
             })
@@ -48,7 +56,12 @@ impl Events {
             rx,
             input_handle,
             tick_handle,
+            stopped,
         }
+    }
+
+    pub fn set_stopped_state(&self, state: bool) {
+        self.stopped.store(state, Ordering::Relaxed);
     }
 
     pub fn next(&self) -> Result<Event<Key>, mpsc::TryRecvError> {

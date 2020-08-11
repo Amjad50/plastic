@@ -11,3 +11,4 @@ nes_ui_base = { path = "../nes_ui_base" }
 
 tui = "0.10"
 termion = "1.5"
+gilrs = "^0.7.4"

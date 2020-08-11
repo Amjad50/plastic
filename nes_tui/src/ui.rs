@@ -10,7 +10,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use crate::event::{Event, Events};
+use crate::event::{Event as tuiEvent, Events};
+
+use gilrs::{Button, Event, EventType, Gilrs};
 
 use termion::{event::Key, input::MouseTerminal, raw::IntoRawMode, screen::AlternateScreen};
 use tui::{
@@ -62,7 +64,11 @@ impl UiProvider for TuiProvider {
         let backend = TermionBackend::new(stdout);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        let events = Events::new(Duration::from_millis(1000 / 30));
+        let mut gilrs = Gilrs::new().unwrap();
+
+        let mut active_gamepad = None;
+
+        let keyboard_events = Events::new(Duration::from_millis(1000 / 30));
 
         // FIXME: find better way to handle input
         let mut not_pressed = HashSet::new();
@@ -95,9 +101,9 @@ impl UiProvider for TuiProvider {
                 .unwrap();
 
             if let Ok(mut ctrl) = ctrl_state.lock() {
-                while let Ok(event) = events.next() {
+                while let Ok(event) = keyboard_events.next() {
                     match event {
-                        Event::Input(input) => {
+                        tuiEvent::Input(input) => {
                             let possible_button = match input {
                                 Key::Esc => break 'outer,
                                 Key::Char('J') | Key::Char('j') => Some(StandardNESKey::B),
@@ -115,7 +121,7 @@ impl UiProvider for TuiProvider {
                                 pressed.insert(button);
                             }
                         }
-                        Event::Tick => {
+                        tuiEvent::Tick => {
                             for button in &not_pressed {
                                 ctrl.release(*button);
                             }
@@ -133,6 +139,35 @@ impl UiProvider for TuiProvider {
                             not_pressed.insert(StandardNESKey::Right);
 
                             pressed.clear();
+                        }
+                    }
+                }
+
+                // set events in the cache and check if gamepad is still active
+                while let Some(Event { id, event, .. }) = gilrs.next_event() {
+                    active_gamepad = Some(id);
+                    if event == EventType::Disconnected {
+                        keyboard_events.set_stopped_state(false);
+                        active_gamepad = None;
+                    }
+                }
+                keyboard_events.set_stopped_state(active_gamepad != None);
+
+                if let Some(gamepad) = active_gamepad.map(|id| gilrs.gamepad(id)) {
+                    for (controller_button, nes_button) in &[
+                        (Button::South, StandardNESKey::B),
+                        (Button::East, StandardNESKey::A),
+                        (Button::Select, StandardNESKey::Select),
+                        (Button::Start, StandardNESKey::Start),
+                        (Button::DPadUp, StandardNESKey::Up),
+                        (Button::DPadDown, StandardNESKey::Down),
+                        (Button::DPadRight, StandardNESKey::Right),
+                        (Button::DPadLeft, StandardNESKey::Left),
+                    ] {
+                        if gamepad.is_pressed(*controller_button) {
+                            ctrl.press(*nes_button);
+                        } else {
+                            ctrl.release(*nes_button);
                         }
                     }
                 }
