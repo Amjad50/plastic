@@ -178,7 +178,9 @@ impl NES {
             apu.clone(),
         )));
 
-        let cpu = CPU6502::new(cpubus.clone(), ppu.clone(), cartridge.clone());
+        let mut cpu = CPU6502::new(cpubus.clone(), ppu.clone());
+        cpu.add_irq_provider(cartridge.clone());
+        cpu.add_irq_provider(apu.clone());
 
         Ok(Self {
             cpu,

@@ -44,18 +44,6 @@ mod cpu_tests {
         }
     }
 
-    impl CartridgeCPUConnection for DummyCartridgePPUHandler {
-        fn is_irq_change_requested(&self) -> bool {
-            false
-        }
-
-        fn irq_pin_state(&self) -> bool {
-            unreachable!()
-        }
-
-        fn clear_irq_request_pin(&mut self) {}
-    }
-
     fn run_blargg_test(filename: &str) -> Result<(), TestError> {
         let mut nes = NES::new(filename)?;
         nes.reset_cpu();
@@ -89,7 +77,7 @@ mod cpu_tests {
 
         let bus = DummyBus::new(data);
         let handler = Rc::new(RefCell::new(DummyCartridgePPUHandler {}));
-        let mut cpu = CPU6502::new(Rc::new(RefCell::new(bus)), handler.clone(), handler);
+        let mut cpu = CPU6502::new(Rc::new(RefCell::new(bus)), handler);
 
         cpu.reset();
 

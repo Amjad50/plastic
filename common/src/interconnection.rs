@@ -7,7 +7,7 @@ pub trait PPUCPUConnection {
     fn send_oam_data(&mut self, address: u8, data: u8);
 }
 
-pub trait CartridgeCPUConnection {
+pub trait CpuIrqProvider {
     fn is_irq_change_requested(&self) -> bool;
     fn irq_pin_state(&self) -> bool;
     fn clear_irq_request_pin(&mut self);

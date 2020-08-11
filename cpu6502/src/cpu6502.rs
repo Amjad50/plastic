@@ -1,6 +1,6 @@
 use super::instruction::{AddressingMode, Instruction, Opcode};
 use common::{
-    interconnection::{CartridgeCPUConnection, PPUCPUConnection},
+    interconnection::{CpuIrqProvider, PPUCPUConnection},
     Bus, Device,
 };
 use std::{cell::RefCell, rc::Rc};
@@ -53,18 +53,14 @@ pub struct CPU6502<T: Bus> {
 
     bus: Rc<RefCell<T>>,
     ppu: Rc<RefCell<dyn PPUCPUConnection>>,
-    cartridge: Rc<RefCell<dyn CartridgeCPUConnection>>,
+    irq_providers: Vec<Rc<RefCell<dyn CpuIrqProvider>>>,
 }
 
 impl<T> CPU6502<T>
 where
     T: Bus,
 {
-    pub fn new(
-        bus: Rc<RefCell<T>>,
-        ppu: Rc<RefCell<dyn PPUCPUConnection>>,
-        cartridge: Rc<RefCell<dyn CartridgeCPUConnection>>,
-    ) -> Self {
+    pub fn new(bus: Rc<RefCell<T>>, ppu: Rc<RefCell<dyn PPUCPUConnection>>) -> Self {
         CPU6502 {
             reg_pc: 0,
             reg_sp: 0xFD, // FIXME: not 100% about this
@@ -83,8 +79,12 @@ where
 
             bus,
             ppu,
-            cartridge,
+            irq_providers: Vec::new(),
         }
+    }
+
+    pub fn add_irq_provider(&mut self, provider: Rc<RefCell<dyn CpuIrqProvider>>) {
+        self.irq_providers.push(provider);
     }
 
     fn set_flag(&mut self, flag: StatusFlag) {
@@ -378,12 +378,23 @@ where
         }
     }
 
-    fn check_for_cartridge_irq(&mut self) {
-        let mut cartridge = self.cartridge.borrow_mut();
+    fn check_for_irq(&mut self) {
+        let mut is_irq_set = false;
 
-        if cartridge.is_irq_change_requested() {
-            self.irq_pin_status = cartridge.irq_pin_state();
-            cartridge.clear_irq_request_pin();
+        for provider in self.irq_providers.iter() {
+            let mut provider = provider.borrow_mut();
+
+            if provider.is_irq_change_requested() {
+                if provider.irq_pin_state() {
+                    is_irq_set = true;
+                }
+                self.irq_pin_status = provider.irq_pin_state();
+                provider.clear_irq_request_pin();
+            }
+        }
+
+        if is_irq_set {
+            self.irq_pin_status = true;
         }
     }
 
@@ -421,7 +432,7 @@ where
                     // instruction
                     self.check_for_nmi_dma();
                     // check if there is pending IRQs from cartridge
-                    self.check_for_cartridge_irq();
+                    self.check_for_irq();
 
                     // fetch
                     let instruction = self.fetch_next_instruction();

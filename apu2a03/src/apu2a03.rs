@@ -4,6 +4,8 @@ use crate::envelope::EnvelopeGenerator;
 use crate::length_counter::LengthCountedChannel;
 use crate::sweeper::Sweeper;
 use crate::tone_source::{APUChannel, APUChannelPlayer};
+use common::interconnection::CpuIrqProvider;
+use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 
 pub struct APU2A03 {
@@ -17,10 +19,14 @@ pub struct APU2A03 {
     reference_clock_frequency: f32,
 
     is_4_step_squence_mode: bool,
+    interrupt_inhibit_flag: bool,
 
     cycle: u16,
 
     wait_reset: i8,
+
+    interrupt_flag: Cell<bool>,
+    request_interrupt_flag_change: Cell<bool>,
 }
 
 impl APU2A03 {
@@ -46,10 +52,14 @@ impl APU2A03 {
             reference_clock_frequency: 1.789773 * 1E6,
 
             is_4_step_squence_mode: false,
+            interrupt_inhibit_flag: false,
 
             cycle: 0,
 
             wait_reset: 0,
+
+            interrupt_flag: Cell::new(false),
+            request_interrupt_flag_change: Cell::new(false),
         }
     }
 
@@ -76,7 +86,14 @@ impl APU2A03 {
                     0
                 };
 
-                triangle_length_counter << 2 | sqr2_length_counter << 1 | sqr1_length_counter
+                let frame_interrupt = self.interrupt_flag.get() as u8;
+                self.interrupt_flag.set(false);
+                self.request_interrupt_flag_change.set(true);
+
+                frame_interrupt << 6
+                    | triangle_length_counter << 2
+                    | sqr2_length_counter << 1
+                    | sqr1_length_counter
             }
             _ => {
                 // unreadable
@@ -261,6 +278,12 @@ impl APU2A03 {
             }
             Register::FrameCounter => {
                 self.is_4_step_squence_mode = data & 0x80 == 0;
+                self.interrupt_inhibit_flag = data & 0x40 != 0;
+
+                if self.interrupt_inhibit_flag {
+                    self.interrupt_flag.set(false);
+                    self.request_interrupt_flag_change.set(true);
+                }
 
                 // reset(side effect)
                 self.wait_reset = 2; // after 4 CPU clocks
@@ -360,6 +383,11 @@ impl APU2A03 {
             14915 if self.is_4_step_squence_mode => {
                 self.generate_quarter_frame_clock();
                 self.generate_half_frame_clock();
+
+                if !self.interrupt_inhibit_flag {
+                    self.interrupt_flag.set(true);
+                    self.request_interrupt_flag_change.set(true);
+                }
                 self.cycle = 0;
             }
             18641 if !self.is_4_step_squence_mode => {
@@ -371,5 +399,19 @@ impl APU2A03 {
                 // ignore
             }
         }
+    }
+}
+
+impl CpuIrqProvider for APU2A03 {
+    fn is_irq_change_requested(&self) -> bool {
+        self.request_interrupt_flag_change.get()
+    }
+
+    fn irq_pin_state(&self) -> bool {
+        self.interrupt_flag.get()
+    }
+
+    fn clear_irq_request_pin(&mut self) {
+        self.request_interrupt_flag_change.set(false);
     }
 }

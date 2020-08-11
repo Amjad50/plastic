@@ -27,7 +27,7 @@ This is a personal project for fun and to experience emulating hardware and conn
   - [x] Triangle
   - [ ] Noise
   - [ ] DMC
-  - [ ] IRQ support
+  - [x] IRQ support
 - [x] Controller:
   controllable using the keyboard and controller (tested with PS4 controller)
 

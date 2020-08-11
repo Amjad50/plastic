@@ -3,9 +3,7 @@ use super::{
     mapper::{Mapper, MappingResult},
     mappers::*,
 };
-use common::{
-    interconnection::CartridgeCPUConnection, Bus, Device, MirroringMode, MirroringProvider,
-};
+use common::{interconnection::CpuIrqProvider, Bus, Device, MirroringMode, MirroringProvider};
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
@@ -319,7 +317,7 @@ impl Drop for Cartridge {
     }
 }
 
-impl CartridgeCPUConnection for Cartridge {
+impl CpuIrqProvider for Cartridge {
     fn is_irq_change_requested(&self) -> bool {
         self.mapper.is_irq_pin_state_changed_requested()
     }
