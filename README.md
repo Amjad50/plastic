@@ -2,6 +2,7 @@
 
 [![Build status](https://github.com/Amjad50/plastic/workflows/Rust/badge.svg)](https://actions-badge.atrox.dev/Amjad50/plastic/goto)
 [![codecov](https://codecov.io/gh/Amjad50/plastic/branch/master/graph/badge.svg)](https://codecov.io/gh/Amjad50/plastic)
+[![license](https://img.shields.io/github/license/Amjad50/plastic)](./LICENSE)
 
 **plastic** is a [NES][NES-wiki] emulator built from scratch using [Rust][Rust].
 
