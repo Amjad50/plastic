@@ -162,13 +162,13 @@ mod ppu_tests {
         run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/01-vbl_basics.nes")
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn ppu_vbl_nmi_test_02_vbl_set_time() -> Result<(), TestError> {
         run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/02-vbl_set_time.nes")
     }
 
-    #[test]
+    // FIXME: this test is still failing
+    // #[test]
     fn ppu_vbl_nmi_test_03_vbl_clear_time() -> Result<(), TestError> {
         run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/03-vbl_clear_time.nes")
     }
@@ -190,8 +190,7 @@ mod ppu_tests {
         run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/06-suppression.nes")
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn ppu_vbl_nmi_test_07_nmi_on_timing() -> Result<(), TestError> {
         run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/07-nmi_on_timing.nes")
     }
@@ -207,8 +206,7 @@ mod ppu_tests {
         run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/09-even_odd_frames.nes")
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn ppu_vbl_nmi_test_10_even_odd_timing() -> Result<(), TestError> {
         run_ppu_vbl_nmi_test("./tests/roms/ppu_vbl_nmi/rom_singles/10-even_odd_timing.nes")
     }

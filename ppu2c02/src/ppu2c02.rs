@@ -129,8 +129,8 @@ pub struct PPU2C02<T: Bus> {
     bg_pattern_shift_registers: [u16; 2],
     bg_palette_shift_registers: [u16; 2],
 
-    nmi_pin_status: bool,
-    nmi_occured_in_this_frame: bool,
+    nmi_pin_status: Cell<bool>,
+    nmi_occured_in_this_frame: Cell<bool>,
 
     bus: T,
     tv: TV,
@@ -178,8 +178,8 @@ where
             bg_pattern_shift_registers: [0; 2],
             bg_palette_shift_registers: [0; 2],
 
-            nmi_pin_status: false,
-            nmi_occured_in_this_frame: false,
+            nmi_pin_status: Cell::new(false),
+            nmi_occured_in_this_frame: Cell::new(false),
 
             bus,
             tv,
@@ -208,6 +208,15 @@ where
                 // reset w_mode
                 self.w_toggle.set(false);
 
+                if self.scanline == 241 && self.cycle <= 2 {
+                    // Race Condition Warning: Reading PPUSTATUS within two
+                    // cycles of the start of vertical blank will return 0 in bit 7
+                    // but clear the latch anyway, causing NMI to not occur that frame
+                    self.reg_status
+                        .set(StatusReg::from_bits(self.reg_status.get().bits & 0x7F).unwrap());
+                    self.nmi_pin_status.set(false);
+                    self.nmi_occured_in_this_frame.set(true);
+                }
                 let result = self.reg_status.get().bits;
                 //  reading the status register will clear bit 7
                 self.reg_status
@@ -263,16 +272,16 @@ where
                 // other NMI has occurred so far
                 if self.reg_control.nmi_enabled() {
                     if self.reg_status.get().intersects(StatusReg::VERTICAL_BLANK)
-                        && !self.nmi_occured_in_this_frame
+                        && !self.nmi_occured_in_this_frame.get()
                     {
-                        self.nmi_pin_status = true;
-                        self.nmi_occured_in_this_frame = true;
+                        self.nmi_pin_status.set(true);
+                        self.nmi_occured_in_this_frame.set(true);
                     }
                 } else {
                     // in case if the NMI flag was disabled, then mark as nmi
                     // never occurred on this frame, even if it has
                     // meaning, that in some cases 2 NMI can occur
-                    self.nmi_occured_in_this_frame = false;
+                    self.nmi_occured_in_this_frame.set(false);
                 }
             }
             Register::Mask => self.reg_mask.bits = data,
@@ -896,7 +905,8 @@ where
     }
 
     fn render_pixel(&mut self) {
-        let mut color = self.generate_pixel();
+        // fix overflowing colors
+        let mut color = self.generate_pixel() & 0x3F;
 
         if self.reg_mask.is_grayscale() {
             // select from the gray column (0x00, 0x10, 0x20, 0x30)
@@ -920,7 +930,7 @@ where
 
                 if self.cycle == 1 {
                     // reset nmi_occured_in_this_frame
-                    self.nmi_occured_in_this_frame = false;
+                    self.nmi_occured_in_this_frame.set(false);
                     // clear v-blank
                     self.reg_status.get_mut().remove(StatusReg::VERTICAL_BLANK);
                     // clear sprite overflow
@@ -971,9 +981,9 @@ where
                     self.reg_status.get_mut().insert(StatusReg::VERTICAL_BLANK);
 
                     // if raising NMI is enabled
-                    if self.reg_control.nmi_enabled() {
-                        self.nmi_pin_status = true;
-                        self.nmi_occured_in_this_frame = true;
+                    if self.reg_control.nmi_enabled() && !self.nmi_occured_in_this_frame.get() {
+                        self.nmi_pin_status.set(true);
+                        self.nmi_occured_in_this_frame.set(true);
                     }
                 }
             }
@@ -1112,11 +1122,11 @@ where
     T: Bus,
 {
     fn is_nmi_pin_set(&self) -> bool {
-        self.nmi_pin_status
+        self.nmi_pin_status.get()
     }
 
     fn clear_nmi_pin(&mut self) {
-        self.nmi_pin_status = false;
+        self.nmi_pin_status.set(false);
     }
 
     fn is_dma_request(&self) -> bool {
