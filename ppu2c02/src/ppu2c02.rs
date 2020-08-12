@@ -1039,12 +1039,13 @@ where
                 }
 
                 // 65 - 256
-                match self.cycle {
-                    // only the first 64 cycles
-                    65..=128 => {
-                        let next_y = self.get_next_scroll_y_render() as i16;
+                if self.cycle >= 65 && self.cycle <= 256 {
+                    let next_y = self.get_next_scroll_y_render() as i16;
 
-                        let index = (self.cycle - 65) as usize;
+                    let mut index = (self.cycle - 65) as usize;
+                    // each takes 3 cycles
+                    if index % 3 == 0 {
+                        index = index / 3;
 
                         let sprite = self.primary_oam[index];
                         let sprite_y = sprite.get_y() as i16;
@@ -1070,7 +1071,6 @@ where
                             }
                         }
                     }
-                    _ => {}
                 }
             }
             257..=320 => {
