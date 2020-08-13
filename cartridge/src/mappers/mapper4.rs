@@ -73,6 +73,20 @@ pub struct Mapper4 {
     ///         +- Nametable mirroring (0: vertical; 1: horizontal)
     mirroring_vertical: bool,
 
+    /// 7  bit  0
+    /// ---- ----
+    /// RWxx xxxx
+    ///  |
+    ///  +-------- Write protection (0: allow writes; 1: deny writes)
+    prg_ram_allow_writes: bool,
+
+    /// 7  bit  0
+    /// ---- ----
+    /// Rxxx xxxx
+    /// |
+    /// +--------- PRG RAM chip enable (0: disable; 1: enable)
+    prg_ram_enabled: bool,
+
     /// ($C000-$DFFE, even)
     /// the value to reload `irq_counter` when it reaches zero or when asked
     /// to be reloaded from `($C001-$DFFF, odd)`
@@ -105,7 +119,7 @@ pub struct Mapper4 {
     is_chr_ram: bool,
 
     /// in 1kb units
-    chr_count: u8,
+    chr_count: u16,
 
     /// in 8kb units
     prg_count: u8,
@@ -130,6 +144,8 @@ impl Mapper4 {
             chr_bank_r4: 0,
             chr_bank_r5: 0,
             mirroring_vertical: false,
+            prg_ram_allow_writes: true,
+            prg_ram_enabled: true,
             irq_latch: 0,
             irq_counter: Cell::new(0),
             reload_irq_counter_flag: Cell::new(false),
@@ -170,7 +186,7 @@ impl Mapper4 {
 impl Mapper for Mapper4 {
     fn init(&mut self, prg_count: u8, is_chr_ram: bool, chr_count: u8, _sram_count: u8) {
         self.prg_count = prg_count * 2;
-        self.chr_count = chr_count * 8;
+        self.chr_count = chr_count as u16 * 8;
 
         self.is_chr_ram = is_chr_ram;
     }
@@ -179,7 +195,13 @@ impl Mapper for Mapper4 {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
+                    0x6000..=0x7FFF => {
+                        if self.prg_ram_enabled {
+                            MappingResult::Allowed(address as usize & 0x1FFF)
+                        } else {
+                            MappingResult::Denied
+                        }
+                    }
                     0x8000..=0xFFFF => {
                         let bank = match address {
                             0x8000..=0x9FFF => {
@@ -216,7 +238,7 @@ impl Mapper for Mapper4 {
 
                     let is_2k = (address & 0x1000 == 0) ^ self.chr_bank_2k_1000;
 
-                    let bank = if is_2k {
+                    let mut bank = if is_2k {
                         if address & 0x0800 == 0 {
                             self.chr_bank_r0
                         } else {
@@ -231,6 +253,11 @@ impl Mapper for Mapper4 {
                             _ => unreachable!(),
                         }
                     } as usize;
+
+                    // this is in case of RAM or ROM with 8KB only
+                    if self.chr_count == 8 {
+                        bank &= 0x7;
+                    }
 
                     assert!(bank <= self.chr_count as usize);
 
@@ -250,7 +277,13 @@ impl Mapper for Mapper4 {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
+                    0x6000..=0x7FFF => {
+                        if self.prg_ram_enabled && self.prg_ram_allow_writes {
+                            MappingResult::Allowed(address as usize & 0x1FFF)
+                        } else {
+                            MappingResult::Denied
+                        }
+                    }
                     0x8000..=0xFFFF => {
                         match address {
                             0x8000..=0x9FFF => {
@@ -281,6 +314,8 @@ impl Mapper for Mapper4 {
                                 } else {
                                     // odd
                                     // PRG RAM stuff
+                                    self.prg_ram_allow_writes = data & 0x40 == 0;
+                                    self.prg_ram_enabled = data & 0x80 != 0;
                                 }
                             }
                             0xC000..=0xDFFF => {

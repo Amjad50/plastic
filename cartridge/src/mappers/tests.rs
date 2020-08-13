@@ -163,26 +163,22 @@ mod mappers_tests {
         run_holy_mapperel_test("./tests/roms/holy-mapperel-bin-0.02/testroms/M3_P32K_C32K_H.nes")
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn holy_mapperel_m4_p128k_test() -> Result<(), TestError> {
         run_holy_mapperel_test("./tests/roms/holy-mapperel-bin-0.02/testroms/M4_P128K.nes")
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn holy_mapperel_m4_p128k_cr32k_test() -> Result<(), TestError> {
         run_holy_mapperel_test("./tests/roms/holy-mapperel-bin-0.02/testroms/M4_P128K_CR32K.nes")
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn holy_mapperel_m4_p128k_cr8k_test() -> Result<(), TestError> {
         run_holy_mapperel_test("./tests/roms/holy-mapperel-bin-0.02/testroms/M4_P128K_CR8K.nes")
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn holy_mapperel_m4_p256k_c256k_test() -> Result<(), TestError> {
         run_holy_mapperel_test("./tests/roms/holy-mapperel-bin-0.02/testroms/M4_P256K_C256K.nes")
     }
