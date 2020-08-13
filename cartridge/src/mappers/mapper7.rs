@@ -31,7 +31,7 @@ impl Mapper7 {
 impl Mapper for Mapper7 {
     fn init(&mut self, prg_count: u8, is_chr_ram: bool, _chr_count: u8, _sram_count: u8) {
         // even and positive
-        assert!(prg_count & 1 == 0 && prg_count > 0);
+        assert!(prg_count % 2 == 0 && prg_count > 0);
 
         self.prg_count = prg_count / 2;
         self.is_chr_ram = is_chr_ram;
@@ -43,7 +43,13 @@ impl Mapper for Mapper7 {
                 match address {
                     0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
                     0x8000..=0xFFFF => {
-                        let bank = self.prg_bank as usize;
+                        let mut bank = self.prg_bank as usize;
+
+                        if self.prg_count == 2 {
+                            bank &= 0x1;
+                        } else if self.prg_count == 4 {
+                            bank &= 0x3;
+                        }
 
                         assert!(bank < self.prg_count as usize);
 
