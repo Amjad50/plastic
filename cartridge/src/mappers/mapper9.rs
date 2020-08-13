@@ -134,7 +134,7 @@ impl Mapper for Mapper9 {
             },
             Device::PPU => {
                 if address < 0x2000 {
-                    let bank = if address & 0x1000 == 0 {
+                    let mut bank = if address & 0x1000 == 0 {
                         // set latch 0
                         if address == 0x0FD8 {
                             self.latch_0.set(0xFD);
@@ -163,6 +163,14 @@ impl Mapper for Mapper9 {
                         }
                     } as usize;
 
+                    if self.chr_count <= 4 {
+                        bank &= 0x3;
+                    } else if self.chr_count <= 8 {
+                        bank &= 0x7;
+                    } else if self.chr_count <= 16 {
+                        bank &= 0xF;
+                    }
+
                     assert!(bank <= self.chr_count as usize);
 
                     let start_of_bank = bank * 0x1000;
@@ -187,7 +195,7 @@ impl Mapper for Mapper9 {
                         0xD000..=0xDFFF => self.chr_fd_1000_bank = data & 0x1F,
                         0xE000..=0xEFFF => self.chr_fe_1000_bank = data & 0x1F,
                         0xF000..=0xFFFF => self.mirroring_vertical = data & 1 == 0,
-                        _ => unreachable!(),
+                        _ => {}
                     }
 
                     MappingResult::Denied
