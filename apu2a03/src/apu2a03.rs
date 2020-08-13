@@ -1,5 +1,5 @@
 use crate::apu2a03_registers::Register;
-use crate::channels::{SquarePulse, TriangleWave};
+use crate::channels::{NoiseWave, SquarePulse, TriangleWave};
 use crate::envelope::EnvelopeGenerator;
 use crate::length_counter::LengthCountedChannel;
 use crate::sweeper::Sweeper;
@@ -15,6 +15,8 @@ pub struct APU2A03 {
     square_pulse_2_sweeper: Sweeper,
 
     triangle: Arc<Mutex<LengthCountedChannel<TriangleWave>>>,
+
+    noise: Arc<Mutex<LengthCountedChannel<EnvelopeGenerator<NoiseWave>>>>,
 
     reference_clock_frequency: f32,
 
@@ -48,6 +50,10 @@ impl APU2A03 {
                 20,
                 1.789773 * 1E6,
             )))),
+
+            noise: Arc::new(Mutex::new(LengthCountedChannel::new(
+                EnvelopeGenerator::new(NoiseWave::new(1.789773 * 1E6)),
+            ))),
 
             reference_clock_frequency: 1.789773 * 1E6,
 
@@ -85,12 +91,18 @@ impl APU2A03 {
                 } else {
                     0
                 };
+                let noise_length_counter = if let Ok(noise) = self.noise.lock() {
+                    (noise.length_counter().counter() != 0) as u8
+                } else {
+                    0
+                };
 
                 let frame_interrupt = self.interrupt_flag.get() as u8;
                 self.interrupt_flag.set(false);
                 self.request_interrupt_flag_change.set(true);
 
                 frame_interrupt << 6
+                    | noise_length_counter << 3
                     | triangle_length_counter << 2
                     | sqr2_length_counter << 1
                     | sqr1_length_counter
@@ -250,10 +262,35 @@ impl APU2A03 {
                     triangle.channel_mut().set_linear_counter_reload_flag(true);
                 }
             }
-            Register::Noise1 => {}
-            Register::Noise2 => {}
-            Register::Noise3 => {}
-            Register::Noise4 => {}
+            Register::Noise1 => {
+                let volume = data & 0xF;
+                let use_volume = data & 0x10 != 0;
+                let halt = data & 0x20 != 0;
+
+                if let Ok(mut noise) = self.noise.lock() {
+                    noise.channel_mut().set_volume(volume, use_volume);
+                    noise.length_counter_mut().set_halt(halt);
+                    noise.channel_mut().set_loop_flag(halt);
+                    noise.channel_mut().set_start_flag(true);
+                }
+            }
+            Register::Noise2 => {
+                // unused
+            }
+            Register::Noise3 => {
+                if let Ok(mut noise) = self.noise.lock() {
+                    let channel = noise.channel_mut().channel_mut();
+
+                    channel.set_mode_flag(data & 0x80 != 0);
+                    channel.set_period(data & 0xF);
+                }
+            }
+            Register::Noise4 => {
+                if let Ok(mut noise) = self.noise.lock() {
+                    noise.length_counter_mut().reload_counter(data >> 3);
+                    noise.channel_mut().channel_mut().reset();
+                }
+            }
             Register::DMC1 => {}
             Register::DMC2 => {}
             Register::DMC3 => {}
@@ -274,6 +311,9 @@ impl APU2A03 {
                     triangle
                         .length_counter_mut()
                         .set_enabled((data >> 2 & 1) != 0);
+                }
+                if let Ok(mut noise) = self.noise.lock() {
+                    noise.length_counter_mut().set_enabled((data >> 3 & 1) != 0);
                 }
             }
             Register::FrameCounter => {
@@ -304,12 +344,14 @@ impl APU2A03 {
         let sqr1 = APUChannelPlayer::from_clone(self.square_pulse_1.clone());
         let sqr2 = APUChannelPlayer::from_clone(self.square_pulse_2.clone());
         let triangle = APUChannelPlayer::from_clone(self.triangle.clone());
+        let noise = APUChannelPlayer::from_clone(self.noise.clone());
 
         let (controller, mixer) = rodio::dynamic_mixer::mixer::<f32>(5, crate::SAMPLE_RATE);
 
         controller.add(sqr1);
         controller.add(sqr2);
         controller.add(triangle);
+        controller.add(noise);
 
         sink.append(mixer);
         sink.set_volume(0.01);
@@ -327,15 +369,13 @@ impl APU2A03 {
         }
     }
 
-    fn square_pulse_1_envelope_clock(&mut self) {
-        if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
-            square_pulse_1.channel_mut().clock();
-        }
-    }
-
-    fn square_pulse_2_envelope_clock(&mut self) {
-        if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
-            square_pulse_2.channel_mut().clock();
+    fn envelope_clock<S: APUChannel>(
+        channel: &mut Arc<Mutex<LengthCountedChannel<EnvelopeGenerator<S>>>>,
+    ) where
+        S::Item: rodio::Sample,
+    {
+        if let Ok(mut channel) = channel.lock() {
+            channel.channel_mut().clock();
         }
     }
 
@@ -346,8 +386,9 @@ impl APU2A03 {
     }
 
     fn generate_quarter_frame_clock(&mut self) {
-        self.square_pulse_1_envelope_clock();
-        self.square_pulse_2_envelope_clock();
+        Self::envelope_clock(&mut self.square_pulse_1);
+        Self::envelope_clock(&mut self.square_pulse_2);
+        Self::envelope_clock(&mut self.noise);
         self.triangle_linear_counter_clock();
     }
 
@@ -357,6 +398,7 @@ impl APU2A03 {
         Self::length_counter_decrement(&mut self.square_pulse_2);
         self.square_pulse_2_sweeper.clock();
         Self::length_counter_decrement(&mut self.triangle);
+        Self::length_counter_decrement(&mut self.noise);
     }
 
     pub fn clock(&mut self) {
@@ -371,6 +413,10 @@ impl APU2A03 {
                 self.generate_quarter_frame_clock();
                 self.generate_half_frame_clock();
             }
+        }
+
+        if let Ok(mut noise) = self.noise.lock() {
+            noise.channel_mut().channel_mut().clock_timer();
         }
 
         self.cycle += 1;
