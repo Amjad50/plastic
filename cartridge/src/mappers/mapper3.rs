@@ -35,7 +35,7 @@ impl Mapper for Mapper3 {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
+                    0x6000..=0x7FFF => MappingResult::Denied,
                     0x8000..=0xFFFF => {
                         // 0x7FFF is for mapping 0x8000-0xFFFF to 0x0000-0x7FFF
                         // which is the range of the array
@@ -72,7 +72,7 @@ impl Mapper for Mapper3 {
     fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult {
         match device {
             Device::CPU => match address {
-                0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
+                0x6000..=0x7FFF => MappingResult::Denied,
                 0x8000..=0xFFFF => {
                     if self.chr_count <= 4 {
                         // Maybe expecting CNROM mode, which is taking only the

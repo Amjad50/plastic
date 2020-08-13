@@ -30,7 +30,7 @@ impl Mapper for Mapper2 {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
+                    0x6000..=0x7FFF => MappingResult::Denied,
                     0x8000..=0xFFFF => {
                         let bank = if address >= 0x8000 && address <= 0xBFFF {
                             self.prg_top_bank & 0xF
@@ -65,7 +65,7 @@ impl Mapper for Mapper2 {
     fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult {
         match device {
             Device::CPU => match address {
-                0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
+                0x6000..=0x7FFF => MappingResult::Denied,
                 0x8000..=0xFFFF => {
                     self.prg_top_bank = data;
                     MappingResult::Denied
