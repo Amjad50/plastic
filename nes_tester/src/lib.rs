@@ -201,6 +201,10 @@ impl NES {
         self.cpubus.borrow().read(address, Device::CPU)
     }
 
+    pub fn ppu_read_address(&self, address: u16) -> u8 {
+        self.ppu.borrow().ppu_bus().read(address, Device::PPU)
+    }
+
     pub fn clock(&mut self) -> CPURunState {
         {
             let mut ppu = self.ppu.borrow_mut();

@@ -347,6 +347,11 @@ where
         };
     }
 
+    /// expose the bus for reading only
+    pub fn ppu_bus(&self) -> &T {
+        &self.bus
+    }
+
     fn read_bus(&self, address: u16) -> u8 {
         self.bus.read(address, Device::PPU)
     }
