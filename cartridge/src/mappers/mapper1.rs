@@ -1,7 +1,6 @@
 use crate::mapper::{Mapper, MappingResult};
 use common::{Device, MirroringMode};
 
-// FIXME: add support for 512kb as now only support 256kb
 pub struct Mapper1 {
     writing_shift_register: u8,
 
@@ -22,6 +21,25 @@ pub struct Mapper1 {
     /// CCCCC
     /// |||||
     /// +++++- Select 4 KB or 8 KB CHR bank at PPU $0000 (low bit ignored in 8 KB mode)
+    ///
+    /// OR
+    ///
+    /// 4bit0
+    /// -----
+    /// ExxxC
+    /// |   |
+    /// |   +- Select 4 KB CHR RAM bank at PPU $0000 (ignored in 8 KB mode)
+    /// +----- PRG RAM disable (0: enable, 1: open bus)
+    ///
+    /// OR
+    ///
+    /// 4bit0
+    /// -----
+    /// PSSxC
+    /// ||| |
+    /// ||| +- Select 4 KB CHR RAM bank at PPU $0000 (ignored in 8 KB mode)
+    /// |++--- Select 8 KB PRG RAM bank
+    /// +----- Select 256 KB PRG ROM bank
     chr_0_bank: u8,
 
     /// 4bit0
@@ -29,6 +47,25 @@ pub struct Mapper1 {
     /// CCCCC
     /// |||||
     /// +++++- Select 4 KB CHR bank at PPU $1000 (ignored in 8 KB mode)
+    ///
+    /// OR
+    ///
+    /// 4bit0
+    /// -----
+    /// ExxxC
+    /// |   |
+    /// |   +- Select 4 KB CHR RAM bank at PPU $0000 (ignored in 8 KB mode)
+    /// +----- PRG RAM disable (0: enable, 1: open bus) (ignored in 8 KB mode)
+    ///
+    /// OR
+    ///
+    /// 4bit0
+    /// -----
+    /// PSSxC
+    /// ||| |
+    /// ||| +- Select 4 KB CHR RAM bank at PPU $0000 (ignored in 8 KB mode)
+    /// |++--- Select 8 KB PRG RAM bank (ignored in 8 KB mode)
+    /// +----- Select 256 KB PRG ROM bank (ignored in 8 KB mode)
     chr_1_bank: u8,
 
     /// 4bit0
@@ -106,8 +143,8 @@ impl Mapper1 {
     }
 
     fn is_prg_ram_enabled(&self) -> bool {
-        // 8KB (SNROM)
-        let snrom_prg_ram_enabled = if self.chr_count == 2 {
+        // 8KB (SNROM) and not in 512KB PRG mode
+        let snrom_prg_ram_enabled = if self.chr_count == 2 && self.prg_count <= 16 {
             if self.is_chr_8kb_mode() {
                 self.chr_0_bank & 0x10 == 0
             } else {
@@ -146,7 +183,7 @@ impl Mapper for Mapper1 {
                         }
                     }
                     0x8000..=0xFFFF => {
-                        let bank = if self.is_prg_32kb_mode() {
+                        let mut bank = if self.is_prg_32kb_mode() {
                             // ignore last bit
                             self.get_prg_bank() & 0b11110
                         } else {
@@ -167,6 +204,16 @@ impl Mapper for Mapper1 {
                                 unreachable!();
                             }
                         } as usize;
+
+                        if self.prg_count > 16 && self.chr_count == 2 {
+                            let prg_high_bit_512_mode = if self.is_chr_8kb_mode() {
+                                self.chr_0_bank & 0x10
+                            } else {
+                                self.chr_1_bank & 0x10
+                            } as usize;
+
+                            bank |= prg_high_bit_512_mode;
+                        }
 
                         assert!(bank <= self.prg_count as usize);
 
