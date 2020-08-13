@@ -33,11 +33,17 @@ pub struct Mapper1 {
 
     /// 4bit0
     /// -----
-    /// RPPPP
-    /// |||||
-    /// |++++- Select 16 KB PRG ROM bank (low bit ignored in 32 KB mode)
-    /// +----- PRG RAM chip enable (0: enabled; 1: disabled; ignored on MMC1A)
+    /// -PPPP
+    ///  ||||
+    ///  ++++- Select 16 KB PRG ROM bank (low bit ignored in 32 KB mode)
     prg_bank: u8,
+
+    /// 4bit0
+    /// -----
+    /// R----
+    /// |
+    /// +----- PRG RAM chip enable (0: enabled; 1: disabled; ignored on MMC1A)
+    prg_ram_enable: bool,
 
     /// is using CHR ram
     is_chr_ram: bool,
@@ -53,10 +59,12 @@ impl Mapper1 {
     pub fn new() -> Self {
         Self {
             writing_shift_register: 0b10000,
-            control_register: 0,
+            control_register: 0x0C, // power-up
             chr_0_bank: 0,
             chr_1_bank: 0,
             prg_bank: 0,
+
+            prg_ram_enable: false,
 
             is_chr_ram: false,
 
@@ -98,7 +106,19 @@ impl Mapper1 {
     }
 
     fn is_prg_ram_enabled(&self) -> bool {
-        self.prg_bank & 0b10000 != 0
+        // 8KB (SNROM)
+        let snrom_prg_ram_enabled = if self.chr_count == 2 {
+            if self.is_chr_8kb_mode() {
+                self.chr_0_bank & 0x10 == 0
+            } else {
+                self.chr_1_bank & 0x10 == 0
+            }
+        } else {
+            // only depend on `self.prg_ram_enable`
+            true
+        };
+
+        self.prg_ram_enable && snrom_prg_ram_enabled
     }
 }
 
@@ -118,7 +138,13 @@ impl Mapper for Mapper1 {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
+                    0x6000..=0x7FFF => {
+                        if self.is_prg_ram_enabled() {
+                            MappingResult::Allowed(address as usize & 0x1FFF)
+                        } else {
+                            MappingResult::Denied
+                        }
+                    }
                     0x8000..=0xFFFF => {
                         let bank = if self.is_prg_32kb_mode() {
                             // ignore last bit
@@ -166,7 +192,7 @@ impl Mapper for Mapper1 {
             }
             Device::PPU => {
                 if address < 0x2000 {
-                    let bank = if self.is_chr_8kb_mode() {
+                    let mut bank = if self.is_chr_8kb_mode() {
                         self.chr_0_bank & 0b11110
                     } else {
                         if address <= 0x0FFF {
@@ -178,7 +204,19 @@ impl Mapper for Mapper1 {
                         }
                     } as usize;
 
-                    // let bank = bank & (self.chr_count - 1) as usize;
+                    // only for 8KB CHR size
+                    //
+                    // For carts with 8 KiB of CHR (be it ROM or RAM), MMC1
+                    // follows the common behavior of using only the low-order
+                    // bits: the bank number is in effect ANDed with 1.
+                    if self.chr_count == 2 {
+                        bank = bank & 1;
+                    } else if self.chr_count <= 8 {
+                        bank = bank & 0x7;
+                    } else if self.chr_count <= 16 {
+                        bank = bank & 0xF;
+                    }
+
                     assert!(bank <= self.chr_count as usize);
 
                     let start_of_bank = 0x1000 * bank;
@@ -202,7 +240,13 @@ impl Mapper for Mapper1 {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
+                    0x6000..=0x7FFF => {
+                        if self.is_prg_ram_enabled() {
+                            MappingResult::Allowed(address as usize & 0x1FFF)
+                        } else {
+                            MappingResult::Denied
+                        }
+                    }
                     0x8000..=0xFFFF => {
                         if data & 0x80 != 0 {
                             self.reset_shift_register();
@@ -219,7 +263,10 @@ impl Mapper for Mapper1 {
                                     0x8000..=0x9FFF => self.control_register = result,
                                     0xA000..=0xBFFF => self.chr_0_bank = result,
                                     0xC000..=0xDFFF => self.chr_1_bank = result,
-                                    0xE000..=0xFFFF => self.prg_bank = result,
+                                    0xE000..=0xFFFF => {
+                                        self.prg_bank = result & 0xF;
+                                        self.prg_ram_enable = result & 0x10 == 0;
+                                    }
                                     _ => {
                                         unreachable!();
                                     }
@@ -251,7 +298,7 @@ impl Mapper for Mapper1 {
     fn nametable_mirroring(&self) -> MirroringMode {
         [
             MirroringMode::SingleScreenLowBank,
-            MirroringMode::Horizontal,
+            MirroringMode::SingleScreenHighBank,
             MirroringMode::Vertical,
             MirroringMode::Horizontal,
         ][self.get_mirroring() as usize]
