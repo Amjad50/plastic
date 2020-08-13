@@ -29,7 +29,7 @@ impl Mapper for Mapper0 {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
+                    0x6000..=0x7FFF => MappingResult::Denied,
                     0x8000..=0xFFFF => {
                         // 0x7FFF is for mapping 0x8000-0xFFFF to 0x0000-0x7FFF
                         // which is the range of the array
@@ -64,13 +64,7 @@ impl Mapper for Mapper0 {
         // only for RAMs
 
         match device {
-            Device::CPU => {
-                if address >= 0x6000 && address <= 0x7FFF {
-                    MappingResult::Allowed(address as usize & 0x1FFF)
-                } else {
-                    MappingResult::Denied
-                }
-            }
+            Device::CPU => MappingResult::Denied,
             Device::PPU => {
                 if self.is_chr_ram && address <= 0x1FFF {
                     MappingResult::Allowed(address as usize)
