@@ -1,13 +1,6 @@
 use crate::tone_source::APUChannel;
-use rodio::Sample;
 
-pub struct EnvelopeGenerator<C>
-where
-    C: APUChannel,
-    C::Item: Sample,
-{
-    channel: C,
-
+pub struct EnvelopeGenerator {
     start_flag: bool,
     loop_flag: bool,
 
@@ -20,14 +13,9 @@ where
     decay_level: u8,
 }
 
-impl<C> EnvelopeGenerator<C>
-where
-    C: APUChannel,
-    C::Item: Sample,
-{
-    pub fn new(channel: C) -> Self {
+impl EnvelopeGenerator {
+    pub fn new() -> Self {
         Self {
-            channel,
             start_flag: false,
             loop_flag: false,
             divider_reload_value: 0,
@@ -35,14 +23,6 @@ where
             use_constant_volume: false,
             decay_level: 0,
         }
-    }
-
-    pub(crate) fn channel(&self) -> &C {
-        &self.channel
-    }
-
-    pub(crate) fn channel_mut(&mut self) -> &mut C {
-        &mut self.channel
     }
 
     pub(crate) fn set_volume(&mut self, vol: u8, use_vol: bool) {
@@ -87,31 +67,18 @@ where
             }
         }
     }
-}
 
-impl<C> Iterator for EnvelopeGenerator<C>
-where
-    C: APUChannel,
-    C::Item: Sample,
-{
-    type Item = C::Item;
-    fn next(&mut self) -> Option<Self::Item> {
-        let result = self.channel.next()?;
-
+    /// return the volume 0 - 1
+    pub(crate) fn get_current_volume(&mut self) -> f32 {
         if self.use_constant_volume {
-            // TODO: make it more clear
-            // divider reload value is also used as a constant volume
-            Some(result.amplify(self.divider_reload_value as f32 / 0xF as f32))
+            self.divider_reload_value as f32 / 0xF as f32
         } else {
-            //  println!("decay {}", self.decay_level);
-            Some(result.amplify(self.decay_level as f32 / 0xF as f32))
+            self.decay_level as f32 / 0xF as f32
         }
     }
 }
 
-impl<C> APUChannel for EnvelopeGenerator<C>
-where
-    C: APUChannel,
-    C::Item: Sample,
-{
+pub trait EnvelopedChannel: APUChannel {
+    fn clock_envlope(&mut self);
+    fn envelope_generator_mut(&mut self) -> &mut EnvelopeGenerator;
 }

@@ -1,5 +1,4 @@
 use crate::channels::SquarePulse;
-use crate::envelope::EnvelopeGenerator;
 use crate::length_counter::LengthCountedChannel;
 use std::sync::{Arc, Mutex};
 
@@ -11,13 +10,11 @@ pub struct Sweeper {
     shift_count: u8,
 
     // FIXME: use more generic approach
-    square_channel: Arc<Mutex<LengthCountedChannel<EnvelopeGenerator<SquarePulse>>>>,
+    square_channel: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
 }
 
 impl Sweeper {
-    pub fn new(
-        square_channel: Arc<Mutex<LengthCountedChannel<EnvelopeGenerator<SquarePulse>>>>,
-    ) -> Self {
+    pub fn new(square_channel: Arc<Mutex<LengthCountedChannel<SquarePulse>>>) -> Self {
         Self {
             enabled: false,
             divider_period_reload_value: 0,
@@ -40,7 +37,7 @@ impl Sweeper {
         if self.enabled {
             if self.divider_period_counter == 0 {
                 if let Ok(mut channel) = self.square_channel.lock() {
-                    let current_period = channel.channel().channel().get_period();
+                    let current_period = channel.channel().get_period();
                     let change_amount = current_period >> self.shift_count;
 
                     let target_period = if self.negative {
@@ -55,10 +52,7 @@ impl Sweeper {
                     };
 
                     // muting is done in the square pulse
-                    channel
-                        .channel_mut()
-                        .channel_mut()
-                        .set_period(target_period);
+                    channel.channel_mut().set_period(target_period);
                 }
 
                 self.divider_period_counter = self.divider_period_reload_value;

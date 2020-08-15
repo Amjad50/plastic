@@ -1,5 +1,4 @@
 use crate::tone_source::APUChannel;
-use rodio::Sample;
 
 const LEGNTH_COUNTER_TABLE: [u8; 0x20] = [
     10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22,
@@ -67,7 +66,6 @@ impl LengthCounter {
 pub struct LengthCountedChannel<C>
 where
     C: APUChannel,
-    C::Item: Sample,
 {
     length_counter: LengthCounter,
     channel: C,
@@ -76,7 +74,6 @@ where
 impl<C> LengthCountedChannel<C>
 where
     C: APUChannel,
-    C::Item: Sample,
 {
     pub fn new(channel: C) -> Self {
         Self {
@@ -102,24 +99,19 @@ where
     }
 }
 
-impl<C> Iterator for LengthCountedChannel<C>
-where
-    C: APUChannel,
-    C::Item: Sample,
-{
-    type Item = C::Item;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.length_counter.counter == 0 {
-            Some(Self::Item::zero_value())
-        } else {
-            self.channel.next()
-        }
-    }
-}
-
 impl<C> APUChannel for LengthCountedChannel<C>
 where
     C: APUChannel,
-    C::Item: Sample,
 {
+    fn get_output(&mut self) -> f32 {
+        if self.length_counter.counter == 0 {
+            0.
+        } else {
+            self.channel.get_output()
+        }
+    }
+
+    fn timer_clock(&mut self) {
+        unreachable!()
+    }
 }

@@ -6,6 +6,7 @@ mod apu2a03_registers;
 mod channels;
 mod envelope;
 mod length_counter;
+mod sequencer;
 mod sweeper;
 mod tone_source;
 

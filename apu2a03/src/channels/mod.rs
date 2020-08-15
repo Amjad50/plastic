@@ -1,7 +1,7 @@
-mod noise;
+// mod noise;
 mod square;
-mod triangle;
+//mod triangle;
 
-pub use noise::NoiseWave;
+// pub use noise::NoiseWave;
 pub use square::SquarePulse;
-pub use triangle::TriangleWave;
+// pub use triangle::TriangleWave;

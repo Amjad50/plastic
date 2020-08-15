@@ -1,19 +1,45 @@
-use rodio::{Sample, Source};
+use rodio::Source;
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
-pub trait APUChannel: Iterator
-where
-    Self::Item: Sample,
-{
-    fn sample_rate(&self) -> u32 {
-        crate::SAMPLE_RATE
+pub trait APUChannel {
+    fn get_output(&mut self) -> f32;
+    fn timer_clock(&mut self);
+}
+
+pub struct BufferedChannel {
+    buffer: VecDeque<f32>,
+}
+
+impl BufferedChannel {
+    pub fn new() -> Self {
+        Self {
+            buffer: VecDeque::new(),
+        }
+    }
+
+    pub fn recored_sample(&mut self, sample: f32) {
+        self.buffer.push_back(sample);
+    }
+}
+
+impl APUChannel for BufferedChannel {
+    fn get_output(&mut self) -> f32 {
+        if self.buffer.len() <= 1 {
+            *self.buffer.front().unwrap_or(&0.)
+        } else {
+            self.buffer.pop_front().unwrap()
+        }
+    }
+
+    fn timer_clock(&mut self) {
+        unreachable!();
     }
 }
 
 pub struct APUChannelPlayer<S>
 where
     S: APUChannel,
-    S::Item: Sample,
 {
     source: Arc<Mutex<S>>,
 }
@@ -21,7 +47,6 @@ where
 impl<S> APUChannelPlayer<S>
 where
     S: APUChannel,
-    S::Item: Sample,
 {
     pub fn from_clone(source: Arc<Mutex<S>>) -> Self {
         Self { source }
@@ -31,18 +56,16 @@ where
 impl<S> Iterator for APUChannelPlayer<S>
 where
     S: APUChannel,
-    S::Item: Sample,
 {
-    type Item = S::Item;
+    type Item = f32;
     fn next(&mut self) -> Option<Self::Item> {
-        self.source.lock().unwrap().next()
+        Some(self.source.lock().unwrap().get_output())
     }
 }
 
 impl<S> Source for APUChannelPlayer<S>
 where
     S: APUChannel,
-    S::Item: Sample,
 {
     #[inline]
     fn current_frame_len(&self) -> Option<usize> {
