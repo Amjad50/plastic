@@ -452,6 +452,7 @@ impl APU2A03 {
         Self::timer_clock(&mut self.square_pulse_1);
         Self::timer_clock(&mut self.square_pulse_2);
         Self::timer_clock(&mut self.triangle);
+        Self::timer_clock(&mut self.triangle);
         Self::timer_clock(&mut self.noise);
 
         self.cycle += 1;
