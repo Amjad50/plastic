@@ -64,10 +64,13 @@ impl EnvelopedChannel for SquarePulse {
 
 impl APUChannel for SquarePulse {
     fn get_output(&mut self) -> f32 {
-        if self.muted || self.sequencer.get_current_value() == 0 {
+        if self.muted || self.envelope_generator.get_current_volume() == 0. {
             0.
         } else {
-            self.envelope_generator.get_current_volume()
+            (self.sequencer.get_current_value() as f32
+                * self.envelope_generator.get_current_volume()
+                - 0.5)
+                * 2.
         }
     }
 
