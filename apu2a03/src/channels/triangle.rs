@@ -1,13 +1,11 @@
+use crate::sequencer::Sequencer;
 use crate::tone_source::APUChannel;
 
 pub struct TriangleWave {
-    freq: f32,
-    n_harmonics: u8,
-    sample_num: usize,
-
     period: u16,
-    // TODO: add a method to stay in sync with one reference stored in APU
-    reference_frequency: f32,
+    current_timer: u16,
+
+    sequencer: Sequencer,
 
     muted: bool,
 
@@ -18,14 +16,18 @@ pub struct TriangleWave {
 }
 
 impl TriangleWave {
-    pub fn new(freq: f32, n_harmonics: u8, reference_frequency: f32) -> Self {
-        Self {
-            freq,
-            n_harmonics,
-            sample_num: 0,
+    pub fn new() -> Self {
+        let mut sequencer = Sequencer::new();
+        sequencer.set_sequence(&[
+            15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+            11, 12, 13, 14, 15,
+        ]);
 
+        Self {
             period: 0,
-            reference_frequency,
+            current_timer: 0,
+
+            sequencer,
 
             muted: false,
 
@@ -44,8 +46,6 @@ impl TriangleWave {
         self.period = period;
 
         self.muted = period < 2;
-
-        self.update_frequency();
     }
 
     pub(crate) fn set_linear_counter_reload_value(&mut self, value: u8) {
@@ -76,40 +76,24 @@ impl TriangleWave {
             }
         }
     }
-
-    fn update_frequency(&mut self) {
-        self.freq = self.reference_frequency / (32 * (self.period + 1)) as f32;
-    }
-
-    /// returns a triangle function using sum of sines
-    fn sin_next(&self, time: usize) -> f32 {
-        let mut a: f32 = 0.;
-
-        for i in 0..=(self.n_harmonics - 1) {
-            // v = (-1)^i
-            let v = (-1. as f32).powi(i as i32);
-            let n = (2 * i as u32 + 1) as f32;
-            let c = n * self.freq / self.sample_rate() as f32 * time as f32 * 2. * 3.1415;
-            a += v * n.powi(-2) * c.sin();
-        }
-
-        a * (8. / (3.1415 as f32).powi(2))
-    }
 }
 
-impl Iterator for TriangleWave {
-    type Item = f32;
-    fn next(&mut self) -> Option<Self::Item> {
+impl APUChannel for TriangleWave {
+    fn get_output(&mut self) -> f32 {
         if self.linear_counter == 0 || self.muted {
-            Some(0.)
+            0.
         } else {
-            self.sample_num = self.sample_num.wrapping_add(1);
+            ((self.sequencer.get_current_value() as f32) - 7.5) / 15. * 2.
+        }
+    }
 
-            let result = self.sin_next(self.sample_num);
+    fn timer_clock(&mut self) {
+        if self.current_timer == 0 {
+            self.sequencer.clock();
 
-            Some(result)
+            self.current_timer = self.period;
+        } else {
+            self.current_timer -= 1;
         }
     }
 }
-
-impl APUChannel for TriangleWave {}

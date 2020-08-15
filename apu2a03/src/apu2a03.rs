@@ -1,5 +1,5 @@
 use crate::apu2a03_registers::Register;
-use crate::channels::SquarePulse;
+use crate::channels::{SquarePulse, TriangleWave};
 use crate::envelope::EnvelopedChannel;
 use crate::length_counter::LengthCountedChannel;
 use crate::sweeper::Sweeper;
@@ -16,7 +16,7 @@ pub struct APU2A03 {
 
     buffered_channel: Arc<Mutex<BufferedChannel>>,
 
-    // triangle: Arc<Mutex<LengthCountedChannel<TriangleWave>>>,
+    triangle: Arc<Mutex<LengthCountedChannel<TriangleWave>>>,
 
     // noise: Arc<Mutex<LengthCountedChannel<NoiseWave>>>,
     mixer: rodio::dynamic_mixer::DynamicMixer<f32>,
@@ -40,19 +40,20 @@ impl APU2A03 {
     pub fn new() -> Self {
         let square_pulse_1 = Arc::new(Mutex::new(LengthCountedChannel::new(SquarePulse::new())));
         let square_pulse_2 = Arc::new(Mutex::new(LengthCountedChannel::new(SquarePulse::new())));
+        let triangle = Arc::new(Mutex::new(LengthCountedChannel::new(TriangleWave::new())));
 
         let buffered_channel = Arc::new(Mutex::new(BufferedChannel::new()));
 
         let sqr1 = APUChannelPlayer::from_clone(square_pulse_1.clone());
         let sqr2 = APUChannelPlayer::from_clone(square_pulse_2.clone());
-        // let triangle = APUChannelPlayer::from_clone(self.triangle.clone());
+        let tri = APUChannelPlayer::from_clone(triangle.clone());
         // let noise = APUChannelPlayer::from_clone(self.noise.clone());
 
         let (controller, mixer) = rodio::dynamic_mixer::mixer::<f32>(5, crate::SAMPLE_RATE);
 
         controller.add(sqr1);
         controller.add(sqr2);
-        // controller.add(triangle);
+        controller.add(tri);
         // controller.add(noise);
 
         Self {
@@ -61,13 +62,9 @@ impl APU2A03 {
             square_pulse_2: square_pulse_2.clone(),
             square_pulse_2_sweeper: Sweeper::new(square_pulse_2.clone()),
 
-            buffered_channel,
+            triangle,
 
-            // triangle: Arc::new(Mutex::new(LengthCountedChannel::new(TriangleWave::new(
-            //     440.,
-            //     20,
-            //     1.789773 * 1E6,
-            // )))),
+            buffered_channel,
 
             // noise: Arc::new(Mutex::new(LengthCountedChannel::new(
             //     EnvelopeGenerator::new(NoiseWave::new(1.789773 * 1E6)),
@@ -106,11 +103,11 @@ impl APU2A03 {
                 } else {
                     0
                 };
-                // let triangle_length_counter = if let Ok(triangle) = self.triangle.lock() {
-                //     (triangle.length_counter().counter() != 0) as u8
-                // } else {
-                //     0
-                // };
+                let triangle_length_counter = if let Ok(triangle) = self.triangle.lock() {
+                    (triangle.length_counter().counter() != 0) as u8
+                } else {
+                    0
+                };
                 // let noise_length_counter = if let Ok(noise) = self.noise.lock() {
                 //     (noise.length_counter().counter() != 0) as u8
                 // } else {
@@ -123,7 +120,7 @@ impl APU2A03 {
 
                 frame_interrupt << 6
                 //     | noise_length_counter << 3
-                //     | triangle_length_counter << 2
+                    | triangle_length_counter << 2
                     | sqr2_length_counter << 1
                     | sqr1_length_counter
             }
@@ -262,43 +259,43 @@ impl APU2A03 {
                 }
             }
             Register::Triangle1 => {
-                // if let Ok(mut triangle) = self.triangle.lock() {
-                //     triangle
-                //         .channel_mut()
-                //         .set_linear_counter_reload_value(data & 0x7F);
-                //     triangle
-                //         .channel_mut()
-                //         .set_linear_counter_control_flag(data & 0x80 != 0);
+                if let Ok(mut triangle) = self.triangle.lock() {
+                    triangle
+                        .channel_mut()
+                        .set_linear_counter_reload_value(data & 0x7F);
+                    triangle
+                        .channel_mut()
+                        .set_linear_counter_control_flag(data & 0x80 != 0);
 
-                //     triangle.length_counter_mut().set_halt(data & 0x80 != 0);
-                // }
+                    triangle.length_counter_mut().set_halt(data & 0x80 != 0);
+                }
             }
             Register::Triangle2 => {
                 // unused
             }
             Register::Triangle3 => {
-                // if let Ok(mut triangle) = self.triangle.lock() {
-                //     let period = triangle.channel().get_period();
+                if let Ok(mut triangle) = self.triangle.lock() {
+                    let period = triangle.channel().get_period();
 
-                //     // lower timer bits
-                //     triangle
-                //         .channel_mut()
-                //         .set_period((period & 0xFF00) | data as u16);
-                // }
+                    // lower timer bits
+                    triangle
+                        .channel_mut()
+                        .set_period((period & 0xFF00) | data as u16);
+                }
             }
             Register::Triangle4 => {
-                // if let Ok(mut triangle) = self.triangle.lock() {
-                //     triangle.length_counter_mut().reload_counter(data >> 3);
+                if let Ok(mut triangle) = self.triangle.lock() {
+                    triangle.length_counter_mut().reload_counter(data >> 3);
 
-                //     let period = triangle.channel().get_period();
+                    let period = triangle.channel().get_period();
 
-                //     // high timer bits
-                //     triangle
-                //         .channel_mut()
-                //         .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8));
+                    // high timer bits
+                    triangle
+                        .channel_mut()
+                        .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8));
 
-                //     triangle.channel_mut().set_linear_counter_reload_flag(true);
-                // }
+                    triangle.channel_mut().set_linear_counter_reload_flag(true);
+                }
             }
             Register::Noise1 => {
                 // let volume = data & 0xF;
@@ -345,11 +342,11 @@ impl APU2A03 {
                         .length_counter_mut()
                         .set_enabled((data >> 1 & 1) != 0);
                 }
-                // if let Ok(mut triangle) = self.triangle.lock() {
-                //     triangle
-                //         .length_counter_mut()
-                //         .set_enabled((data >> 2 & 1) != 0);
-                // }
+                if let Ok(mut triangle) = self.triangle.lock() {
+                    triangle
+                        .length_counter_mut()
+                        .set_enabled((data >> 2 & 1) != 0);
+                }
                 // if let Ok(mut noise) = self.noise.lock() {
                 //     noise.length_counter_mut().set_enabled((data >> 3 & 1) != 0);
                 // }
@@ -405,9 +402,9 @@ impl APU2A03 {
     }
 
     fn triangle_linear_counter_clock(&mut self) {
-        // if let Ok(mut triangle) = self.triangle.lock() {
-        //     triangle.channel_mut().clock_linear_counter();
-        // }
+        if let Ok(mut triangle) = self.triangle.lock() {
+            triangle.channel_mut().clock_linear_counter();
+        }
     }
 
     fn generate_quarter_frame_clock(&mut self) {
@@ -422,7 +419,7 @@ impl APU2A03 {
         self.square_pulse_1_sweeper.clock();
         Self::length_counter_decrement(&mut self.square_pulse_2);
         self.square_pulse_2_sweeper.clock();
-        // Self::length_counter_decrement(&mut self.triangle);
+        Self::length_counter_decrement(&mut self.triangle);
         // Self::length_counter_decrement(&mut self.noise);
     }
 
@@ -456,6 +453,7 @@ impl APU2A03 {
         // }
         Self::timer_clock(&mut self.square_pulse_1);
         Self::timer_clock(&mut self.square_pulse_2);
+        Self::timer_clock(&mut self.triangle);
 
         self.cycle += 1;
 
