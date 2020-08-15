@@ -1,3 +1,4 @@
+use crate::envelope::{EnvelopeGenerator, EnvelopedChannel};
 use crate::tone_source::APUChannel;
 
 /// Table for NTSC only
@@ -6,14 +7,10 @@ const NOISE_PERIODS_TABLE: [u16; 0x10] = [
 ];
 
 pub struct NoiseWave {
-    freq: f32,
-    n_harmonics: u8,
-    sample_num: usize,
-
     period: u16,
     current_timer: u16,
-    // TODO: add a method to stay in sync with one reference stored in APU
-    reference_frequency: f32,
+
+    envelope_generator: EnvelopeGenerator,
 
     shift_register: u16,
 
@@ -21,15 +18,12 @@ pub struct NoiseWave {
 }
 
 impl NoiseWave {
-    pub fn new(reference_frequency: f32) -> Self {
+    pub fn new() -> Self {
         Self {
-            freq: 0.,
-            n_harmonics: 20, // default
-            sample_num: 0,
-
             period: 0,
             current_timer: 0,
-            reference_frequency,
+
+            envelope_generator: EnvelopeGenerator::new(),
 
             shift_register: 1,
 
@@ -37,25 +31,26 @@ impl NoiseWave {
         }
     }
 
-    pub(crate) fn get_period(&self) -> u16 {
-        self.period
-    }
-
     pub(crate) fn set_period(&mut self, period_index_index: u8) {
         self.period = NOISE_PERIODS_TABLE[period_index_index as usize & 0xF];
-
-        self.update_frequency();
     }
 
     pub(crate) fn set_mode_flag(&mut self, flag: bool) {
         self.mode_flag = flag;
     }
+}
 
-    pub(crate) fn reset(&mut self) {
-        self.sample_num = 0;
+impl APUChannel for NoiseWave {
+    fn get_output(&mut self) -> f32 {
+        if self.envelope_generator.get_current_volume() == 0. {
+            0.
+        } else {
+            let bit = (self.shift_register & 1) as f32;
+            (bit * self.envelope_generator.get_current_volume() - 0.5) * 2.
+        }
     }
 
-    pub(crate) fn clock_timer(&mut self) {
+    fn timer_clock(&mut self) {
         if self.current_timer == 0 {
             let selected_bit_location = if self.mode_flag { 6 } else { 1 };
             let bit_0 = self.shift_register & 1;
@@ -65,38 +60,19 @@ impl NoiseWave {
             self.shift_register = (self.shift_register >> 1) & 0x3FFF;
             self.shift_register |= feedback << 14;
 
-            self.current_timer = self.period + 1;
+            self.current_timer = self.period;
         } else {
             self.current_timer = self.current_timer.saturating_sub(1);
         }
     }
-
-    fn update_frequency(&mut self) {
-        self.freq = self.reference_frequency / (1 * (self.period + 1)) as f32;
-    }
-
-    fn generate_next(&mut self, time: usize) -> f32 {
-        1.
-    }
-
-    fn muted(&self) -> bool {
-        self.shift_register & 1 != 0
-    }
 }
 
-impl Iterator for NoiseWave {
-    type Item = f32;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.muted() {
-            Some(0.)
-        } else {
-            self.sample_num = self.sample_num.wrapping_add(1);
+impl EnvelopedChannel for NoiseWave {
+    fn clock_envlope(&mut self) {
+        self.envelope_generator.clock()
+    }
 
-            let result = self.generate_next(self.sample_num);
-
-            Some(result)
-        }
+    fn envelope_generator_mut(&mut self) -> &mut EnvelopeGenerator {
+        &mut self.envelope_generator
     }
 }
-
-impl APUChannel for NoiseWave {}
