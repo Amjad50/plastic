@@ -4,7 +4,7 @@ use crate::envelope::EnvelopedChannel;
 use crate::length_counter::LengthCountedChannel;
 use crate::mixer::Mixer;
 use crate::sweeper::Sweeper;
-use crate::tone_source::{APUChannel, APUChannelPlayer, BufferedChannel, Filter};
+use crate::tone_source::{APUChannel, APUChannelPlayer, BufferedChannel, Filter, TimedAPUChannel};
 use common::interconnection::CpuIrqProvider;
 use std::cell::Cell;
 use std::sync::{Arc, Mutex};
@@ -395,7 +395,7 @@ impl APU2A03 {
         }
     }
 
-    fn timer_clock<S: APUChannel>(channel: &mut Arc<Mutex<LengthCountedChannel<S>>>) {
+    fn timer_clock<S: TimedAPUChannel>(channel: &mut Arc<Mutex<LengthCountedChannel<S>>>) {
         if let Ok(mut channel) = channel.lock() {
             channel.channel_mut().timer_clock();
         }

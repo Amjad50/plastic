@@ -4,6 +4,9 @@ use std::sync::{Arc, Mutex};
 
 pub trait APUChannel {
     fn get_output(&mut self) -> f32;
+}
+
+pub trait TimedAPUChannel: APUChannel {
     fn timer_clock(&mut self);
 }
 
@@ -33,14 +36,8 @@ impl APUChannel for BufferedChannel {
             self.buffer.pop_front().unwrap()
         }
     }
-
-    fn timer_clock(&mut self) {
-        unreachable!();
-    }
 }
 
-// This is a simple antialiasing IIR filter for 352.8 Khz (8 * 44.1 Khz) sampling rate.
-//
 // this is not my own.
 // source: https://github.com/koute/pinky/blob/master/nes/src/filter.rs
 pub struct Filter {

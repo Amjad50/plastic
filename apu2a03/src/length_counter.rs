@@ -110,8 +110,4 @@ where
             self.channel.get_output()
         }
     }
-
-    fn timer_clock(&mut self) {
-        unreachable!()
-    }
 }

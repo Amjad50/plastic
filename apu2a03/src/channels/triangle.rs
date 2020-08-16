@@ -1,5 +1,5 @@
 use crate::sequencer::Sequencer;
-use crate::tone_source::APUChannel;
+use crate::tone_source::{APUChannel, TimedAPUChannel};
 
 pub struct TriangleWave {
     period: u16,
@@ -87,7 +87,9 @@ impl APUChannel for TriangleWave {
             self.sequencer.get_current_value() as f32
         }
     }
+}
 
+impl TimedAPUChannel for TriangleWave {
     fn timer_clock(&mut self) {
         if self.current_timer == 0 {
             self.sequencer.clock();

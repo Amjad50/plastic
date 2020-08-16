@@ -1,5 +1,5 @@
 use crate::envelope::{EnvelopeGenerator, EnvelopedChannel};
-use crate::tone_source::APUChannel;
+use crate::tone_source::{APUChannel, TimedAPUChannel};
 
 /// Table for NTSC only
 const NOISE_PERIODS_TABLE: [u16; 0x10] = [
@@ -48,7 +48,9 @@ impl APUChannel for NoiseWave {
             self.envelope_generator.get_current_volume()
         }
     }
+}
 
+impl TimedAPUChannel for NoiseWave {
     fn timer_clock(&mut self) {
         if self.current_timer == 0 {
             let selected_bit_location = if self.mode_flag { 6 } else { 1 };

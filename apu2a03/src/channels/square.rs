@@ -1,6 +1,6 @@
 use crate::envelope::{EnvelopeGenerator, EnvelopedChannel};
 use crate::sequencer::Sequencer;
-use crate::tone_source::APUChannel;
+use crate::tone_source::{APUChannel, TimedAPUChannel};
 
 const DUTY_CYCLE_SEQUENCES: [[u8; 8]; 4] = [
     [0, 1, 0, 0, 0, 0, 0, 0],
@@ -70,7 +70,9 @@ impl APUChannel for SquarePulse {
             self.envelope_generator.get_current_volume()
         }
     }
+}
 
+impl TimedAPUChannel for SquarePulse {
     fn timer_clock(&mut self) {
         if self.current_timer == 0 {
             self.sequencer.clock();

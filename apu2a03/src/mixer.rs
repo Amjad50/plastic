@@ -55,8 +55,4 @@ impl APUChannel for Mixer {
 
         pulse_out + tnd_out
     }
-
-    fn timer_clock(&mut self) {
-        unreachable!()
-    }
 }
