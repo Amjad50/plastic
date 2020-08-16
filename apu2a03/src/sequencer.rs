@@ -18,7 +18,7 @@ impl Sequencer {
     }
 
     pub(crate) fn get_current_value(&self) -> u8 {
-        self.sequence[self.position]
+        *self.sequence.get(self.position).unwrap_or(&0)
     }
 
     fn length(&self) -> usize {
