@@ -4,7 +4,7 @@ use crate::envelope::EnvelopedChannel;
 use crate::length_counter::LengthCountedChannel;
 use crate::mixer::Mixer;
 use crate::sweeper::Sweeper;
-use crate::tone_source::{APUChannel, APUChannelPlayer, BufferedChannel};
+use crate::tone_source::{APUChannel, APUChannelPlayer, BufferedChannel, Filter};
 use common::interconnection::CpuIrqProvider;
 use std::cell::Cell;
 use std::sync::{Arc, Mutex};
@@ -30,10 +30,13 @@ pub struct APU2A03 {
 
     wait_reset: i8,
 
-    sample_counter: f32,
+    sample_counter: f64,
 
     interrupt_flag: Cell<bool>,
     request_interrupt_flag_change: Cell<bool>,
+
+    filter: Filter,
+    filter_counter: u8,
 }
 
 impl APU2A03 {
@@ -73,6 +76,9 @@ impl APU2A03 {
 
             interrupt_flag: Cell::new(false),
             request_interrupt_flag_change: Cell::new(false),
+
+            filter: Filter::new(),
+            filter_counter: 0,
         }
     }
 
@@ -371,7 +377,7 @@ impl APU2A03 {
         let sink = rodio::Sink::new(&device);
 
         sink.append(APUChannelPlayer::from_clone(self.buffered_channel.clone()));
-        sink.set_volume(0.09);
+        sink.set_volume(0.15);
 
         sink.play();
         sink.detach();
@@ -431,15 +437,30 @@ impl APU2A03 {
             }
         }
 
-        let samples_per_frame = 894886.5 / crate::SAMPLE_RATE as f32;
+        let cpu = 1.789773 * 1E6;
+        let apu = cpu / 2.;
+
+        // after how many apu clocks a sample should be recorded
+        // for now its 44100 * 8 and that is only due to the filter used, as it supports
+        // that only for now.
+        //
+        // FIXME: the buffer is being emptied faster than filled for some reason, please investigate
+        //  (-0.9) is set to fix that, but of course its not 1% reliable :(
+        let samples_every_n_apu_clock = (apu / (crate::SAMPLE_RATE as f64 * 8.)) - 0.9;
 
         self.sample_counter += 1.0;
-        if self.sample_counter >= samples_per_frame {
-            self.buffered_channel
-                .lock()
-                .unwrap()
-                .recored_sample(self.mixer.get_output());
-            self.sample_counter -= samples_per_frame;
+        if self.sample_counter >= samples_every_n_apu_clock {
+            let output = self.mixer.get_output();
+            let output = self.filter.apply(output);
+
+            if self.filter_counter == 8 {
+                self.filter_counter = 0;
+                self.buffered_channel.lock().unwrap().recored_sample(output);
+            } else {
+                self.filter_counter += 1;
+            }
+
+            self.sample_counter -= samples_every_n_apu_clock;
         }
 
         Self::timer_clock(&mut self.square_pulse_1);
