@@ -54,10 +54,6 @@ impl TriangleWave {
 
     pub(crate) fn set_linear_counter_control_flag(&mut self, flag: bool) {
         self.linear_counter_control_flag = flag;
-
-        if !flag {
-            self.linear_counter_reload_flag = false;
-        }
     }
 
     pub(crate) fn set_linear_counter_reload_flag(&mut self, flag: bool) {
@@ -70,6 +66,11 @@ impl TriangleWave {
             self.linear_counter_reload_flag = self.linear_counter_control_flag;
 
             self.linear_counter = self.linear_counter_reload_value;
+
+            // clear only if the control flag is cleared
+            if !self.linear_counter_control_flag {
+                self.linear_counter_reload_flag = false;
+            }
         } else {
             if self.linear_counter != 0 {
                 self.linear_counter = self.linear_counter.saturating_sub(1);
