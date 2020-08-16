@@ -84,7 +84,7 @@ impl APUChannel for TriangleWave {
         if self.linear_counter == 0 || self.muted {
             0.
         } else {
-            ((self.sequencer.get_current_value() as f32) - 7.5) / 15. * 2.
+            self.sequencer.get_current_value() as f32
         }
     }
 

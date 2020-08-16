@@ -71,9 +71,9 @@ impl EnvelopeGenerator {
     /// return the volume 0 - 1
     pub(crate) fn get_current_volume(&mut self) -> f32 {
         if self.use_constant_volume {
-            self.divider_reload_value as f32 / 0xF as f32
+            self.divider_reload_value as f32
         } else {
-            self.decay_level as f32 / 0xF as f32
+            self.decay_level as f32
         }
     }
 }

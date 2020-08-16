@@ -2,6 +2,7 @@ use crate::apu2a03_registers::Register;
 use crate::channels::{NoiseWave, SquarePulse, TriangleWave};
 use crate::envelope::EnvelopedChannel;
 use crate::length_counter::LengthCountedChannel;
+use crate::mixer::Mixer;
 use crate::sweeper::Sweeper;
 use crate::tone_source::{APUChannel, APUChannelPlayer, BufferedChannel};
 use common::interconnection::CpuIrqProvider;
@@ -14,12 +15,13 @@ pub struct APU2A03 {
     square_pulse_2: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
     square_pulse_2_sweeper: Sweeper,
 
-    buffered_channel: Arc<Mutex<BufferedChannel>>,
-
     triangle: Arc<Mutex<LengthCountedChannel<TriangleWave>>>,
 
     noise: Arc<Mutex<LengthCountedChannel<NoiseWave>>>,
-    mixer: rodio::dynamic_mixer::DynamicMixer<f32>,
+
+    buffered_channel: Arc<Mutex<BufferedChannel>>,
+
+    mixer: Mixer,
 
     is_4_step_squence_mode: bool,
     interrupt_inhibit_flag: bool,
@@ -41,33 +43,24 @@ impl APU2A03 {
         let triangle = Arc::new(Mutex::new(LengthCountedChannel::new(TriangleWave::new())));
         let noise = Arc::new(Mutex::new(LengthCountedChannel::new(NoiseWave::new())));
 
-        let buffered_channel = Arc::new(Mutex::new(BufferedChannel::new()));
-
-        let sqr1_player = APUChannelPlayer::from_clone(square_pulse_1.clone());
-        let sqr2_player = APUChannelPlayer::from_clone(square_pulse_2.clone());
-        let triangle_player = APUChannelPlayer::from_clone(triangle.clone());
-        let noise_player = APUChannelPlayer::from_clone(noise.clone());
-
-        let (controller, mixer) = rodio::dynamic_mixer::mixer::<f32>(5, crate::SAMPLE_RATE);
-
-        controller.add(sqr1_player);
-        controller.add(sqr2_player);
-        controller.add(triangle_player);
-        controller.add(noise_player);
-
         Self {
             square_pulse_1: square_pulse_1.clone(),
             square_pulse_1_sweeper: Sweeper::new(square_pulse_1.clone()),
             square_pulse_2: square_pulse_2.clone(),
             square_pulse_2_sweeper: Sweeper::new(square_pulse_2.clone()),
 
-            triangle,
+            triangle: triangle.clone(),
 
-            noise,
+            noise: noise.clone(),
 
-            buffered_channel,
+            buffered_channel: Arc::new(Mutex::new(BufferedChannel::new())),
 
-            mixer,
+            mixer: Mixer::new(
+                square_pulse_1.clone(),
+                square_pulse_2.clone(),
+                triangle.clone(),
+                noise.clone(),
+            ),
 
             is_4_step_squence_mode: false,
             interrupt_inhibit_flag: false,
@@ -378,7 +371,7 @@ impl APU2A03 {
         let sink = rodio::Sink::new(&device);
 
         sink.append(APUChannelPlayer::from_clone(self.buffered_channel.clone()));
-        sink.set_volume(0.05);
+        sink.set_volume(0.09);
 
         sink.play();
         sink.detach();
@@ -445,7 +438,7 @@ impl APU2A03 {
             self.buffered_channel
                 .lock()
                 .unwrap()
-                .recored_sample(self.mixer.next().unwrap());
+                .recored_sample(self.mixer.get_output());
             self.sample_counter -= samples_per_frame;
         }
 

@@ -42,11 +42,10 @@ impl NoiseWave {
 
 impl APUChannel for NoiseWave {
     fn get_output(&mut self) -> f32 {
-        if self.envelope_generator.get_current_volume() == 0. {
+        if self.shift_register & 1 == 0 {
             0.
         } else {
-            let bit = (self.shift_register & 1) as f32;
-            (bit * self.envelope_generator.get_current_volume() - 0.5) * 2.
+            self.envelope_generator.get_current_volume()
         }
     }
 
