@@ -174,7 +174,8 @@ impl TimedAPUChannel for Dmc {
             }
 
             self.output_shift_register >>= 1;
-            self.shifter_remaining_bits_counter -= 1;
+            self.shifter_remaining_bits_counter =
+                self.shifter_remaining_bits_counter.saturating_sub(1);
 
             if self.shifter_remaining_bits_counter == 0 {
                 self.shifter_remaining_bits_counter = 8;
