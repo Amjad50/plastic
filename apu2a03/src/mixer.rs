@@ -1,4 +1,4 @@
-use crate::channels::{NoiseWave, SquarePulse, TriangleWave};
+use crate::channels::{Dmc, NoiseWave, SquarePulse, TriangleWave};
 use crate::length_counter::LengthCountedChannel;
 use crate::tone_source::APUChannel;
 use std::sync::{Arc, Mutex};
@@ -8,6 +8,7 @@ pub struct Mixer {
     square_pulse_2: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
     triangle: Arc<Mutex<LengthCountedChannel<TriangleWave>>>,
     noise: Arc<Mutex<LengthCountedChannel<NoiseWave>>>,
+    dmc: Arc<Mutex<Dmc>>,
 }
 
 impl Mixer {
@@ -16,12 +17,14 @@ impl Mixer {
         square_pulse_2: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
         triangle: Arc<Mutex<LengthCountedChannel<TriangleWave>>>,
         noise: Arc<Mutex<LengthCountedChannel<NoiseWave>>>,
+        dmc: Arc<Mutex<Dmc>>,
     ) -> Self {
         Self {
             square_pulse_1,
             square_pulse_2,
             triangle,
             noise,
+            dmc,
         }
     }
 
@@ -40,6 +43,7 @@ impl APUChannel for Mixer {
         let square_pulse_2 = Self::channel_output(&mut self.square_pulse_2);
         let triangle = Self::channel_output(&mut self.triangle);
         let noise = Self::channel_output(&mut self.noise);
+        let dmc = Self::channel_output(&mut self.dmc);
 
         let pulse_out = if square_pulse_1 == 0. && square_pulse_2 == 0. {
             0.
@@ -47,10 +51,10 @@ impl APUChannel for Mixer {
             95.88 / ((8128. / (square_pulse_1 + square_pulse_2)) + 100.)
         };
 
-        let tnd_out = if triangle == 0. && noise == 0. {
+        let tnd_out = if triangle == 0. && noise == 0. && dmc == 0. {
             0.
         } else {
-            159.79 / ((1. / ((triangle / 8227.) + (noise / 12241.))) + 100.)
+            159.79 / ((1. / ((triangle / 8227.) + (noise / 12241.) + (dmc / 22638.))) + 100.)
         };
 
         pulse_out + tnd_out

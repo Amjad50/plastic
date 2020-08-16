@@ -1,4 +1,5 @@
-use crate::tone_source::APUChannel;
+use crate::envelope::EnvelopedChannel;
+use crate::tone_source::{APUChannel, TimedAPUChannel};
 
 const LEGNTH_COUNTER_TABLE: [u8; 0x20] = [
     10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22,
@@ -109,5 +110,27 @@ where
         } else {
             self.channel.get_output()
         }
+    }
+}
+
+impl<C> TimedAPUChannel for LengthCountedChannel<C>
+where
+    C: TimedAPUChannel,
+{
+    fn timer_clock(&mut self) {
+        self.channel.timer_clock()
+    }
+}
+
+impl<C> EnvelopedChannel for LengthCountedChannel<C>
+where
+    C: EnvelopedChannel,
+{
+    fn clock_envlope(&mut self) {
+        self.channel.clock_envlope();
+    }
+
+    fn envelope_generator_mut(&mut self) -> &mut crate::envelope::EnvelopeGenerator {
+        self.channel.envelope_generator_mut()
     }
 }

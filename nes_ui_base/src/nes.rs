@@ -146,7 +146,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
         let cpubus = CPUBus::new(cartridge.clone(), ppu.clone(), apu.clone(), ctrl);
 
-        let mut cpu = CPU6502::new(Rc::new(RefCell::new(cpubus)), ppu.clone());
+        let mut cpu = CPU6502::new(Rc::new(RefCell::new(cpubus)), ppu.clone(), apu.clone());
         cpu.add_irq_provider(cartridge.clone());
         cpu.add_irq_provider(apu.clone());
 

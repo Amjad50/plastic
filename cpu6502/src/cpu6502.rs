@@ -1,6 +1,6 @@
 use super::instruction::{AddressingMode, Instruction, Opcode};
 use common::{
-    interconnection::{CpuIrqProvider, PPUCPUConnection},
+    interconnection::{APUCPUConnection, CpuIrqProvider, PPUCPUConnection},
     Bus, Device,
 };
 use std::{cell::RefCell, rc::Rc};
@@ -53,6 +53,8 @@ pub struct CPU6502<T: Bus> {
 
     bus: Rc<RefCell<T>>,
     ppu: Rc<RefCell<dyn PPUCPUConnection>>,
+    apu: Rc<RefCell<dyn APUCPUConnection>>,
+
     irq_providers: Vec<Rc<RefCell<dyn CpuIrqProvider>>>,
 }
 
@@ -60,7 +62,11 @@ impl<T> CPU6502<T>
 where
     T: Bus,
 {
-    pub fn new(bus: Rc<RefCell<T>>, ppu: Rc<RefCell<dyn PPUCPUConnection>>) -> Self {
+    pub fn new(
+        bus: Rc<RefCell<T>>,
+        ppu: Rc<RefCell<dyn PPUCPUConnection>>,
+        apu: Rc<RefCell<dyn APUCPUConnection>>,
+    ) -> Self {
         CPU6502 {
             reg_pc: 0,
             reg_sp: 0xFD, // FIXME: not 100% about this
@@ -79,6 +85,8 @@ where
 
             bus,
             ppu,
+            apu,
+
             irq_providers: Vec::new(),
         }
     }
@@ -398,9 +406,25 @@ where
         }
     }
 
+    fn check_and_run_dmc_transfer(&mut self) {
+        let request = self.apu.borrow().request_dmc_reader_read();
+
+        if let Some(addr) = request {
+            let data = self.read_bus(addr);
+
+            self.apu.borrow_mut().submit_buffer_byte(data);
+
+            // FIXME: respect different clock delay for respective positions to
+            //  steal the clock
+            self.cycles_to_wait += 3;
+        }
+    }
+
     // return true if an instruction executed
     // false if it was waiting for remaining cycles
     pub fn run_next(&mut self) -> CPURunState {
+        self.check_and_run_dmc_transfer();
+
         if self.cycles_to_wait == 0 {
             // are we still executing the DMA transfer instruction?
             if self.dma_remaining > 0 {

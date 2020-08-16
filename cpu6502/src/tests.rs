@@ -25,9 +25,9 @@ mod cpu_tests {
         }
     }
 
-    struct DummyCartridgePPUHandler {}
+    struct DummyHandler {}
 
-    impl PPUCPUConnection for DummyCartridgePPUHandler {
+    impl PPUCPUConnection for DummyHandler {
         fn is_nmi_pin_set(&self) -> bool {
             false
         }
@@ -40,6 +40,15 @@ mod cpu_tests {
             unreachable!()
         }
         fn send_oam_data(&mut self, _address: u8, _data: u8) {
+            unreachable!();
+        }
+    }
+
+    impl APUCPUConnection for DummyHandler {
+        fn request_dmc_reader_read(&self) -> Option<u16> {
+            None
+        }
+        fn submit_buffer_byte(&mut self, _: u8) {
             unreachable!();
         }
     }
@@ -76,8 +85,8 @@ mod cpu_tests {
         const SUCCUSS_ADDRESS: u16 = 0x336D;
 
         let bus = DummyBus::new(data);
-        let handler = Rc::new(RefCell::new(DummyCartridgePPUHandler {}));
-        let mut cpu = CPU6502::new(Rc::new(RefCell::new(bus)), handler);
+        let handler = Rc::new(RefCell::new(DummyHandler {}));
+        let mut cpu = CPU6502::new(Rc::new(RefCell::new(bus)), handler.clone(), handler.clone());
 
         cpu.reset();
 
