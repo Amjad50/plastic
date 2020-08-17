@@ -1120,6 +1120,52 @@ where
             self.render_pixel();
         }
     }
+
+    pub fn reset(&mut self, bus: T) {
+        // just as if calling the constructor but without TV, just reset it
+        self.reg_control = ControlReg::empty();
+        self.reg_mask = MaskReg::empty();
+        self.reg_status = Cell::new(StatusReg::empty());
+        self.reg_oam_addr = Cell::new(0);
+
+        self.scanline = 0; // start from -1 scanline
+        self.cycle = 0;
+
+        self.vram_address_cur = Cell::new(0);
+        self.vram_address_top_left = 0;
+
+        self.ppu_data_read_buffer = Cell::new(0);
+
+        self.fine_x_scroll = 0;
+
+        self.w_toggle = Cell::new(false);
+
+        self.bg_pattern_shift_registers = [0; 2];
+        self.bg_palette_shift_registers = [0; 2];
+
+        self.nmi_pin_status = Cell::new(false);
+        self.nmi_occured_in_this_frame = Cell::new(false);
+
+        self.bus = bus;
+
+        self.primary_oam = [Sprite::empty(); 64];
+        self.secondary_oam = [Sprite::empty(); 8];
+
+        self.secondary_oam_counter = 0;
+
+        self.sprite_pattern_shift_registers = [[0; 2]; 8];
+        self.sprite_attribute_registers = [SpriteAttribute::empty(); 8];
+        self.sprite_counters = [0; 8];
+        self.sprite_0_present = false;
+        self.next_scanline_sprite_0_present = false;
+
+        self.is_dma_request = false;
+        self.dma_request_address = 0;
+
+        self.is_odd_frame = false;
+
+        self.tv.reset();
+    }
 }
 
 impl<T> PPUCPUConnection for PPU2C02<T>

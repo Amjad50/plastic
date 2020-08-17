@@ -2,13 +2,14 @@ use nes_ui_base::{
     nes::{TV_HEIGHT, TV_WIDTH},
     nes_controller::{StandardNESControllerState, StandardNESKey},
     nes_display::Color as NESColor,
-    UiProvider,
+    UiEvent, UiProvider,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc::Sender, Arc, Mutex};
 
 use gdk::enums::key;
+use gdk::ModifierType;
 use gio::prelude::*;
 use gtk::prelude::*;
 
@@ -21,11 +22,13 @@ impl UiProvider for GtkProvider {
 
     fn run_ui_loop(
         &mut self,
+        ui_to_nes_sender: Sender<UiEvent>,
         image: Arc<Mutex<Vec<u8>>>,
         ctrl_state: Arc<Mutex<StandardNESControllerState>>,
     ) {
         let ctrl_state1 = ctrl_state.clone();
         let ctrl_state2 = ctrl_state.clone();
+        let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
 
         let app = gtk::Application::new(
             Some("amjad50.plastic.nes_gtk"),
@@ -80,6 +83,7 @@ impl UiProvider for GtkProvider {
             .borrow_mut()
             .connect_key_press_event(move |_, event| {
                 let mut ctrl = ctrl_state1.lock().unwrap();
+
                 match gdk::keyval_to_upper(event.get_keyval()) {
                     key::J => ctrl.press(StandardNESKey::B),
                     key::K => ctrl.press(StandardNESKey::A),
@@ -89,6 +93,9 @@ impl UiProvider for GtkProvider {
                     key::S => ctrl.press(StandardNESKey::Down),
                     key::A => ctrl.press(StandardNESKey::Left),
                     key::D => ctrl.press(StandardNESKey::Right),
+                    key::R if event.get_state().intersects(ModifierType::CONTROL_MASK) => {
+                        ui_to_nes_sender_clone.send(UiEvent::Reset).unwrap()
+                    }
                     _ => {}
                 }
 
@@ -130,5 +137,6 @@ impl UiProvider for GtkProvider {
         });
 
         app.run(&[]);
+        ui_to_nes_sender.send(UiEvent::Exit).unwrap();
     }
 }

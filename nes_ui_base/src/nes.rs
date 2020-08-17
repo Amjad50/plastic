@@ -7,9 +7,9 @@ use display::TV;
 use ppu2c02::{Palette, VRam, PPU2C02};
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc::channel, Arc, Mutex};
 
-use crate::UiProvider;
+use crate::{UiEvent, UiProvider};
 
 // NES TV size
 // TODO: should be included in "tv" crate
@@ -117,6 +117,7 @@ impl Bus for CPUBus {
 }
 
 pub struct NES<P: UiProvider + Send + 'static> {
+    cartridge: Rc<RefCell<Cartridge>>,
     cpu: CPU6502<CPUBus>,
     ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
     apu: Rc<RefCell<APU2A03>>,
@@ -151,6 +152,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         cpu.add_irq_provider(apu.clone());
 
         Ok(Self {
+            cartridge,
             cpu,
             ppu,
             apu,
@@ -160,18 +162,30 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         })
     }
 
+    pub fn reset(&mut self) {
+        self.cpu.reset();
+
+        let ppubus = PPUBus::new(self.cartridge.clone());
+
+        self.ppu.borrow_mut().reset(ppubus);
+
+        self.apu.replace(APU2A03::new());
+        // TODO: implement reset for cartridge if needed
+        // self.cartridge.borrow_mut().reset();
+    }
+
     /// calculate a new view based on the window size
     pub fn run(&mut self) {
         let image = self.image.clone();
         let ctrl_state = self.ctrl_state.clone();
 
-        let (tx, rx) = std::sync::mpsc::channel::<bool>();
+        let (ui_to_nes_sender, ui_to_nes_receiver) = channel::<UiEvent>();
 
         let mut ui = self.ui.take().unwrap();
 
         std::thread::spawn(move || {
-            ui.run_ui_loop(image, ctrl_state);
-            tx.send(true).unwrap();
+            ui.run_ui_loop(ui_to_nes_sender.clone(), image, ctrl_state);
+            ui_to_nes_sender.send(UiEvent::Exit).unwrap();
         });
 
         self.cpu.reset();
@@ -185,7 +199,18 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         let mut apu_clock = false;
 
         // run the emulator loop
-        while let Err(_) = rx.try_recv() {
+        loop {
+            // check for events
+            if let Ok(event) = ui_to_nes_receiver.try_recv() {
+                match event {
+                    UiEvent::Exit => break,
+                    UiEvent::Reset => {
+                        self.reset();
+                        self.apu.borrow().play();
+                    }
+                }
+            }
+
             for _ in 0..N {
                 self.cpu.run_next();
                 if apu_clock {

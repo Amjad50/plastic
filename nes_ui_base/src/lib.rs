@@ -7,7 +7,12 @@ pub mod nes_display {
     pub use display::Color;
 }
 
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc::Sender, Arc, Mutex};
+
+pub enum UiEvent {
+    Exit,
+    Reset,
+}
 
 pub trait UiProvider {
     // TODO: for now only supported are 32-bit size pixel data, maybe later we can
@@ -24,11 +29,13 @@ pub trait UiProvider {
     /// return unless the UI is closed, if this function returns, the emulation
     /// will stop and the emulator process will return
     ///
+    /// [`ui_to_nes_sender`] a way for the UI to send messages to the backend nes
     /// [`image`] contains the raw image data
     /// [`ctrl_state`] is the controller state, the provider should change this
     /// based on buttons presses and releases
     fn run_ui_loop(
         &mut self,
+        ui_to_nes_sender: Sender<UiEvent>,
         image: Arc<Mutex<Vec<u8>>>,
         ctrl_state: Arc<Mutex<controller::StandardNESControllerState>>,
     );

@@ -43,4 +43,9 @@ impl TV {
         let result = (self.pixels_handler)(color);
         pixels[index..index + 4].copy_from_slice(&result);
     }
+
+    pub fn reset(&mut self) {
+        let mut pixels = self.pixels.lock().unwrap();
+        pixels.resize((self.width * self.height * 4) as usize, 0);
+    }
 }
