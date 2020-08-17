@@ -2,10 +2,10 @@ use nes_ui_base::{
     nes::{TV_HEIGHT, TV_WIDTH},
     nes_controller::{StandardNESControllerState, StandardNESKey},
     nes_display::Color as NESColor,
-    UiProvider,
+    UiEvent, UiProvider,
 };
 
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc::Sender, Arc, Mutex};
 
 use sfml::{
     graphics::{Color, FloatRect, Image, RenderTarget, RenderWindow, Sprite, Texture, View},
@@ -49,6 +49,7 @@ impl SfmlProvider {
 impl UiProvider for SfmlProvider {
     fn run_ui_loop(
         &mut self,
+        ui_to_nes_sender: Sender<UiEvent>,
         image: Arc<Mutex<Vec<u8>>>,
         ctrl_state: Arc<Mutex<StandardNESControllerState>>,
     ) {
@@ -82,7 +83,11 @@ impl UiProvider for SfmlProvider {
                         Event::Resized { width, height } => {
                             window.set_view(&Self::get_view(width, height, TV_WIDTH, TV_HEIGHT));
                         }
-                        Event::KeyPressed { code: key, .. } => match key {
+                        Event::KeyPressed {
+                            code: key,
+                            ctrl: ctrl_key,
+                            ..
+                        } => match key {
                             Key::J => ctrl.press(StandardNESKey::B),
                             Key::K => ctrl.press(StandardNESKey::A),
                             Key::U => ctrl.press(StandardNESKey::Select),
@@ -91,6 +96,7 @@ impl UiProvider for SfmlProvider {
                             Key::S => ctrl.press(StandardNESKey::Down),
                             Key::A => ctrl.press(StandardNESKey::Left),
                             Key::D => ctrl.press(StandardNESKey::Right),
+                            Key::R if ctrl_key => ui_to_nes_sender.send(UiEvent::Reset).unwrap(),
                             _ => {}
                         },
                         Event::KeyReleased { code: key, .. } => match key {

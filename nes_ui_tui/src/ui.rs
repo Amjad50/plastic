@@ -2,11 +2,11 @@ use nes_ui_base::{
     nes::{TV_HEIGHT, TV_WIDTH},
     nes_controller::{StandardNESControllerState, StandardNESKey},
     nes_display::Color as NESColor,
-    UiProvider,
+    UiEvent, UiProvider,
 };
 use std::collections::HashSet;
 use std::io;
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc::Sender, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -14,7 +14,7 @@ use crate::event::{Event as tuiEvent, Events};
 
 use gilrs::{Button, Event, EventType, Gilrs};
 
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyModifiers};
 use tui::{
     backend::CrosstermBackend,
     style::Color,
@@ -55,6 +55,7 @@ impl UiProvider for TuiProvider {
 
     fn run_ui_loop(
         &mut self,
+        ui_to_nes_sender: Sender<UiEvent>,
         image: Arc<Mutex<Vec<u8>>>,
         ctrl_state: Arc<Mutex<StandardNESControllerState>>,
     ) {
@@ -102,9 +103,16 @@ impl UiProvider for TuiProvider {
                 while let Ok(event) = keyboard_events.next() {
                     match event {
                         tuiEvent::Input(input) => {
+                            let modifiers = input.modifiers;
                             let input = input.code;
                             let possible_button = match input {
                                 KeyCode::Esc => break 'outer,
+                                KeyCode::Char('R') | KeyCode::Char('r')
+                                    if modifiers.intersects(KeyModifiers::CONTROL) =>
+                                {
+                                    ui_to_nes_sender.send(UiEvent::Reset).unwrap();
+                                    None
+                                }
                                 KeyCode::Char('J') | KeyCode::Char('j') => Some(StandardNESKey::B),
                                 KeyCode::Char('K') | KeyCode::Char('k') => Some(StandardNESKey::A),
                                 KeyCode::Char('U') | KeyCode::Char('u') => {
