@@ -9,9 +9,10 @@ use std::rc::Rc;
 use std::sync::{mpsc::Sender, Arc, Mutex};
 
 use gdk::enums::key;
-use gdk::ModifierType;
+use gdk::{DragAction, ModifierType};
 use gio::prelude::*;
 use gtk::prelude::*;
+use gtk::{DestDefaults, TargetEntry, TargetFlags};
 
 pub struct GtkProvider {}
 
@@ -28,7 +29,8 @@ impl UiProvider for GtkProvider {
     ) {
         let ctrl_state1 = ctrl_state.clone();
         let ctrl_state2 = ctrl_state.clone();
-        let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
+        let ui_to_nes_sender_clone_1 = ui_to_nes_sender.clone();
+        let ui_to_nes_sender_clone_2 = ui_to_nes_sender.clone();
 
         let app = gtk::Application::new(
             Some("amjad50.plastic.nes_gtk"),
@@ -94,7 +96,7 @@ impl UiProvider for GtkProvider {
                     key::A => ctrl.press(StandardNESKey::Left),
                     key::D => ctrl.press(StandardNESKey::Right),
                     key::R if event.get_state().intersects(ModifierType::CONTROL_MASK) => {
-                        ui_to_nes_sender_clone.send(UiEvent::Reset).unwrap()
+                        ui_to_nes_sender_clone_1.send(UiEvent::Reset).unwrap()
                     }
                     _ => {}
                 }
@@ -119,6 +121,35 @@ impl UiProvider for GtkProvider {
                 }
 
                 Inhibit(false)
+            });
+
+        // Support for dragging a new file into the emulator
+        const DRAG_ID: u32 = 100;
+        window.borrow_mut().drag_dest_set(
+            DestDefaults::ALL,
+            &[TargetEntry::new(
+                "text/plain",
+                TargetFlags::OTHER_APP,
+                DRAG_ID,
+            )],
+            DragAction::COPY,
+        );
+
+        window
+            .borrow_mut()
+            .connect_drag_data_received(move |_, _, _x, _y, data, info, _| {
+                if info == DRAG_ID {
+                    if let Some(text) = data.get_text() {
+                        let text = text.trim_start_matches("file://");
+
+                        // we don't want to panic and exit, just ignore if corrupted
+                        if text.ends_with(".nes") {
+                            ui_to_nes_sender_clone_2
+                                .send(UiEvent::LoadRom(text.to_owned()))
+                                .unwrap();
+                        }
+                    }
+                }
             });
 
         app.connect_activate(move |app| {

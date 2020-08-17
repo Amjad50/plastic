@@ -208,6 +208,17 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                         self.reset();
                         self.apu.borrow().play();
                     }
+
+                    UiEvent::LoadRom(file_location) => {
+                        let cartridge = Cartridge::from_file(file_location);
+                        if let Ok(cartridge) = cartridge {
+                            self.cartridge.replace(cartridge);
+                            self.reset();
+                            self.apu.borrow().play();
+                        } else {
+                            break;
+                        }
+                    }
                 }
             }
 

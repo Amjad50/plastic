@@ -12,6 +12,7 @@ use std::sync::{mpsc::Sender, Arc, Mutex};
 pub enum UiEvent {
     Exit,
     Reset,
+    LoadRom(String),
 }
 
 pub trait UiProvider {
