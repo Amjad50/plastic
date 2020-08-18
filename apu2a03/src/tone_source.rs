@@ -12,13 +12,25 @@ pub trait TimedAPUChannel: APUChannel {
 
 pub struct BufferedChannel {
     buffer: VecDeque<f32>,
+    overusing: bool,
+    last: f32,
 }
 
 impl BufferedChannel {
     pub fn new() -> Self {
         Self {
             buffer: VecDeque::new(),
+            overusing: false,
+            last: 0.,
         }
+    }
+
+    pub fn get_is_overusing(&self) -> bool {
+        self.overusing
+    }
+
+    pub fn clear_overusing(&mut self) {
+        self.overusing = false;
     }
 
     pub fn recored_sample(&mut self, sample: f32) {
@@ -28,10 +40,15 @@ impl BufferedChannel {
 
 impl APUChannel for BufferedChannel {
     fn get_output(&mut self) -> f32 {
-        if self.buffer.len() <= 1 {
+        if self.buffer.len() == 0 {
+            self.overusing = true;
+
+            self.last
+        } else if self.buffer.len() == 1 {
+            self.last = self.buffer.pop_front().unwrap();
             // this should not reach here, or just one time
             // buffer is empty [Problem]
-            *self.buffer.front().unwrap_or(&0.)
+            self.last
         } else {
             self.buffer.pop_front().unwrap()
         }

@@ -32,7 +32,10 @@ pub struct APU2A03 {
 
     wait_reset: i8,
 
+    apu_freq: f64,
     sample_counter: f64,
+
+    offset: f64,
 
     interrupt_flag: Cell<bool>,
     request_interrupt_flag_change: Cell<bool>,
@@ -76,7 +79,10 @@ impl APU2A03 {
 
             cycle: 0,
 
+            apu_freq: 0.,
             sample_counter: 0.,
+
+            offset: 0.,
 
             wait_reset: 0,
 
@@ -470,6 +476,10 @@ impl APU2A03 {
         Self::length_counter_decrement(&mut self.noise);
     }
 
+    pub fn update_apu_freq(&mut self, apu_freq: f64) {
+        self.apu_freq = apu_freq;
+    }
+
     pub fn clock(&mut self) {
         if self.wait_reset > 0 {
             self.wait_reset -= 1;
@@ -484,8 +494,14 @@ impl APU2A03 {
             }
         }
 
-        let cpu = 1.789773 * 1E6;
-        let apu = cpu / 2.;
+        if self.cycle % 300 == 0 {
+            if let Ok(mut buffered_channel) = self.buffered_channel.lock() {
+                if buffered_channel.get_is_overusing() {
+                    self.offset += 0.001;
+                    buffered_channel.clear_overusing();
+                }
+            }
+        }
 
         // after how many apu clocks a sample should be recorded
         // for now its 44100 * 8 and that is only due to the filter used, as it supports
@@ -493,7 +509,8 @@ impl APU2A03 {
         //
         // FIXME: the buffer is being emptied faster than filled for some reason, please investigate
         //  (-0.9) is set to fix that, but of course its not 1% reliable :(
-        let samples_every_n_apu_clock = (apu / (crate::SAMPLE_RATE as f64 * 8.)) - 0.8;
+        let samples_every_n_apu_clock =
+            (self.apu_freq / (crate::SAMPLE_RATE as f64 * 8.)) - self.offset;
 
         self.sample_counter += 1.0;
         if self.sample_counter >= samples_every_n_apu_clock {

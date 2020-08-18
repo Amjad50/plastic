@@ -212,6 +212,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         });
 
         self.cpu.reset();
+        self.apu.borrow_mut().update_apu_freq(1.7 * 1E6 / 2.);
 
         if !self.paused {
             // Run the sound thread
@@ -222,7 +223,9 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         const CPU_FREQ: f64 = 1.789773 * 1E6;
         const N: usize = 2000; // number of CPU cycles per loop, lower is smoother
         const CPU_PER_CYCLE_NANOS: f64 = 1E9 / CPU_FREQ;
-        let mut apu_clock = false;
+
+        let mut average_apu_freq = CPU_FREQ / 2.;
+        let mut average_counter = 1.;
 
         // run the emulator loop
         loop {
@@ -235,6 +238,8 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                         if !self.paused {
                             self.apu.borrow().play();
                         }
+                        average_apu_freq = CPU_FREQ / 2.;
+                        average_counter = 1.;
                     }
 
                     UiEvent::LoadRom(file_location) => {
@@ -245,6 +250,8 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                             if !self.paused {
                                 self.apu.borrow().play();
                             }
+                            average_apu_freq = CPU_FREQ / 2.;
+                            average_counter = 1.;
                         } else {
                             break;
                         }
@@ -259,23 +266,34 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
             for _ in 0..N {
                 self.cpu.run_next();
-                if apu_clock {
-                    self.apu.borrow_mut().clock();
-                }
-                apu_clock = !apu_clock;
+                self.cpu.run_next();
 
-                let mut ppu = self.ppu.borrow_mut();
-                ppu.clock();
-                ppu.clock();
-                ppu.clock();
+                self.apu.borrow_mut().clock();
+
+                {
+                    let mut ppu = self.ppu.borrow_mut();
+                    ppu.clock();
+                    ppu.clock();
+                    ppu.clock();
+                    ppu.clock();
+                    ppu.clock();
+                    ppu.clock();
+                }
             }
 
             if let Some(d) =
-                std::time::Duration::from_nanos((CPU_PER_CYCLE_NANOS * N as f64) as u64)
+                std::time::Duration::from_nanos((CPU_PER_CYCLE_NANOS * 2. * N as f64) as u64)
                     .checked_sub(last.elapsed())
             {
                 std::thread::sleep(d);
             }
+
+            let apu_freq = N as f64 / last.elapsed().as_secs_f64();
+
+            average_counter += 1.;
+            average_apu_freq = average_apu_freq + ((apu_freq - average_apu_freq) / average_counter);
+
+            self.apu.borrow_mut().update_apu_freq(average_apu_freq);
 
             last = std::time::Instant::now();
         }
