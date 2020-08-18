@@ -4,15 +4,16 @@ use nes_ui_base::{
     nes_display::Color as NESColor,
     UiEvent, UiProvider,
 };
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::{mpsc::Sender, Arc, Mutex};
 
 use gdk::enums::key;
-use gdk::{DragAction, ModifierType};
+use gdk::{keyval_to_upper, DragAction, ModifierType};
 use gio::prelude::*;
 use gtk::prelude::*;
-use gtk::{DestDefaults, TargetEntry, TargetFlags};
+use gtk::{
+    Application, Builder, DestDefaults, DrawingArea, FileChooserAction, FileChooserDialog,
+    FileFilter, Inhibit, MenuItem, ResponseType, TargetEntry, TargetFlags, Window,
+};
 
 pub struct GtkProvider {}
 
@@ -27,23 +28,22 @@ impl UiProvider for GtkProvider {
         image: Arc<Mutex<Vec<u8>>>,
         ctrl_state: Arc<Mutex<StandardNESControllerState>>,
     ) {
-        let ctrl_state1 = ctrl_state.clone();
-        let ctrl_state2 = ctrl_state.clone();
-        let ui_to_nes_sender_clone_1 = ui_to_nes_sender.clone();
-        let ui_to_nes_sender_clone_2 = ui_to_nes_sender.clone();
-
-        let app = gtk::Application::new(
+        let app = Application::new(
             Some("amjad50.plastic.nes_gtk"),
             gio::ApplicationFlags::FLAGS_NONE,
         )
         .expect("Application could not be initialized");
 
-        let window = Rc::new(RefCell::new(gtk::Window::new(gtk::WindowType::Toplevel)));
+        let ui_glade_string = include_str!("../ui.glade");
+        let builder = Builder::new_from_string(ui_glade_string);
 
-        window.borrow_mut().set_title("Plastic");
+        let window = builder.get_object::<Window>("top_level_window").unwrap();
+        let drawing_area = builder.get_object::<DrawingArea>("canvas").unwrap();
+        let menu_action_open = builder.get_object::<MenuItem>("menu_action_open").unwrap();
+        let menu_action_quit = builder.get_object::<MenuItem>("menu_action_quit").unwrap();
+        let menu_action_reset = builder.get_object::<MenuItem>("menu_action_reset").unwrap();
 
-        let window_redraw = window.clone();
-        let drawing_area = gtk::DrawingArea::new();
+        window.show_all();
 
         drawing_area.connect_draw(move |area, cr| {
             let data = image.lock().unwrap().to_vec();
@@ -66,66 +66,55 @@ impl UiProvider for GtkProvider {
             cr.set_source(&pattern);
             cr.paint();
 
-            gtk::Inhibit(false)
+            Inhibit(false)
         });
 
-        window
-            .borrow_mut()
-            .set_size_request((TV_WIDTH * 3) as i32, (TV_HEIGHT * 3) as i32);
+        window.set_size_request((TV_WIDTH * 3) as i32, (TV_HEIGHT * 3) as i32);
 
-        window.borrow_mut().add(&drawing_area);
+        let ctrl_state_clone = ctrl_state.clone();
+        let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
+        window.connect_key_press_event(move |_, event| {
+            let mut ctrl = ctrl_state_clone.lock().unwrap();
 
-        let image = gtk::Image::new();
-
-        window.borrow_mut().add(&image);
-
-        window.borrow().show_all();
-
-        window
-            .borrow_mut()
-            .connect_key_press_event(move |_, event| {
-                let mut ctrl = ctrl_state1.lock().unwrap();
-
-                match gdk::keyval_to_upper(event.get_keyval()) {
-                    key::J => ctrl.press(StandardNESKey::B),
-                    key::K => ctrl.press(StandardNESKey::A),
-                    key::U => ctrl.press(StandardNESKey::Select),
-                    key::I => ctrl.press(StandardNESKey::Start),
-                    key::W => ctrl.press(StandardNESKey::Up),
-                    key::S => ctrl.press(StandardNESKey::Down),
-                    key::A => ctrl.press(StandardNESKey::Left),
-                    key::D => ctrl.press(StandardNESKey::Right),
-                    key::R if event.get_state().intersects(ModifierType::CONTROL_MASK) => {
-                        ui_to_nes_sender_clone_1.send(UiEvent::Reset).unwrap()
-                    }
-                    _ => {}
+            match keyval_to_upper(event.get_keyval()) {
+                key::J => ctrl.press(StandardNESKey::B),
+                key::K => ctrl.press(StandardNESKey::A),
+                key::U => ctrl.press(StandardNESKey::Select),
+                key::I => ctrl.press(StandardNESKey::Start),
+                key::W => ctrl.press(StandardNESKey::Up),
+                key::S => ctrl.press(StandardNESKey::Down),
+                key::A => ctrl.press(StandardNESKey::Left),
+                key::D => ctrl.press(StandardNESKey::Right),
+                key::R if event.get_state().intersects(ModifierType::CONTROL_MASK) => {
+                    ui_to_nes_sender_clone.send(UiEvent::Reset).unwrap()
                 }
+                _ => {}
+            }
 
-                Inhibit(false)
-            });
+            Inhibit(false)
+        });
 
-        window
-            .borrow_mut()
-            .connect_key_release_event(move |_, event| {
-                let mut ctrl = ctrl_state2.lock().unwrap();
-                match gdk::keyval_to_upper(event.get_keyval()) {
-                    key::J => ctrl.release(StandardNESKey::B),
-                    key::K => ctrl.release(StandardNESKey::A),
-                    key::U => ctrl.release(StandardNESKey::Select),
-                    key::I => ctrl.release(StandardNESKey::Start),
-                    key::W => ctrl.release(StandardNESKey::Up),
-                    key::S => ctrl.release(StandardNESKey::Down),
-                    key::A => ctrl.release(StandardNESKey::Left),
-                    key::D => ctrl.release(StandardNESKey::Right),
-                    _ => {}
-                }
+        let ctrl_state_clone = ctrl_state.clone();
+        window.connect_key_release_event(move |_, event| {
+            let mut ctrl = ctrl_state_clone.lock().unwrap();
+            match gdk::keyval_to_upper(event.get_keyval()) {
+                key::J => ctrl.release(StandardNESKey::B),
+                key::K => ctrl.release(StandardNESKey::A),
+                key::U => ctrl.release(StandardNESKey::Select),
+                key::I => ctrl.release(StandardNESKey::Start),
+                key::W => ctrl.release(StandardNESKey::Up),
+                key::S => ctrl.release(StandardNESKey::Down),
+                key::A => ctrl.release(StandardNESKey::Left),
+                key::D => ctrl.release(StandardNESKey::Right),
+                _ => {}
+            }
 
-                Inhibit(false)
-            });
+            Inhibit(false)
+        });
 
         // Support for dragging a new file into the emulator
         const DRAG_ID: u32 = 100;
-        window.borrow_mut().drag_dest_set(
+        window.drag_dest_set(
             DestDefaults::ALL,
             &[TargetEntry::new(
                 "text/plain",
@@ -135,34 +124,67 @@ impl UiProvider for GtkProvider {
             DragAction::COPY,
         );
 
-        window
-            .borrow_mut()
-            .connect_drag_data_received(move |_, _, _x, _y, data, info, _| {
-                if info == DRAG_ID {
-                    if let Some(text) = data.get_text() {
-                        let text = text.trim_start_matches("file://");
+        let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
+        window.connect_drag_data_received(move |_, _, _x, _y, data, info, _| {
+            if info == DRAG_ID {
+                if let Some(text) = data.get_text() {
+                    let text = text.trim_start_matches("file://");
 
-                        // we don't want to panic and exit, just ignore if corrupted
-                        if text.ends_with(".nes") {
-                            ui_to_nes_sender_clone_2
-                                .send(UiEvent::LoadRom(text.to_owned()))
-                                .unwrap();
-                        }
+                    // we don't want to panic and exit, just ignore if corrupted
+                    if text.ends_with(".nes") {
+                        ui_to_nes_sender_clone
+                            .send(UiEvent::LoadRom(text.to_owned()))
+                            .unwrap();
                     }
                 }
-            });
+            }
+        });
+
+        let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
+        menu_action_reset.connect_activate(move |_| {
+            ui_to_nes_sender_clone.send(UiEvent::Reset).unwrap();
+        });
+
+        let app_clone = app.clone();
+        menu_action_quit.connect_activate(move |_| app_clone.quit());
+
+        let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
+        menu_action_open.connect_activate(move |_| {
+            let dialog = FileChooserDialog::with_buttons::<Window>(
+                Some("Select NES ROM"),
+                None,
+                FileChooserAction::Open,
+                &[
+                    ("_Cancel", ResponseType::Cancel),
+                    ("_Open", ResponseType::Accept),
+                ],
+            );
+
+            let filter = FileFilter::new();
+            filter.add_mime_type("application/x-nes-rom");
+            dialog.set_filter(&filter);
+
+            let result = dialog.run();
+            if result == ResponseType::Accept {
+                if let Some(file) = dialog.get_filename() {
+                    ui_to_nes_sender_clone
+                        .send(UiEvent::LoadRom(file.to_string_lossy().to_string()))
+                        .unwrap();
+                }
+            }
+            dialog.close();
+        });
 
         app.connect_activate(move |app| {
-            app.add_window(&*window.borrow());
+            app.add_window(&window);
         });
 
         timeout_add(1000 / 120, move || {
-            let window = window_redraw.borrow();
-            window.queue_draw_area(
+            drawing_area.queue_draw_area(
                 0,
                 0,
-                window.get_allocated_width(),
-                window.get_allocated_height(),
+                drawing_area.get_allocated_width(),
+                drawing_area.get_allocated_height(),
             );
             glib::Continue(true)
         });
