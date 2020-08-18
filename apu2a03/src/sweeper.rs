@@ -1,6 +1,7 @@
 use crate::channels::SquarePulse;
 use crate::length_counter::LengthCountedChannel;
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct Sweeper {
     enabled: bool,
@@ -10,11 +11,11 @@ pub struct Sweeper {
     shift_count: u8,
 
     // FIXME: use more generic approach
-    square_channel: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
+    square_channel: Rc<RefCell<LengthCountedChannel<SquarePulse>>>,
 }
 
 impl Sweeper {
-    pub fn new(square_channel: Arc<Mutex<LengthCountedChannel<SquarePulse>>>) -> Self {
+    pub fn new(square_channel: Rc<RefCell<LengthCountedChannel<SquarePulse>>>) -> Self {
         Self {
             enabled: false,
             divider_period_reload_value: 0,
@@ -36,24 +37,24 @@ impl Sweeper {
     pub(crate) fn clock(&mut self) {
         if self.enabled {
             if self.divider_period_counter == 0 {
-                if let Ok(mut channel) = self.square_channel.lock() {
-                    let current_period = channel.channel().get_period();
-                    let change_amount = current_period >> self.shift_count;
+                let mut channel = self.square_channel.borrow_mut();
 
-                    let target_period = if self.negative {
-                        // TODO: handle the differences between sqr1 and sqr2
-                        // sqr1 adds the ones' complement (−c − 1).
-                        // Making 20 negative produces a change amount of −21.
-                        // sqr2 adds the two's complement (−c).
-                        // Making 20 negative produces a change amount of −20.
-                        current_period.saturating_sub(change_amount)
-                    } else {
-                        current_period.saturating_add(change_amount)
-                    };
+                let current_period = channel.channel().get_period();
+                let change_amount = current_period >> self.shift_count;
 
-                    // muting is done in the square pulse
-                    channel.channel_mut().set_period(target_period);
-                }
+                let target_period = if self.negative {
+                    // TODO: handle the differences between sqr1 and sqr2
+                    // sqr1 adds the ones' complement (−c − 1).
+                    // Making 20 negative produces a change amount of −21.
+                    // sqr2 adds the two's complement (−c).
+                    // Making 20 negative produces a change amount of −20.
+                    current_period.saturating_sub(change_amount)
+                } else {
+                    current_period.saturating_add(change_amount)
+                };
+
+                // muting is done in the square pulse
+                channel.channel_mut().set_period(target_period);
 
                 self.divider_period_counter = self.divider_period_reload_value;
             } else {

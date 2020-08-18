@@ -6,20 +6,21 @@ use crate::mixer::Mixer;
 use crate::sweeper::Sweeper;
 use crate::tone_source::{APUChannel, APUChannelPlayer, BufferedChannel, Filter, TimedAPUChannel};
 use common::interconnection::{APUCPUConnection, CpuIrqProvider};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 pub struct APU2A03 {
-    square_pulse_1: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
+    square_pulse_1: Rc<RefCell<LengthCountedChannel<SquarePulse>>>,
     square_pulse_1_sweeper: Sweeper,
-    square_pulse_2: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
+    square_pulse_2: Rc<RefCell<LengthCountedChannel<SquarePulse>>>,
     square_pulse_2_sweeper: Sweeper,
 
-    triangle: Arc<Mutex<LengthCountedChannel<TriangleWave>>>,
+    triangle: Rc<RefCell<LengthCountedChannel<TriangleWave>>>,
 
-    noise: Arc<Mutex<LengthCountedChannel<NoiseWave>>>,
+    noise: Rc<RefCell<LengthCountedChannel<NoiseWave>>>,
 
-    dmc: Arc<Mutex<Dmc>>,
+    dmc: Rc<RefCell<Dmc>>,
 
     buffered_channel: Arc<Mutex<BufferedChannel>>,
 
@@ -46,11 +47,11 @@ pub struct APU2A03 {
 
 impl APU2A03 {
     pub fn new() -> Self {
-        let square_pulse_1 = Arc::new(Mutex::new(LengthCountedChannel::new(SquarePulse::new())));
-        let square_pulse_2 = Arc::new(Mutex::new(LengthCountedChannel::new(SquarePulse::new())));
-        let triangle = Arc::new(Mutex::new(LengthCountedChannel::new(TriangleWave::new())));
-        let noise = Arc::new(Mutex::new(LengthCountedChannel::new(NoiseWave::new())));
-        let dmc = Arc::new(Mutex::new(Dmc::new()));
+        let square_pulse_1 = Rc::new(RefCell::new(LengthCountedChannel::new(SquarePulse::new())));
+        let square_pulse_2 = Rc::new(RefCell::new(LengthCountedChannel::new(SquarePulse::new())));
+        let triangle = Rc::new(RefCell::new(LengthCountedChannel::new(TriangleWave::new())));
+        let noise = Rc::new(RefCell::new(LengthCountedChannel::new(NoiseWave::new())));
+        let dmc = Rc::new(RefCell::new(Dmc::new()));
 
         Self {
             square_pulse_1: square_pulse_1.clone(),
@@ -97,32 +98,21 @@ impl APU2A03 {
     pub(crate) fn read_register(&self, register: Register) -> u8 {
         match register {
             Register::Status => {
-                let sqr1_length_counter = if let Ok(square_pulse_1) = self.square_pulse_1.lock() {
-                    (square_pulse_1.length_counter().counter() != 0) as u8
-                } else {
-                    0
-                };
-                let sqr2_length_counter = if let Ok(square_pulse_2) = self.square_pulse_2.lock() {
-                    (square_pulse_2.length_counter().counter() != 0) as u8
-                } else {
-                    0
-                };
-                let triangle_length_counter = if let Ok(triangle) = self.triangle.lock() {
-                    (triangle.length_counter().counter() != 0) as u8
-                } else {
-                    0
-                };
-                let noise_length_counter = if let Ok(noise) = self.noise.lock() {
-                    (noise.length_counter().counter() != 0) as u8
-                } else {
-                    0
-                };
-                let mut dmc_active = 0;
-                let mut dmc_interrupt = 0;
-                if let Ok(dmc) = self.dmc.lock() {
-                    dmc_active = dmc.sample_remaining_bytes_more_than_0() as u8;
-                    dmc_interrupt = dmc.get_irq_pin_state() as u8;
-                }
+                let sqr1_length_counter =
+                    (self.square_pulse_1.borrow().length_counter().counter() != 0) as u8;
+
+                let sqr2_length_counter =
+                    (self.square_pulse_2.borrow().length_counter().counter() != 0) as u8;
+
+                let triangle_length_counter =
+                    (self.triangle.borrow().length_counter().counter() != 0) as u8;
+
+                let noise_length_counter =
+                    (self.noise.borrow().length_counter().counter() != 0) as u8;
+
+                let dmc = self.dmc.borrow();
+                let dmc_active = dmc.sample_remaining_bytes_more_than_0() as u8;
+                let dmc_interrupt = dmc.get_irq_pin_state() as u8;
 
                 let frame_interrupt = self.interrupt_flag.get() as u8;
                 self.interrupt_flag.set(false);
@@ -151,62 +141,62 @@ impl APU2A03 {
                 let use_volume = data & 0x10 != 0;
                 let halt = data & 0x20 != 0;
 
-                if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
-                    square_pulse_1
-                        .channel_mut()
-                        .set_duty_cycle_index(duty_cycle_index);
-                    square_pulse_1
-                        .channel_mut()
-                        .envelope_generator_mut()
-                        .set_volume(volume, use_volume);
+                let mut square_pulse_1 = self.square_pulse_1.borrow_mut();
 
-                    square_pulse_1.length_counter_mut().set_halt(halt);
-                    square_pulse_1
-                        .channel_mut()
-                        .envelope_generator_mut()
-                        .set_loop_flag(halt);
+                square_pulse_1
+                    .channel_mut()
+                    .set_duty_cycle_index(duty_cycle_index);
+                square_pulse_1
+                    .channel_mut()
+                    .envelope_generator_mut()
+                    .set_volume(volume, use_volume);
 
-                    square_pulse_1
-                        .channel_mut()
-                        .envelope_generator_mut()
-                        .set_start_flag(true);
-                }
+                square_pulse_1.length_counter_mut().set_halt(halt);
+                square_pulse_1
+                    .channel_mut()
+                    .envelope_generator_mut()
+                    .set_loop_flag(halt);
+
+                square_pulse_1
+                    .channel_mut()
+                    .envelope_generator_mut()
+                    .set_start_flag(true);
             }
             Register::Pulse1_2 => {
                 // sweep
                 self.square_pulse_1_sweeper.set_from_data_byte(data);
             }
             Register::Pulse1_3 => {
-                if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
-                    let period = square_pulse_1.channel().get_period();
+                let mut square_pulse_1 = self.square_pulse_1.borrow_mut();
 
-                    // lower timer bits
-                    square_pulse_1
-                        .channel_mut()
-                        .set_period((period & 0xFF00) | data as u16);
-                }
+                let period = square_pulse_1.channel().get_period();
+
+                // lower timer bits
+                square_pulse_1
+                    .channel_mut()
+                    .set_period((period & 0xFF00) | data as u16);
             }
             Register::Pulse1_4 => {
-                if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
-                    square_pulse_1
-                        .length_counter_mut()
-                        .reload_counter(data >> 3);
+                let mut square_pulse_1 = self.square_pulse_1.borrow_mut();
 
-                    let period = square_pulse_1.channel().get_period();
+                square_pulse_1
+                    .length_counter_mut()
+                    .reload_counter(data >> 3);
 
-                    // high timer bits
-                    square_pulse_1
-                        .channel_mut()
-                        .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8));
+                let period = square_pulse_1.channel().get_period();
 
-                    square_pulse_1
-                        .channel_mut()
-                        .envelope_generator_mut()
-                        .set_start_flag(true);
+                // high timer bits
+                square_pulse_1
+                    .channel_mut()
+                    .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8));
 
-                    // reset pulse
-                    square_pulse_1.channel_mut().reset();
-                }
+                square_pulse_1
+                    .channel_mut()
+                    .envelope_generator_mut()
+                    .set_start_flag(true);
+
+                // reset pulse
+                square_pulse_1.channel_mut().reset();
             }
             Register::Pulse2_1 => {
                 let duty_cycle_index = data >> 6;
@@ -214,195 +204,190 @@ impl APU2A03 {
                 let use_volume = data & 0x10 != 0;
                 let halt = data & 0x20 != 0;
 
-                if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
-                    square_pulse_2
-                        .channel_mut()
-                        .set_duty_cycle_index(duty_cycle_index);
-                    square_pulse_2
-                        .channel_mut()
-                        .envelope_generator_mut()
-                        .set_volume(volume, use_volume);
+                let mut square_pulse_2 = self.square_pulse_2.borrow_mut();
 
-                    square_pulse_2.length_counter_mut().set_halt(halt);
-                    square_pulse_2
-                        .channel_mut()
-                        .envelope_generator_mut()
-                        .set_loop_flag(halt);
-                    square_pulse_2
-                        .channel_mut()
-                        .envelope_generator_mut()
-                        .set_start_flag(true);
-                }
+                square_pulse_2
+                    .channel_mut()
+                    .set_duty_cycle_index(duty_cycle_index);
+                square_pulse_2
+                    .channel_mut()
+                    .envelope_generator_mut()
+                    .set_volume(volume, use_volume);
+
+                square_pulse_2.length_counter_mut().set_halt(halt);
+                square_pulse_2
+                    .channel_mut()
+                    .envelope_generator_mut()
+                    .set_loop_flag(halt);
+                square_pulse_2
+                    .channel_mut()
+                    .envelope_generator_mut()
+                    .set_start_flag(true);
             }
             Register::Pulse2_2 => {
                 // sweep
                 self.square_pulse_2_sweeper.set_from_data_byte(data);
             }
             Register::Pulse2_3 => {
-                if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
-                    let period = square_pulse_2.channel().get_period();
+                let mut square_pulse_2 = self.square_pulse_2.borrow_mut();
 
-                    // lower timer bits
-                    square_pulse_2
-                        .channel_mut()
-                        .set_period((period & 0xFF00) | data as u16);
-                }
+                let period = square_pulse_2.channel().get_period();
+
+                // lower timer bits
+                square_pulse_2
+                    .channel_mut()
+                    .set_period((period & 0xFF00) | data as u16);
             }
             Register::Pulse2_4 => {
-                if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
-                    square_pulse_2
-                        .length_counter_mut()
-                        .reload_counter(data >> 3);
+                let mut square_pulse_2 = self.square_pulse_2.borrow_mut();
 
-                    let period = square_pulse_2.channel().get_period();
+                square_pulse_2
+                    .length_counter_mut()
+                    .reload_counter(data >> 3);
 
-                    // high timer bits
-                    square_pulse_2
-                        .channel_mut()
-                        .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8));
+                let period = square_pulse_2.channel().get_period();
 
-                    square_pulse_2
-                        .channel_mut()
-                        .envelope_generator_mut()
-                        .set_start_flag(true);
+                // high timer bits
+                square_pulse_2
+                    .channel_mut()
+                    .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8));
 
-                    // reset pulse
-                    square_pulse_2.channel_mut().reset();
-                }
+                square_pulse_2
+                    .channel_mut()
+                    .envelope_generator_mut()
+                    .set_start_flag(true);
+
+                // reset pulse
+                square_pulse_2.channel_mut().reset();
             }
             Register::Triangle1 => {
-                if let Ok(mut triangle) = self.triangle.lock() {
-                    triangle
-                        .channel_mut()
-                        .set_linear_counter_reload_value(data & 0x7F);
-                    triangle
-                        .channel_mut()
-                        .set_linear_counter_control_flag(data & 0x80 != 0);
+                let mut triangle = self.triangle.borrow_mut();
+                triangle
+                    .channel_mut()
+                    .set_linear_counter_reload_value(data & 0x7F);
+                triangle
+                    .channel_mut()
+                    .set_linear_counter_control_flag(data & 0x80 != 0);
 
-                    triangle.length_counter_mut().set_halt(data & 0x80 != 0);
-                }
+                triangle.length_counter_mut().set_halt(data & 0x80 != 0);
             }
             Register::Triangle2 => {
                 // unused
             }
             Register::Triangle3 => {
-                if let Ok(mut triangle) = self.triangle.lock() {
-                    let period = triangle.channel().get_period();
+                let mut triangle = self.triangle.borrow_mut();
 
-                    // lower timer bits
-                    triangle
-                        .channel_mut()
-                        .set_period((period & 0xFF00) | data as u16);
-                }
+                let period = triangle.channel().get_period();
+
+                // lower timer bits
+                triangle
+                    .channel_mut()
+                    .set_period((period & 0xFF00) | data as u16);
             }
             Register::Triangle4 => {
-                if let Ok(mut triangle) = self.triangle.lock() {
-                    triangle.length_counter_mut().reload_counter(data >> 3);
+                let mut triangle = self.triangle.borrow_mut();
 
-                    let period = triangle.channel().get_period();
+                triangle.length_counter_mut().reload_counter(data >> 3);
 
-                    // high timer bits
-                    triangle
-                        .channel_mut()
-                        .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8));
+                let period = triangle.channel().get_period();
 
-                    triangle.channel_mut().set_linear_counter_reload_flag(true);
-                }
+                // high timer bits
+                triangle
+                    .channel_mut()
+                    .set_period((period & 0xFF) | ((data as u16 & 0b111) << 8));
+
+                triangle.channel_mut().set_linear_counter_reload_flag(true);
             }
             Register::Noise1 => {
                 let volume = data & 0xF;
                 let use_volume = data & 0x10 != 0;
                 let halt = data & 0x20 != 0;
 
-                if let Ok(mut noise) = self.noise.lock() {
-                    noise
-                        .channel_mut()
-                        .envelope_generator_mut()
-                        .set_volume(volume, use_volume);
-                    noise.length_counter_mut().set_halt(halt);
-                    noise
-                        .channel_mut()
-                        .envelope_generator_mut()
-                        .set_loop_flag(halt);
-                    noise
-                        .channel_mut()
-                        .envelope_generator_mut()
-                        .set_start_flag(true);
-                }
+                let mut noise = self.noise.borrow_mut();
+                noise
+                    .channel_mut()
+                    .envelope_generator_mut()
+                    .set_volume(volume, use_volume);
+                noise.length_counter_mut().set_halt(halt);
+                noise
+                    .channel_mut()
+                    .envelope_generator_mut()
+                    .set_loop_flag(halt);
+                noise
+                    .channel_mut()
+                    .envelope_generator_mut()
+                    .set_start_flag(true);
             }
             Register::Noise2 => {
                 // unused
             }
             Register::Noise3 => {
-                if let Ok(mut noise) = self.noise.lock() {
-                    let channel = noise.channel_mut();
+                let mut noise = self.noise.borrow_mut();
 
-                    channel.set_mode_flag(data & 0x80 != 0);
-                    channel.set_period(data & 0xF);
-                }
+                let channel = noise.channel_mut();
+
+                channel.set_mode_flag(data & 0x80 != 0);
+                channel.set_period(data & 0xF);
             }
             Register::Noise4 => {
-                if let Ok(mut noise) = self.noise.lock() {
-                    noise.length_counter_mut().reload_counter(data >> 3);
-                }
+                self.noise
+                    .borrow_mut()
+                    .length_counter_mut()
+                    .reload_counter(data >> 3);
             }
             Register::DMC1 => {
                 let rate_index = data & 0xF;
                 let loop_flag = data & 0x40 != 0;
                 let irq_enabled = data & 0x80 != 0;
 
-                if let Ok(mut dmc) = self.dmc.lock() {
-                    dmc.set_rate_index(rate_index);
-                    dmc.set_loop_flag(loop_flag);
-                    dmc.set_irq_enabled_flag(irq_enabled);
-                }
+                let mut dmc = self.dmc.borrow_mut();
+                dmc.set_rate_index(rate_index);
+                dmc.set_loop_flag(loop_flag);
+                dmc.set_irq_enabled_flag(irq_enabled);
             }
             Register::DMC2 => {
-                if let Ok(mut dmc) = self.dmc.lock() {
-                    dmc.set_direct_output_level_load(data & 0x7F);
-                }
+                self.dmc
+                    .borrow_mut()
+                    .set_direct_output_level_load(data & 0x7F);
             }
             Register::DMC3 => {
-                if let Ok(mut dmc) = self.dmc.lock() {
-                    dmc.set_samples_address(data);
-                }
+                self.dmc.borrow_mut().set_samples_address(data);
             }
             Register::DMC4 => {
-                if let Ok(mut dmc) = self.dmc.lock() {
-                    dmc.set_samples_length(data);
-                }
+                self.dmc.borrow_mut().set_samples_length(data);
             }
             Register::Status => {
                 // enable and disable length counters
-                if let Ok(mut square_pulse_1) = self.square_pulse_1.lock() {
-                    square_pulse_1
-                        .length_counter_mut()
-                        .set_enabled((data >> 0 & 1) != 0);
-                }
-                if let Ok(mut square_pulse_2) = self.square_pulse_2.lock() {
-                    square_pulse_2
-                        .length_counter_mut()
-                        .set_enabled((data >> 1 & 1) != 0);
-                }
-                if let Ok(mut triangle) = self.triangle.lock() {
-                    triangle
-                        .length_counter_mut()
-                        .set_enabled((data >> 2 & 1) != 0);
-                }
-                if let Ok(mut noise) = self.noise.lock() {
-                    noise.length_counter_mut().set_enabled((data >> 3 & 1) != 0);
-                }
-                if let Ok(mut dmc) = self.dmc.lock() {
-                    if data >> 4 & 1 == 0 {
-                        dmc.clear_sample_remaining_bytes_and_silence();
-                    } else {
-                        if !dmc.sample_remaining_bytes_more_than_0() {
-                            dmc.restart_sample();
-                        }
-                    }
+                self.square_pulse_1
+                    .borrow_mut()
+                    .length_counter_mut()
+                    .set_enabled((data >> 0 & 1) != 0);
 
-                    dmc.clear_interrupt_flag();
+                self.square_pulse_2
+                    .borrow_mut()
+                    .length_counter_mut()
+                    .set_enabled((data >> 1 & 1) != 0);
+
+                self.triangle
+                    .borrow_mut()
+                    .length_counter_mut()
+                    .set_enabled((data >> 2 & 1) != 0);
+
+                self.noise
+                    .borrow_mut()
+                    .length_counter_mut()
+                    .set_enabled((data >> 3 & 1) != 0);
+
+                let mut dmc = self.dmc.borrow_mut();
+                if data >> 4 & 1 == 0 {
+                    dmc.clear_sample_remaining_bytes_and_silence();
+                } else {
+                    if !dmc.sample_remaining_bytes_more_than_0() {
+                        dmc.restart_sample();
+                    }
                 }
+
+                dmc.clear_interrupt_flag();
             }
             Register::FrameCounter => {
                 self.is_4_step_squence_mode = data & 0x80 == 0;
@@ -436,28 +421,23 @@ impl APU2A03 {
         sink.detach();
     }
 
-    fn length_counter_decrement<S: APUChannel>(channel: &mut Arc<Mutex<LengthCountedChannel<S>>>) {
-        if let Ok(mut channel) = channel.lock() {
-            channel.length_counter_mut().decrement();
-        }
+    fn length_counter_decrement<S: APUChannel>(channel: &mut Rc<RefCell<LengthCountedChannel<S>>>) {
+        channel.borrow_mut().length_counter_mut().decrement();
     }
 
-    fn envelope_clock<S: EnvelopedChannel>(channel: &mut Arc<Mutex<S>>) {
-        if let Ok(mut channel) = channel.lock() {
-            channel.clock_envlope();
-        }
+    fn envelope_clock<S: EnvelopedChannel>(channel: &mut Rc<RefCell<S>>) {
+        channel.borrow_mut().clock_envlope();
     }
 
-    fn timer_clock<S: TimedAPUChannel>(channel: &mut Arc<Mutex<S>>) {
-        if let Ok(mut channel) = channel.lock() {
-            channel.timer_clock();
-        }
+    fn timer_clock<S: TimedAPUChannel>(channel: &mut Rc<RefCell<S>>) {
+        channel.borrow_mut().timer_clock();
     }
 
     fn triangle_linear_counter_clock(&mut self) {
-        if let Ok(mut triangle) = self.triangle.lock() {
-            triangle.channel_mut().clock_linear_counter();
-        }
+        self.triangle
+            .borrow_mut()
+            .channel_mut()
+            .clock_linear_counter();
     }
 
     fn generate_quarter_frame_clock(&mut self) {
@@ -571,21 +551,13 @@ impl APU2A03 {
 
 impl CpuIrqProvider for APU2A03 {
     fn is_irq_change_requested(&self) -> bool {
-        let dmc_irq_request = if let Ok(dmc) = self.dmc.lock() {
-            dmc.is_irq_change_requested()
-        } else {
-            false
-        };
+        let dmc_irq_request = self.dmc.borrow().is_irq_change_requested();
 
         self.request_interrupt_flag_change.get() || dmc_irq_request
     }
 
     fn irq_pin_state(&self) -> bool {
-        let dmc_irq = if let Ok(dmc) = self.dmc.lock() {
-            dmc.get_irq_pin_state()
-        } else {
-            false
-        };
+        let dmc_irq = self.dmc.borrow().get_irq_pin_state();
 
         self.interrupt_flag.get() || dmc_irq
     }
@@ -593,24 +565,16 @@ impl CpuIrqProvider for APU2A03 {
     fn clear_irq_request_pin(&mut self) {
         self.request_interrupt_flag_change.set(false);
 
-        if let Ok(mut dmc) = self.dmc.lock() {
-            dmc.clear_irq_request_pin();
-        }
+        self.dmc.borrow_mut().clear_irq_request_pin();
     }
 }
 
 impl APUCPUConnection for APU2A03 {
     fn request_dmc_reader_read(&self) -> Option<u16> {
-        if let Ok(dmc) = self.dmc.lock() {
-            dmc.request_dmc_reader_read()
-        } else {
-            None
-        }
+        self.dmc.borrow().request_dmc_reader_read()
     }
 
     fn submit_buffer_byte(&mut self, byte: u8) {
-        if let Ok(mut dmc) = self.dmc.lock() {
-            dmc.submit_buffer_byte(byte);
-        }
+        self.dmc.borrow_mut().submit_buffer_byte(byte);
     }
 }

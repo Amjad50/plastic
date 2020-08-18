@@ -1,23 +1,24 @@
 use crate::channels::{Dmc, NoiseWave, SquarePulse, TriangleWave};
 use crate::length_counter::LengthCountedChannel;
 use crate::tone_source::APUChannel;
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct Mixer {
-    square_pulse_1: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
-    square_pulse_2: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
-    triangle: Arc<Mutex<LengthCountedChannel<TriangleWave>>>,
-    noise: Arc<Mutex<LengthCountedChannel<NoiseWave>>>,
-    dmc: Arc<Mutex<Dmc>>,
+    square_pulse_1: Rc<RefCell<LengthCountedChannel<SquarePulse>>>,
+    square_pulse_2: Rc<RefCell<LengthCountedChannel<SquarePulse>>>,
+    triangle: Rc<RefCell<LengthCountedChannel<TriangleWave>>>,
+    noise: Rc<RefCell<LengthCountedChannel<NoiseWave>>>,
+    dmc: Rc<RefCell<Dmc>>,
 }
 
 impl Mixer {
     pub fn new(
-        square_pulse_1: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
-        square_pulse_2: Arc<Mutex<LengthCountedChannel<SquarePulse>>>,
-        triangle: Arc<Mutex<LengthCountedChannel<TriangleWave>>>,
-        noise: Arc<Mutex<LengthCountedChannel<NoiseWave>>>,
-        dmc: Arc<Mutex<Dmc>>,
+        square_pulse_1: Rc<RefCell<LengthCountedChannel<SquarePulse>>>,
+        square_pulse_2: Rc<RefCell<LengthCountedChannel<SquarePulse>>>,
+        triangle: Rc<RefCell<LengthCountedChannel<TriangleWave>>>,
+        noise: Rc<RefCell<LengthCountedChannel<NoiseWave>>>,
+        dmc: Rc<RefCell<Dmc>>,
     ) -> Self {
         Self {
             square_pulse_1,
@@ -27,23 +28,15 @@ impl Mixer {
             dmc,
         }
     }
-
-    fn channel_output<C: APUChannel>(channel: &mut Arc<Mutex<C>>) -> f32 {
-        if let Ok(mut channel) = channel.lock() {
-            channel.get_output()
-        } else {
-            0.
-        }
-    }
 }
 
 impl APUChannel for Mixer {
     fn get_output(&mut self) -> f32 {
-        let square_pulse_1 = Self::channel_output(&mut self.square_pulse_1);
-        let square_pulse_2 = Self::channel_output(&mut self.square_pulse_2);
-        let triangle = Self::channel_output(&mut self.triangle);
-        let noise = Self::channel_output(&mut self.noise);
-        let dmc = Self::channel_output(&mut self.dmc);
+        let square_pulse_1 = self.square_pulse_1.borrow_mut().get_output();
+        let square_pulse_2 = self.square_pulse_2.borrow_mut().get_output();
+        let triangle = self.triangle.borrow_mut().get_output();
+        let noise = self.noise.borrow_mut().get_output();
+        let dmc = self.dmc.borrow_mut().get_output();
 
         let pulse_out = if square_pulse_1 == 0. && square_pulse_2 == 0. {
             0.
