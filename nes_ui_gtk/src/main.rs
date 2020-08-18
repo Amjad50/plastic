@@ -6,12 +6,11 @@ use ui::GtkProvider;
 fn main() {
     let args = args().collect::<Vec<String>>();
 
-    if args.len() < 2 {
-        eprintln!("USAGE: {} <rom-file>", args[0]);
-        return;
-    }
-
-    let mut nes = NES::new(&args[1], GtkProvider {}).expect("");
+    let mut nes = if args.len() >= 2 {
+        NES::new(&args[1], GtkProvider {}).expect("")
+    } else {
+        NES::new_without_file(GtkProvider {})
+    };
 
     nes.run();
 }

@@ -32,6 +32,8 @@ pub struct Cartridge {
     sram_data: Vec<u8>,
 
     mapper: Box<dyn Mapper>,
+
+    is_empty: bool,
 }
 
 impl Cartridge {
@@ -143,6 +145,8 @@ impl Cartridge {
                         chr_data,
                         sram_data,
                         mapper,
+
+                        is_empty: false,
                     })
                 }
             } else {
@@ -150,6 +154,32 @@ impl Cartridge {
             }
         } else {
             Err(CartridgeError::ExtensionError)
+        }
+    }
+
+    pub fn new_without_file() -> Self {
+        Self {
+            // should not be used
+            file_path: Path::new("").to_path_buf().into_boxed_path(),
+            _size_prg: 0,
+            _size_chr: 0,
+            _is_chr_ram: false,
+            _mapper_id: 0,
+            mirroring_vertical: false,
+            contain_sram: false,
+            sram_size: 0,
+            _contain_trainer: false,
+            use_4_screen_mirroring: false,
+            _vs_unisystem: false,
+            _playchoice_10_hint: false,
+            _is_nes_2: false,
+            _trainer_data: Vec::new(),
+            prg_data: Vec::new(),
+            chr_data: Vec::new(),
+            sram_data: Vec::new(),
+            mapper: Box::new(Mapper0::new()),
+
+            is_empty: true,
         }
     }
 
@@ -224,10 +254,21 @@ impl Cartridge {
             Ok(())
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.is_empty
+    }
 }
 
 impl Bus for Cartridge {
     fn read(&self, address: u16, device: Device) -> u8 {
+        if self.is_empty {
+            return match device {
+                Device::CPU => 0xEA, // NOP instruction just in case, this
+                Device::PPU => 0x00, // should not be called
+            };
+        }
+
         let result = self.mapper.map_read(address, device);
 
         if let MappingResult::Allowed(new_address) = result {
@@ -254,6 +295,10 @@ impl Bus for Cartridge {
         }
     }
     fn write(&mut self, address: u16, data: u8, device: Device) {
+        if self.is_empty {
+            return;
+        }
+
         // send the write signal, this might trigger bank change
         let result = self.mapper.map_write(address, data, device);
 
@@ -293,6 +338,11 @@ impl Bus for Cartridge {
 
 impl MirroringProvider for Cartridge {
     fn mirroring_mode(&self) -> MirroringMode {
+        if self.is_empty {
+            //anything
+            return MirroringMode::Vertical;
+        }
+
         if self.use_4_screen_mirroring {
             MirroringMode::FourScreen
         } else {
@@ -311,7 +361,7 @@ impl MirroringProvider for Cartridge {
 
 impl Drop for Cartridge {
     fn drop(&mut self) {
-        if self.contain_sram {
+        if !self.is_empty && self.contain_sram {
             self.save_sram_file().unwrap();
         }
     }
@@ -319,6 +369,10 @@ impl Drop for Cartridge {
 
 impl CpuIrqProvider for Cartridge {
     fn is_irq_change_requested(&self) -> bool {
+        if self.is_empty {
+            return false;
+        }
+
         self.mapper.is_irq_pin_state_changed_requested()
     }
 

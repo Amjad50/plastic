@@ -1,6 +1,6 @@
 use apu2a03::APU2A03;
 use cartridge::{Cartridge, CartridgeError};
-use common::{Bus, Device};
+use common::{Bus, Device, MirroringProvider};
 use controller::{Controller, StandardNESControllerState};
 use cpu6502::CPU6502;
 use display::TV;
@@ -17,13 +17,13 @@ pub const TV_WIDTH: u32 = 256;
 pub const TV_HEIGHT: u32 = 240;
 
 struct PPUBus {
-    cartridge: Rc<RefCell<Cartridge>>,
+    cartridge: Rc<RefCell<dyn Bus>>,
     vram: VRam,
     palettes: Palette,
 }
 
 struct CPUBus {
-    cartridge: Rc<RefCell<Cartridge>>,
+    cartridge: Rc<RefCell<dyn Bus>>,
     ram: [u8; 0x800],
     ppu: Rc<RefCell<dyn Bus>>,
     apu: Rc<RefCell<dyn Bus>>,
@@ -32,7 +32,7 @@ struct CPUBus {
 
 impl CPUBus {
     pub fn new(
-        cartridge: Rc<RefCell<Cartridge>>,
+        cartridge: Rc<RefCell<dyn Bus>>,
         ppu: Rc<RefCell<dyn Bus>>,
         apu: Rc<RefCell<dyn Bus>>,
         contoller: Controller,
@@ -48,7 +48,10 @@ impl CPUBus {
 }
 
 impl PPUBus {
-    pub fn new(cartridge: Rc<RefCell<Cartridge>>) -> Self {
+    pub fn new<S>(cartridge: Rc<RefCell<S>>) -> Self
+    where
+        S: Bus + MirroringProvider + 'static,
+    {
         PPUBus {
             cartridge: cartridge.clone(),
             vram: VRam::new(cartridge.clone()),
@@ -125,11 +128,24 @@ pub struct NES<P: UiProvider + Send + 'static> {
     ctrl_state: Arc<Mutex<StandardNESControllerState>>,
 
     ui: Option<P>, // just to hold the UI object (it will be taken in the main loop)
+
+    paused: bool,
 }
 
 impl<P: UiProvider + Send + 'static> NES<P> {
     pub fn new(filename: &str, ui: P) -> Result<Self, CartridgeError> {
         let cartridge = Cartridge::from_file(filename)?;
+
+        Ok(Self::create_nes(cartridge, ui))
+    }
+
+    pub fn new_without_file(ui: P) -> Self {
+        let cartridge = Cartridge::new_without_file();
+
+        Self::create_nes(cartridge, ui)
+    }
+
+    fn create_nes(cartridge: Cartridge, ui: P) -> Self {
         let cartridge = Rc::new(RefCell::new(cartridge));
         let ppubus = PPUBus::new(cartridge.clone());
 
@@ -151,7 +167,9 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         cpu.add_irq_provider(cartridge.clone());
         cpu.add_irq_provider(apu.clone());
 
-        Ok(Self {
+        let paused = cartridge.borrow().is_empty();
+
+        Self {
             cartridge,
             cpu,
             ppu,
@@ -159,7 +177,9 @@ impl<P: UiProvider + Send + 'static> NES<P> {
             image,
             ctrl_state,
             ui: Some(ui),
-        })
+
+            paused,
+        }
     }
 
     pub fn reset(&mut self) {
@@ -170,6 +190,8 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         self.ppu.borrow_mut().reset(ppubus);
 
         self.apu.replace(APU2A03::new());
+
+        self.paused = self.cartridge.borrow().is_empty();
         // TODO: implement reset for cartridge if needed
         // self.cartridge.borrow_mut().reset();
     }
@@ -189,8 +211,11 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         });
 
         self.cpu.reset();
-        // Run the sound thread
-        self.apu.borrow().play();
+
+        if !self.paused {
+            // Run the sound thread
+            self.apu.borrow().play();
+        }
 
         let mut last = std::time::Instant::now();
         const CPU_FREQ: f64 = 1.789773 * 1E6;
@@ -206,7 +231,9 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                     UiEvent::Exit => break,
                     UiEvent::Reset => {
                         self.reset();
-                        self.apu.borrow().play();
+                        if !self.paused {
+                            self.apu.borrow().play();
+                        }
                     }
 
                     UiEvent::LoadRom(file_location) => {
@@ -214,12 +241,19 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                         if let Ok(cartridge) = cartridge {
                             self.cartridge.replace(cartridge);
                             self.reset();
-                            self.apu.borrow().play();
+                            if !self.paused {
+                                self.apu.borrow().play();
+                            }
                         } else {
                             break;
                         }
                     }
                 }
+            }
+
+            if self.paused {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                continue;
             }
 
             for _ in 0..N {
