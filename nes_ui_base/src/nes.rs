@@ -194,6 +194,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         self.paused = self.cartridge.borrow().is_empty();
         // TODO: implement reset for cartridge if needed
         // self.cartridge.borrow_mut().reset();
+        // FIXME: added a way to reset CPU BUS
     }
 
     /// calculate a new view based on the window size

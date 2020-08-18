@@ -338,11 +338,6 @@ where
         self.dma_remaining = 0;
         self.dma_address = 0;
 
-        // FIXME: its stupid method but clear the ram
-        for i in 0x0000..=0x1FFF {
-            self.write_bus(i, 0);
-        }
-
         self.set_flag(StatusFlag::InterruptDisable);
         self.reg_sp = 0xFD; //reset
 
