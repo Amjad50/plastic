@@ -58,10 +58,27 @@ impl UiProvider for GtkProvider {
             let pattern = cairo::SurfacePattern::create(&src);
             pattern.set_filter(cairo::Filter::Nearest);
 
-            let scale_width = area.get_allocated_width() as f64 / TV_WIDTH as f64;
-            let scale_height = area.get_allocated_height() as f64 / TV_HEIGHT as f64;
+            let area_width = area.get_allocated_width() as f64;
+            let area_height = area.get_allocated_height() as f64;
 
-            cr.scale(scale_width, scale_height);
+            let scale_width = area_width / TV_WIDTH as f64;
+            let scale_height = area_height / TV_HEIGHT as f64;
+
+            let scale_smallest;
+            let mut top = 0.;
+            let mut left = 0.;
+
+            if scale_width > scale_height {
+                scale_smallest = scale_height;
+                left = (area_width - (TV_WIDTH as f64 * scale_smallest)) / 2.;
+            } else {
+                scale_smallest = scale_width;
+                top = (area_height - (TV_HEIGHT as f64 * scale_smallest)) / 2.;
+            };
+
+            cr.translate(left, top);
+
+            cr.scale(scale_smallest, scale_smallest);
 
             cr.set_source(&pattern);
             cr.paint();
