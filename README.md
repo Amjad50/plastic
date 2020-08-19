@@ -23,11 +23,11 @@ This is a personal project for fun and to experience emulating hardware and conn
   - [x] Mapper 7
   - [ ] Mapper 8
   - [x] Mapper 9
-- [ ] Audio Processing Unit:
+- [x] Audio Processing Unit:
   - [x] 2 Pulse wave(square)
   - [x] Triangle
-  - [ ] Noise
-  - [ ] DMC
+  - [x] Noise
+  - [x] DMC
   - [x] IRQ support
 - [x] Controller:
   controllable using the keyboard and controller (tested with PS4 controller)
@@ -45,6 +45,8 @@ let mut nes = NES::new("path/to/rom.nes", Provider {})?;
 
 nes.run();
 ```
+
+For now all UI providers can reset the game through `<CTRL-R>`
 
 Using this design, I have implemented some providers which have
 different purposes:
@@ -77,6 +79,8 @@ different in performance even after adding the debugger.
 #### Advantages
 1. Ability to add buttons and menus which enable easier integration
    for debuggers and anything similar.
+2. Ability to open a NES file through the menu.
+3. Can run without specifying a ROM from the command line.
 #### Disadvantages
 1. Does not offer gamepad support, but it can be added through
    other external libraries.
@@ -94,7 +98,8 @@ each pixel, it is advised to use the smallest font size your
 terminal emulator supports. Have fun.
 
 ### Controls
-In all the UI providers I followed the same controlling scheme:
+In all the UI providers I followed the same controlling scheme,
+as well as the ability to reset through `<CTRL-R>`:
 
 #### Keyboard
 | keyboard | nes controller |
