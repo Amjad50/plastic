@@ -82,7 +82,7 @@ impl APU2A03 {
             apu_freq: 0.,
             sample_counter: 0.,
 
-            offset: 0.,
+            offset: 0.5,
 
             wait_reset: 0,
 
