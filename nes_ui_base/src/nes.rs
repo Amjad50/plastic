@@ -256,6 +256,14 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                             break;
                         }
                     }
+                    UiEvent::Pause => {
+                        self.paused = true;
+                        self.apu.borrow_mut().pause();
+                    }
+                    UiEvent::Resume => {
+                        self.paused = false;
+                        self.apu.borrow_mut().play();
+                    }
                 }
             }
 

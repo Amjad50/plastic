@@ -7,9 +7,9 @@ fn main() {
     let args = args().collect::<Vec<String>>();
 
     let mut nes = if args.len() >= 2 {
-        NES::new(&args[1], GtkProvider {}).expect("")
+        NES::new(&args[1], GtkProvider::new()).unwrap()
     } else {
-        NES::new_without_file(GtkProvider {})
+        NES::new_without_file(GtkProvider::new())
     };
 
     nes.run();

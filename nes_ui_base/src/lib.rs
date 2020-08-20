@@ -12,6 +12,8 @@ use std::sync::{mpsc::Sender, Arc, Mutex};
 pub enum UiEvent {
     Exit,
     Reset,
+    Pause,
+    Resume,
     LoadRom(String),
 }
 

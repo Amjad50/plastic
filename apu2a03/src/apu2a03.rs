@@ -40,6 +40,8 @@ pub struct APU2A03 {
 
     filter: Filter,
     filter_counter: u8,
+
+    player: rodio::Sink,
 }
 
 impl APU2A03 {
@@ -54,6 +56,16 @@ impl APU2A03 {
         let noise = Rc::new(RefCell::new(LengthCountedChannel::new(NoiseWave::new())));
         let dmc = Rc::new(RefCell::new(Dmc::new()));
 
+        let buffered_channel = Arc::new(Mutex::new(BufferedChannel::new()));
+
+        let device = rodio::default_output_device().unwrap();
+        let sink = rodio::Sink::new(&device);
+
+        sink.append(APUChannelPlayer::from_clone(buffered_channel.clone()));
+        sink.set_volume(0.15);
+
+        sink.pause();
+
         Self {
             square_pulse_1: square_pulse_1.clone(),
             square_pulse_2: square_pulse_2.clone(),
@@ -64,7 +76,7 @@ impl APU2A03 {
 
             dmc: dmc.clone(),
 
-            buffered_channel: Arc::new(Mutex::new(BufferedChannel::new())),
+            buffered_channel,
 
             mixer: Mixer::new(
                 square_pulse_1.clone(),
@@ -91,6 +103,8 @@ impl APU2A03 {
 
             filter: Filter::new(),
             filter_counter: 0,
+
+            player: sink,
         }
     }
 
@@ -416,14 +430,11 @@ impl APU2A03 {
     }
 
     pub fn play(&self) {
-        let device = rodio::default_output_device().unwrap();
-        let sink = rodio::Sink::new(&device);
+        self.player.play()
+    }
 
-        sink.append(APUChannelPlayer::from_clone(self.buffered_channel.clone()));
-        sink.set_volume(0.15);
-
-        sink.play();
-        sink.detach();
+    pub fn pause(&self) {
+        self.player.pause();
     }
 
     fn length_counter_decrement<S: APUChannel>(channel: &mut Rc<RefCell<LengthCountedChannel<S>>>) {

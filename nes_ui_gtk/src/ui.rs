@@ -4,7 +4,7 @@ use nes_ui_base::{
     nes_display::Color as NESColor,
     UiEvent, UiProvider,
 };
-use std::sync::{mpsc::Sender, Arc, Mutex};
+use std::sync::{atomic::AtomicBool, atomic::Ordering, mpsc::Sender, Arc, Mutex};
 
 use gdk::enums::key;
 use gdk::{keyval_to_upper, DragAction, ModifierType};
@@ -15,7 +15,17 @@ use gtk::{
     FileFilter, Inhibit, MenuItem, ResponseType, TargetEntry, TargetFlags, Window,
 };
 
-pub struct GtkProvider {}
+pub struct GtkProvider {
+    paused: Arc<AtomicBool>,
+}
+
+impl GtkProvider {
+    pub fn new() -> Self {
+        Self {
+            paused: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
 
 impl UiProvider for GtkProvider {
     fn get_tv_color_converter() -> fn(&NESColor) -> [u8; 4] {
@@ -42,6 +52,10 @@ impl UiProvider for GtkProvider {
         let menu_action_open = builder.get_object::<MenuItem>("menu_action_open").unwrap();
         let menu_action_quit = builder.get_object::<MenuItem>("menu_action_quit").unwrap();
         let menu_action_reset = builder.get_object::<MenuItem>("menu_action_reset").unwrap();
+        let menu_action_pause = builder.get_object::<MenuItem>("menu_action_pause").unwrap();
+        let menu_action_resume = builder
+            .get_object::<MenuItem>("menu_action_resume")
+            .unwrap();
 
         window.show_all();
 
@@ -90,6 +104,7 @@ impl UiProvider for GtkProvider {
 
         let ctrl_state_clone = ctrl_state.clone();
         let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
+        let paused_clone = self.paused.clone();
         window.connect_key_press_event(move |_, event| {
             let mut ctrl = ctrl_state_clone.lock().unwrap();
 
@@ -104,6 +119,15 @@ impl UiProvider for GtkProvider {
                 key::D => ctrl.press(StandardNESKey::Right),
                 key::R if event.get_state().intersects(ModifierType::CONTROL_MASK) => {
                     ui_to_nes_sender_clone.send(UiEvent::Reset).unwrap()
+                }
+                key::Escape => {
+                    if paused_clone.load(Ordering::Relaxed) {
+                        ui_to_nes_sender_clone.send(UiEvent::Resume).unwrap();
+                        paused_clone.store(false, Ordering::Relaxed);
+                    } else {
+                        ui_to_nes_sender_clone.send(UiEvent::Pause).unwrap();
+                        paused_clone.store(true, Ordering::Relaxed);
+                    }
                 }
                 _ => {}
             }
@@ -160,6 +184,20 @@ impl UiProvider for GtkProvider {
         let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
         menu_action_reset.connect_activate(move |_| {
             ui_to_nes_sender_clone.send(UiEvent::Reset).unwrap();
+        });
+
+        let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
+        let paused_clone = self.paused.clone();
+        menu_action_pause.connect_activate(move |_| {
+            ui_to_nes_sender_clone.send(UiEvent::Pause).unwrap();
+            paused_clone.store(true, Ordering::Relaxed);
+        });
+
+        let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
+        let paused_clone = self.paused.clone();
+        menu_action_resume.connect_activate(move |_| {
+            ui_to_nes_sender_clone.send(UiEvent::Resume).unwrap();
+            paused_clone.store(false, Ordering::Relaxed);
         });
 
         let app_clone = app.clone();
