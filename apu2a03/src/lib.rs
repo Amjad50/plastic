@@ -8,7 +8,6 @@ mod envelope;
 mod length_counter;
 mod mixer;
 mod sequencer;
-mod sweeper;
 mod tone_source;
 
 pub use crate::apu2a03::APU2A03;

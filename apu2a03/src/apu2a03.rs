@@ -3,7 +3,6 @@ use crate::channels::{Dmc, NoiseWave, SquarePulse, TriangleWave};
 use crate::envelope::EnvelopedChannel;
 use crate::length_counter::LengthCountedChannel;
 use crate::mixer::Mixer;
-use crate::sweeper::Sweeper;
 use crate::tone_source::{APUChannel, APUChannelPlayer, BufferedChannel, Filter, TimedAPUChannel};
 use common::interconnection::{APUCPUConnection, CpuIrqProvider};
 use std::cell::{Cell, RefCell};
@@ -12,9 +11,7 @@ use std::sync::{Arc, Mutex};
 
 pub struct APU2A03 {
     square_pulse_1: Rc<RefCell<LengthCountedChannel<SquarePulse>>>,
-    square_pulse_1_sweeper: Sweeper,
     square_pulse_2: Rc<RefCell<LengthCountedChannel<SquarePulse>>>,
-    square_pulse_2_sweeper: Sweeper,
 
     triangle: Rc<RefCell<LengthCountedChannel<TriangleWave>>>,
 
@@ -47,17 +44,19 @@ pub struct APU2A03 {
 
 impl APU2A03 {
     pub fn new() -> Self {
-        let square_pulse_1 = Rc::new(RefCell::new(LengthCountedChannel::new(SquarePulse::new())));
-        let square_pulse_2 = Rc::new(RefCell::new(LengthCountedChannel::new(SquarePulse::new())));
+        let square_pulse_1 = Rc::new(RefCell::new(LengthCountedChannel::new(SquarePulse::new(
+            true,
+        ))));
+        let square_pulse_2 = Rc::new(RefCell::new(LengthCountedChannel::new(SquarePulse::new(
+            false,
+        ))));
         let triangle = Rc::new(RefCell::new(LengthCountedChannel::new(TriangleWave::new())));
         let noise = Rc::new(RefCell::new(LengthCountedChannel::new(NoiseWave::new())));
         let dmc = Rc::new(RefCell::new(Dmc::new()));
 
         Self {
             square_pulse_1: square_pulse_1.clone(),
-            square_pulse_1_sweeper: Sweeper::new(square_pulse_1.clone()),
             square_pulse_2: square_pulse_2.clone(),
-            square_pulse_2_sweeper: Sweeper::new(square_pulse_2.clone()),
 
             triangle: triangle.clone(),
 
@@ -164,7 +163,10 @@ impl APU2A03 {
             }
             Register::Pulse1_2 => {
                 // sweep
-                self.square_pulse_1_sweeper.set_from_data_byte(data);
+                self.square_pulse_1
+                    .borrow_mut()
+                    .channel_mut()
+                    .set_sweeper_data(data);
             }
             Register::Pulse1_3 => {
                 let mut square_pulse_1 = self.square_pulse_1.borrow_mut();
@@ -226,7 +228,10 @@ impl APU2A03 {
             }
             Register::Pulse2_2 => {
                 // sweep
-                self.square_pulse_2_sweeper.set_from_data_byte(data);
+                self.square_pulse_2
+                    .borrow_mut()
+                    .channel_mut()
+                    .set_sweeper_data(data);
             }
             Register::Pulse2_3 => {
                 let mut square_pulse_2 = self.square_pulse_2.borrow_mut();
@@ -440,6 +445,10 @@ impl APU2A03 {
             .clock_linear_counter();
     }
 
+    fn square_sweeper_clock(channel: &mut Rc<RefCell<LengthCountedChannel<SquarePulse>>>) {
+        channel.borrow_mut().channel_mut().clock_sweeper();
+    }
+
     fn generate_quarter_frame_clock(&mut self) {
         Self::envelope_clock(&mut self.square_pulse_1);
         Self::envelope_clock(&mut self.square_pulse_2);
@@ -449,9 +458,9 @@ impl APU2A03 {
 
     fn generate_half_frame_clock(&mut self) {
         Self::length_counter_decrement(&mut self.square_pulse_1);
-        self.square_pulse_1_sweeper.clock();
+        Self::square_sweeper_clock(&mut self.square_pulse_1);
         Self::length_counter_decrement(&mut self.square_pulse_2);
-        self.square_pulse_2_sweeper.clock();
+        Self::square_sweeper_clock(&mut self.square_pulse_2);
         Self::length_counter_decrement(&mut self.triangle);
         Self::length_counter_decrement(&mut self.noise);
     }
