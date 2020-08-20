@@ -128,6 +128,11 @@ as well as the ability to reset through `<CTRL-R>`:
 For now its static, and there is no way to change it except for
 doing it in the code, TODO later.
 
+### License
+This project is under [MIT](./LICENSE) license.
+
+NES is a product and/or trademark of Nintendo Co., Ltd. Nintendo Co., Ltd. and is not affiliated in any way with Plastic or its author
+
 ### References
 Most of the documentation for NES components can be found in the [NES dev wiki](http://wiki.nesdev.com/w/index.php/Nesdev_Wiki)
 
