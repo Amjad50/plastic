@@ -11,6 +11,7 @@ pub enum CartridgeError {
     HeaderError,
     TooLargeFile(u64),
     ExtensionError,
+    MapperNotImplemented(u8),
     Others,
 }
 
@@ -27,6 +28,7 @@ impl CartridgeError {
                 still has some data at the end with size {}-bytes",
                 size
             ),
+            Self::MapperNotImplemented(id) => format!("Mapper {} is not yet implemented", id),
             Self::ExtensionError => "The cartridge file must end with `.nes` extension".to_owned(),
         }
     }

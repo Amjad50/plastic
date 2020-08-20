@@ -91,7 +91,8 @@ impl Cartridge {
 
                 // initialize the mapper first, so that if it is not supported yet,
                 // panic
-                let mapper = Self::get_mapper(mapper_id, size_prg, size_chr, is_chr_ram, sram_size);
+                let mapper = Self::get_mapper(mapper_id, size_prg, size_chr, is_chr_ram, sram_size)
+                    .ok_or(CartridgeError::MapperNotImplemented(mapper_id))?;
 
                 let mut trainer_data = Vec::new();
 
@@ -203,7 +204,7 @@ impl Cartridge {
         chr_count: u8,
         is_chr_ram: bool,
         sram_size: u8,
-    ) -> Box<dyn Mapper> {
+    ) -> Option<Box<dyn Mapper>> {
         let mut mapper: Box<dyn Mapper> = match mapper_id {
             0 => Box::new(Mapper0::new()),
             1 => Box::new(Mapper1::new()),
@@ -213,7 +214,7 @@ impl Cartridge {
             7 => Box::new(Mapper7::new()),
             9 => Box::new(Mapper9::new()),
             _ => {
-                unimplemented!("Mapper {} is not yet implemented", mapper_id);
+                return None;
             }
         };
 
@@ -221,7 +222,7 @@ impl Cartridge {
         // they share a constructor
         mapper.init(prg_count, is_chr_ram, chr_count, sram_size);
 
-        mapper
+        Some(mapper)
     }
 
     fn load_sram_file<P: AsRef<Path>>(path: P, sram_size: usize) -> Result<Vec<u8>, SramError> {
