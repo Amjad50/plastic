@@ -13,7 +13,13 @@ pub trait TimedAPUChannel: APUChannel {
 pub struct BufferedChannel {
     buffer: VecDeque<f32>,
     overusing: bool,
+    underusing: bool,
     last: f32,
+    recent_record: bool, // did a record happen recently
+    recent_output: bool, // did an output request happen recently
+                         //
+                         // these are used to know if we are now in a bulk recording
+                         // stage, which what happens in the APU
 }
 
 impl BufferedChannel {
@@ -21,7 +27,10 @@ impl BufferedChannel {
         Self {
             buffer: VecDeque::new(),
             overusing: false,
+            underusing: false,
             last: 0.,
+            recent_record: false,
+            recent_output: false,
         }
     }
 
@@ -29,19 +38,37 @@ impl BufferedChannel {
         self.overusing
     }
 
-    pub fn clear_overusing(&mut self) {
+    pub fn get_is_underusing(&self) -> bool {
+        self.underusing
+    }
+
+    pub fn clear_using_flags(&mut self) {
         self.overusing = false;
+        self.underusing = false;
     }
 
     pub fn recored_sample(&mut self, sample: f32) {
         self.buffer.push_back(sample);
+        if self.recent_record {
+            if self.buffer.len() > 10 && !self.overusing {
+                self.underusing = true;
+            }
+            self.recent_record = false;
+        }
+        if self.recent_output {
+            self.recent_output = false;
+            self.recent_record = true;
+        }
     }
 }
 
 impl APUChannel for BufferedChannel {
     fn get_output(&mut self) -> f32 {
+        self.recent_output = true;
+
         if self.buffer.len() == 0 {
             self.overusing = true;
+            self.underusing = false;
 
             self.last
         } else if self.buffer.len() == 1 {

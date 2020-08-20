@@ -474,23 +474,28 @@ impl APU2A03 {
             }
         }
 
-        if self.cycle % 300 == 0 {
-            if let Ok(mut buffered_channel) = self.buffered_channel.lock() {
-                if buffered_channel.get_is_overusing() {
-                    self.offset += 0.001;
-                    buffered_channel.clear_overusing();
-                }
-            }
-        }
-
         // after how many apu clocks a sample should be recorded
         // for now its 44100 * 8 and that is only due to the filter used, as it supports
         // that only for now.
-        //
-        // FIXME: the buffer is being emptied faster than filled for some reason, please investigate
-        //  (-0.9) is set to fix that, but of course its not 1% reliable :(
         let samples_every_n_apu_clock =
             (self.apu_freq / (crate::SAMPLE_RATE as f64 * 8.)) - self.offset;
+
+        if self.cycle % 300 == 0 {
+            if let Ok(mut buffered_channel) = self.buffered_channel.lock() {
+                // buffered_channel.set_max_sample_limit(samples_every_n_apu_clock as usize);
+
+                let change = if buffered_channel.get_is_overusing() {
+                    0.001
+                } else if buffered_channel.get_is_underusing() {
+                    -0.0002
+                } else {
+                    0.
+                };
+
+                self.offset += change;
+                buffered_channel.clear_using_flags();
+            }
+        }
 
         self.sample_counter += 1.0;
         if self.sample_counter >= samples_every_n_apu_clock {
