@@ -9,6 +9,8 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
+use rodio::DeviceTrait;
+
 pub struct APU2A03 {
     square_pulse_1: Rc<RefCell<LengthCountedChannel<SquarePulse>>>,
     square_pulse_2: Rc<RefCell<LengthCountedChannel<SquarePulse>>>,
@@ -41,7 +43,7 @@ pub struct APU2A03 {
     filter: Filter,
     filter_counter: u8,
 
-    player: rodio::Sink,
+    player: Option<rodio::Sink>,
 }
 
 impl APU2A03 {
@@ -58,14 +60,6 @@ impl APU2A03 {
 
         let buffered_channel = Arc::new(Mutex::new(BufferedChannel::new()));
 
-        let device = rodio::default_output_device().unwrap();
-        let sink = rodio::Sink::new(&device);
-
-        sink.append(APUChannelPlayer::from_clone(buffered_channel.clone()));
-        sink.set_volume(0.15);
-
-        sink.pause();
-
         Self {
             square_pulse_1: square_pulse_1.clone(),
             square_pulse_2: square_pulse_2.clone(),
@@ -76,7 +70,7 @@ impl APU2A03 {
 
             dmc: dmc.clone(),
 
-            buffered_channel,
+            buffered_channel: buffered_channel.clone(),
 
             mixer: Mixer::new(
                 square_pulse_1.clone(),
@@ -104,7 +98,27 @@ impl APU2A03 {
             filter: Filter::new(),
             filter_counter: 0,
 
-            player: sink,
+            player: Self::get_player(buffered_channel.clone()),
+        }
+    }
+
+    fn get_player<S: APUChannel + Send + 'static>(channel: Arc<Mutex<S>>) -> Option<rodio::Sink> {
+        let device = rodio::default_output_device()?;
+
+        // bug in rodio, that it panics if the device does not support any format
+        // it is fixed now in github, not sure when is the release coming
+        let formats = device.supported_output_formats().ok()?;
+        if formats.count() > 0 {
+            let sink = rodio::Sink::new(&device);
+
+            sink.append(APUChannelPlayer::from_clone(channel.clone()));
+            sink.set_volume(0.15);
+
+            sink.pause();
+
+            Some(sink)
+        } else {
+            None
         }
     }
 
@@ -430,11 +444,15 @@ impl APU2A03 {
     }
 
     pub fn play(&self) {
-        self.player.play()
+        if let Some(ref player) = self.player {
+            player.play();
+        }
     }
 
     pub fn pause(&self) {
-        self.player.pause();
+        if let Some(ref player) = self.player {
+            player.pause();
+        }
     }
 
     fn length_counter_decrement<S: APUChannel>(channel: &mut Rc<RefCell<LengthCountedChannel<S>>>) {
