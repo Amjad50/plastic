@@ -6,11 +6,18 @@ use ui::GtkProvider;
 fn main() {
     let args = args().collect::<Vec<String>>();
 
-    let mut nes = if args.len() >= 2 {
-        NES::new(&args[1], GtkProvider::new()).unwrap()
+    let nes = if args.len() >= 2 {
+        NES::new(&args[1], GtkProvider::new())
     } else {
-        NES::new_without_file(GtkProvider::new())
+        Ok(NES::new_without_file(GtkProvider::new()))
     };
 
-    nes.run();
+    match nes {
+        Ok(mut nes) => {
+            nes.run();
+        }
+        Err(err) => {
+            eprintln!("[ERROR] {}", err);
+        }
+    }
 }

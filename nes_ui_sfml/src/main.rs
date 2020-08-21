@@ -11,6 +11,12 @@ fn main() {
         return;
     }
 
-    let mut nes = NES::new(&args[1], SfmlProvider {}).expect("");
-    nes.run();
+    match NES::new(&args[1], SfmlProvider {}) {
+        Ok(mut nes) => {
+            nes.run();
+        }
+        Err(err) => {
+            eprintln!("[ERROR] {}", err);
+        }
+    }
 }
