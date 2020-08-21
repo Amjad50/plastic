@@ -203,7 +203,7 @@ impl Mapper for Mapper4 {
                         }
                     }
                     0x8000..=0xFFFF => {
-                        let bank = match address {
+                        let mut bank = match address {
                             0x8000..=0x9FFF => {
                                 if self.prg_rom_bank_fix_8000 {
                                     // second to last
@@ -224,6 +224,8 @@ impl Mapper for Mapper4 {
                             0xE000..=0xFFFF => self.prg_count - 1,
                             _ => unreachable!(),
                         } as usize;
+
+                        bank %= self.prg_count as usize;
 
                         let start_of_bank = bank * 0x2000;
 
