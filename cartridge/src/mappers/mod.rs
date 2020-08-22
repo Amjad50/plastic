@@ -7,6 +7,7 @@ mod mapper7;
 mod mapper9;
 
 mod mapper10;
+mod mapper11;
 
 mod tests;
 
@@ -19,3 +20,4 @@ pub use mapper7::Mapper7;
 pub use mapper9::Mapper9;
 
 pub use mapper10::Mapper10;
+pub use mapper11::Mapper11;
