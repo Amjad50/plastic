@@ -57,9 +57,9 @@ impl Mapper for Mapper3 {
             }
             Device::PPU => {
                 if address < 0x2000 {
-                    assert!(self.chr_bank <= self.chr_count);
+                    let bank = self.chr_bank % self.chr_count;
 
-                    let start_of_bank = 0x2000 * self.chr_bank as usize;
+                    let start_of_bank = 0x2000 * bank as usize;
 
                     MappingResult::Allowed(start_of_bank + (address & 0x1FFF) as usize)
                 } else {

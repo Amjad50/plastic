@@ -32,7 +32,7 @@ impl Mapper for Mapper2 {
                 match address {
                     0x6000..=0x7FFF => MappingResult::Denied,
                     0x8000..=0xFFFF => {
-                        let bank = if address >= 0x8000 && address <= 0xBFFF {
+                        let mut bank = if address >= 0x8000 && address <= 0xBFFF {
                             self.prg_top_bank & 0xF
                         } else if address >= 0xC000 {
                             self.prg_count - 1
@@ -40,7 +40,7 @@ impl Mapper for Mapper2 {
                             unreachable!();
                         } as usize;
 
-                        assert!(bank <= self.prg_count as usize);
+                        bank %= self.prg_count as usize;
 
                         let start_of_bank = 0x4000 * bank;
 

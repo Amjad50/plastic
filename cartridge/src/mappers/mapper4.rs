@@ -256,12 +256,7 @@ impl Mapper for Mapper4 {
                         }
                     } as usize;
 
-                    // this is in case of RAM or ROM with 8KB only
-                    if self.chr_count == 8 {
-                        bank &= 0x7;
-                    }
-
-                    assert!(bank <= self.chr_count as usize);
+                    bank %= self.chr_count as usize;
 
                     let mask = if is_2k { 0x7FF } else { 0x3FF };
 

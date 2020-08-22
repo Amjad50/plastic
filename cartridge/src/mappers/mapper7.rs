@@ -43,17 +43,9 @@ impl Mapper for Mapper7 {
                 match address {
                     0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
                     0x8000..=0xFFFF => {
-                        let mut bank = self.prg_bank as usize;
+                        let bank = self.prg_bank % self.prg_count;
 
-                        if self.prg_count == 2 {
-                            bank &= 0x1;
-                        } else if self.prg_count == 4 {
-                            bank &= 0x3;
-                        }
-
-                        assert!(bank < self.prg_count as usize);
-
-                        let start_of_bank = bank * 0x8000;
+                        let start_of_bank = 0x8000 * bank as usize;
 
                         // add the offset
                         MappingResult::Allowed(start_of_bank + (address & 0x7FFF) as usize)

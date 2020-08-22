@@ -112,7 +112,7 @@ impl Mapper for Mapper9 {
             Device::CPU => match address {
                 0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
                 0x8000..=0xFFFF => {
-                    let bank = match address {
+                    let mut bank = match address {
                         0x8000..=0x9FFF => self.prg_bank,
                         0xA000..=0xFFFF => {
                             // last 3 banks
@@ -124,7 +124,7 @@ impl Mapper for Mapper9 {
                         _ => unreachable!(),
                     } as usize;
 
-                    assert!(bank < self.prg_count as usize);
+                    bank %= self.prg_count as usize;
 
                     let start_of_bank = bank * 0x2000;
 
@@ -163,15 +163,7 @@ impl Mapper for Mapper9 {
                         }
                     } as usize;
 
-                    if self.chr_count <= 4 {
-                        bank &= 0x3;
-                    } else if self.chr_count <= 8 {
-                        bank &= 0x7;
-                    } else if self.chr_count <= 16 {
-                        bank &= 0xF;
-                    }
-
-                    assert!(bank <= self.chr_count as usize);
+                    bank %= self.chr_count as usize;
 
                     let start_of_bank = bank * 0x1000;
 

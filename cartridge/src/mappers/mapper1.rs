@@ -215,7 +215,7 @@ impl Mapper for Mapper1 {
                             bank |= prg_high_bit_512_mode;
                         }
 
-                        assert!(bank <= self.prg_count as usize);
+                        bank %= self.prg_count as usize;
 
                         let start_of_bank = 0x4000 * bank;
 
@@ -251,20 +251,7 @@ impl Mapper for Mapper1 {
                         }
                     } as usize;
 
-                    // only for 8KB CHR size
-                    //
-                    // For carts with 8 KiB of CHR (be it ROM or RAM), MMC1
-                    // follows the common behavior of using only the low-order
-                    // bits: the bank number is in effect ANDed with 1.
-                    if self.chr_count == 2 {
-                        bank = bank & 1;
-                    } else if self.chr_count <= 8 {
-                        bank = bank & 0x7;
-                    } else if self.chr_count <= 16 {
-                        bank = bank & 0xF;
-                    }
-
-                    assert!(bank <= self.chr_count as usize);
+                    bank %= self.chr_count as usize;
 
                     let start_of_bank = 0x1000 * bank;
 
