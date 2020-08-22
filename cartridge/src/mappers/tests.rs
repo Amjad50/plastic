@@ -288,8 +288,7 @@ mod mappers_tests {
         )
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn holy_mapperel_m10_p128k_c64k_w8k_test() -> Result<(), TestError> {
         run_holy_mapperel_test(
             "./tests/roms/holy-mapperel-bin-0.02/testroms/M10_P128K_C64K_W8K.nes",

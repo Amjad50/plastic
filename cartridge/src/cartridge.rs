@@ -213,6 +213,7 @@ impl Cartridge {
             4 => Box::new(Mapper4::new()),
             7 => Box::new(Mapper7::new()),
             9 => Box::new(Mapper9::new()),
+            10 => Box::new(Mapper10::new()),
             _ => {
                 return None;
             }
