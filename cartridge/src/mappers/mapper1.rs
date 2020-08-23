@@ -91,7 +91,6 @@ pub struct Mapper1 {
     /// in 16kb units
     prg_count: u8,
 
-    // TODO: add support for SOROM, SUROM and SXROM which support bank switching PRG RAM
     /// in 8kb units
     prg_ram_count: u8,
 }
@@ -190,6 +189,23 @@ impl Mapper1 {
         // add the offset
         MappingResult::Allowed(start_of_bank + (address & mask) as usize)
     }
+
+    fn map_prg_ram(&self, address: u16) -> MappingResult {
+        if self.is_prg_ram_enabled() && self.prg_ram_count > 0 {
+            let bank = if self.prg_ram_count > 1 {
+                if self.is_chr_8kb_mode() {
+                    (self.chr_0_bank >> 2) & 0x3
+                } else {
+                    (self.chr_1_bank >> 2) & 0x3
+                }
+            } else {
+                0
+            } as usize;
+            MappingResult::Allowed(bank * 0x2000 + (address & 0x1FFF) as usize)
+        } else {
+            MappingResult::Denied
+        }
+    }
 }
 
 impl Mapper for Mapper1 {
@@ -210,13 +226,7 @@ impl Mapper for Mapper1 {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => {
-                        if self.is_prg_ram_enabled() && self.prg_ram_count > 0 {
-                            MappingResult::Allowed(address as usize & 0x1FFF)
-                        } else {
-                            MappingResult::Denied
-                        }
-                    }
+                    0x6000..=0x7FFF => self.map_prg_ram(address),
                     0x8000..=0xFFFF => {
                         let mut bank = if self.is_prg_32kb_mode() {
                             // ignore last bit
@@ -286,13 +296,7 @@ impl Mapper for Mapper1 {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => {
-                        if self.is_prg_ram_enabled() && self.prg_ram_count > 0 {
-                            MappingResult::Allowed(address as usize & 0x1FFF)
-                        } else {
-                            MappingResult::Denied
-                        }
-                    }
+                    0x6000..=0x7FFF => self.map_prg_ram(address),
                     0x8000..=0xFFFF => {
                         if data & 0x80 != 0 {
                             self.reset_shift_register();
