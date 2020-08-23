@@ -50,6 +50,8 @@ pub struct ProviderApp {
     ui_to_nes_sender: Sender<UiEvent>,
     image: Arc<Mutex<Vec<u8>>>,
     ctrl_state: Arc<Mutex<StandardNESControllerState>>,
+
+    paused: Arc<AtomicBool>,
 }
 
 impl ProviderApp {
@@ -65,6 +67,7 @@ impl ProviderApp {
             ui_to_nes_sender,
             image,
             ctrl_state,
+            paused: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -102,6 +105,18 @@ impl ProviderApp {
             keys::_S => ctrl.release(StandardNESKey::Down),
             keys::_A => ctrl.release(StandardNESKey::Left),
             keys::_D => ctrl.release(StandardNESKey::Right),
+
+            // FIXME: for some reason ESCAPE is not detected on press and only
+            //  on release
+            keys::ESCAPE => {
+                if self.paused.load(Ordering::Relaxed) {
+                    self.ui_to_nes_sender.send(UiEvent::Resume).unwrap();
+                    self.paused.store(false, Ordering::Relaxed);
+                } else {
+                    self.ui_to_nes_sender.send(UiEvent::Pause).unwrap();
+                    self.paused.store(true, Ordering::Relaxed);
+                }
+            }
             _ => {}
         }
     }
@@ -191,15 +206,11 @@ impl ProviderApp {
     }
 }
 
-pub struct NwgProvider {
-    paused: Arc<AtomicBool>,
-}
+pub struct NwgProvider {}
 
 impl NwgProvider {
     pub fn new() -> Self {
-        Self {
-            paused: Arc::new(AtomicBool::new(false)),
-        }
+        Self {}
     }
 }
 
