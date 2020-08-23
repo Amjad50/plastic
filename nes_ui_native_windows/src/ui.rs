@@ -1,0 +1,169 @@
+use nes_ui_base::{
+    nes::{TV_HEIGHT, TV_WIDTH},
+    nes_controller::{StandardNESControllerState, StandardNESKey},
+    nes_display::Color as NESColor,
+    UiEvent, UiProvider,
+};
+use std::sync::{atomic::AtomicBool, atomic::Ordering, mpsc::Sender, Arc, Mutex};
+
+use native_windows_derive as nwd;
+use native_windows_gui as nwg;
+
+use nwd::NwgUi;
+use nwg::{EventData, ExternCanvas, NativeUi, Timer, Window};
+use winapi::um::{
+    wingdi::{
+        BitBlt, CreateBitmap, CreateCompatibleDC, CreateSolidBrush, DeleteDC, DeleteObject,
+        SelectObject, SetStretchBltMode, StretchBlt, COLORONCOLOR, RGB, SRCCOPY,
+    },
+    winuser::FillRect,
+};
+
+#[derive(NwgUi)]
+pub struct ProviderApp {
+    #[nwg_control(
+        size: (TV_WIDTH as i32 * 3, TV_HEIGHT as i32 * 3),
+        title: "Plastic",
+        flags: "WINDOW|VISIBLE|MAIN_WINDOW|RESIZABLE"
+    )]
+    #[nwg_events(
+        OnWindowClose: [nwg::stop_thread_dispatch()],
+        // handle all cases for resizing [not good] :(
+        OnInit:           [ProviderApp::window_resize(SELF, CTRL)],
+        OnResize:         [ProviderApp::window_resize(SELF, CTRL)],
+        OnWindowMaximize: [ProviderApp::window_resize(SELF, CTRL)],
+        OnWindowMinimize: [ProviderApp::window_resize(SELF, CTRL)],
+    )]
+    window: Window,
+
+    #[nwg_control(parent: Some(&data.window), position: (0, 0), size: (280, 280))]
+    #[nwg_events(OnPaint: [ProviderApp::paint(SELF, CTRL, EVT_DATA)])]
+    canvas: ExternCanvas,
+
+    #[nwg_control(parent: window, interval: 1000/60, stopped: false)]
+    #[nwg_events(OnTimerTick: [ProviderApp::timer_tick(SELF)])]
+    timer: Timer,
+
+    ui_to_nes_sender: Sender<UiEvent>,
+    image: Arc<Mutex<Vec<u8>>>,
+    ctrl_state: Arc<Mutex<StandardNESControllerState>>,
+}
+
+impl ProviderApp {
+    fn initial_state(
+        ui_to_nes_sender: Sender<UiEvent>,
+        image: Arc<Mutex<Vec<u8>>>,
+        ctrl_state: Arc<Mutex<StandardNESControllerState>>,
+    ) -> Self {
+        Self {
+            window: Default::default(),
+            canvas: Default::default(),
+            timer: Default::default(),
+            ui_to_nes_sender,
+            image,
+            ctrl_state,
+        }
+    }
+}
+
+impl ProviderApp {
+    fn window_resize(&self, ctrl: &Window) {
+        self.canvas.set_size(ctrl.size().0, ctrl.size().1);
+    }
+
+    fn paint(&self, ctrl: &ExternCanvas, data: &EventData) {
+        let paint = data.on_paint();
+        let ps = paint.begin_paint();
+
+        let hdc = ps.hdc;
+        let rc = &ps.rcPaint;
+
+        let data: *const u8 = self.image.lock().unwrap().as_ptr();
+
+        // All/Most functions from the winapi are unsafe, so ya
+        unsafe {
+            let brush: *mut _ = &mut CreateSolidBrush(RGB(0, 0, 0));
+            FillRect(hdc, rc, brush as _);
+
+            let bitmap = CreateBitmap(TV_WIDTH as i32, TV_HEIGHT as i32, 1, 32, data as _);
+
+            let hdcmem = CreateCompatibleDC(hdc);
+
+            let hbmold = SelectObject(hdcmem, bitmap as _);
+
+            BitBlt(
+                hdc,
+                0,
+                0,
+                TV_WIDTH as i32,
+                TV_HEIGHT as i32,
+                hdcmem,
+                0,
+                0,
+                SRCCOPY,
+            );
+
+            SetStretchBltMode(hdc, COLORONCOLOR);
+            StretchBlt(
+                hdc,
+                0,
+                0,
+                ctrl.size().0 as i32,
+                ctrl.size().1 as i32,
+                hdc,
+                0,
+                0,
+                TV_WIDTH as i32,
+                TV_HEIGHT as i32,
+                SRCCOPY,
+            );
+
+            SelectObject(hdcmem, hbmold);
+            DeleteDC(hdcmem);
+            DeleteObject(bitmap as _);
+        }
+
+        paint.end_paint(&ps);
+    }
+
+    fn timer_tick(&self) {
+        self.canvas.invalidate();
+    }
+}
+
+pub struct NwgProvider {
+    paused: Arc<AtomicBool>,
+}
+
+impl NwgProvider {
+    pub fn new() -> Self {
+        Self {
+            paused: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+
+impl UiProvider for NwgProvider {
+    fn get_tv_color_converter() -> fn(&NESColor) -> [u8; 4] {
+        |color| [color.b, color.g, color.r, 0xFF]
+    }
+
+    fn run_ui_loop(
+        &mut self,
+        ui_to_nes_sender: Sender<UiEvent>,
+        image: Arc<Mutex<Vec<u8>>>,
+        ctrl_state: Arc<Mutex<StandardNESControllerState>>,
+    ) {
+        nwg::init().expect("Failed to init Native Windows GUI");
+        nwg::Font::set_global_family("Segoe UI").expect("Failed to set default font");
+
+        let _app = ProviderApp::build_ui(ProviderApp::initial_state(
+            ui_to_nes_sender,
+            image,
+            ctrl_state,
+        ))
+        .expect("Failed to build UI");
+
+        nwg::dispatch_thread_events();
+    }
+}

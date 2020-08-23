@@ -660,6 +660,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "libm"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fc7aa29613bd6a620df431842069224d8bc9011086b1db4c0e0cd47fa03ec9a"
+
+[[package]]
 name = "libudev-sys"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -727,6 +733,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "native-windows-derive"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c39357a029a532c887fb1596e0f0498613d8dd119549d400569d61c048145ac6"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "native-windows-gui"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d77a98c6db4e390a74024c1ad9c6eb94f21dcfdeea5053ec8c7fe5681b287c1"
+dependencies = [
+ "bitflags",
+ "lazy_static",
+ "stretch",
+ "winapi",
+ "winapi-build",
+]
+
+[[package]]
 name = "nes_tester"
 version = "0.1.0"
 dependencies = [
@@ -761,6 +791,16 @@ dependencies = [
  "glib",
  "gtk",
  "nes_ui_base",
+]
+
+[[package]]
+name = "nes_ui_native_windows"
+version = "0.1.0"
+dependencies = [
+ "native-windows-derive",
+ "native-windows-gui",
+ "nes_ui_base",
+ "winapi",
 ]
 
 [[package]]
@@ -1204,6 +1244,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "213701ba3370744dcd1a12960caa4843b3d68b4d1c0a5d575e0d65b2ee9d16c0"
 
 [[package]]
+name = "stretch"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b0dc6d20ce137f302edf90f9cd3d278866fd7fb139efca6f246161222ad6d87"
+dependencies = [
+ "lazy_static",
+ "libm",
+]
+
+[[package]]
 name = "syn"
 version = "1.0.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1357,6 +1407,12 @@ dependencies = [
  "winapi-i686-pc-windows-gnu",
  "winapi-x86_64-pc-windows-gnu",
 ]
+
+[[package]]
+name = "winapi-build"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d315eee3b34aca4797b2da6b13ed88266e6d612562a0c46390af8299fc699bc"
 
 [[package]]
 name = "winapi-i686-pc-windows-gnu"
