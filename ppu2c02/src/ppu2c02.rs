@@ -1,8 +1,9 @@
 use crate::ppu2c02_registers::Register;
 use crate::sprite::{Sprite, SpriteAttribute};
 use common::{interconnection::PPUCPUConnection, Bus, Device};
-use display::{COLORS, TV};
+use display::{Color, COLORS, TV};
 use std::cell::Cell;
+use std::cmp::min;
 
 bitflags! {
     pub struct ControlReg: u8 {
@@ -909,6 +910,38 @@ where
         color
     }
 
+    fn emphasis_color(&self, color: Color) -> Color {
+        let is_red_emph = self.reg_mask.intersects(MaskReg::EMPHASIZE_RED);
+        let is_green_emph = self.reg_mask.intersects(MaskReg::EMPHASIZE_GREEN);
+        let is_blue_emph = self.reg_mask.intersects(MaskReg::EMPHASIZE_BLUE);
+
+        let mut red = 1.;
+        let mut green = 1.;
+        let mut blue = 1.;
+
+        if is_red_emph {
+            red *= 1.1;
+            green *= 0.9;
+            blue *= 0.9;
+        }
+        if is_green_emph {
+            red *= 0.9;
+            green *= 1.1;
+            blue *= 0.9;
+        }
+        if is_blue_emph {
+            red *= 0.9;
+            green *= 0.9;
+            blue *= 1.1;
+        }
+
+        Color {
+            r: min((color.r as f32 * red) as u8, 255),
+            g: min((color.g as f32 * green) as u8, 255),
+            b: min((color.b as f32 * blue) as u8, 255),
+        }
+    }
+
     fn render_pixel(&mut self) {
         // fix overflowing colors
         let mut color = self.generate_pixel() & 0x3F;
@@ -922,7 +955,7 @@ where
         self.tv.set_pixel(
             self.cycle as u32,
             self.scanline as u32,
-            &COLORS[color as usize],
+            &self.emphasis_color(COLORS[color as usize]),
         );
     }
 
