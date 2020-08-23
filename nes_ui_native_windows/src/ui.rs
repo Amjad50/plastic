@@ -87,30 +87,55 @@ impl ProviderApp {
 
             let bitmap = CreateBitmap(TV_WIDTH as i32, TV_HEIGHT as i32, 1, 32, data as _);
 
-            let hdcmem = CreateCompatibleDC(hdc);
+            // used for setting the bitmap and scaling it before moving it to
+            // the original hdc
+            let hdctmp = CreateCompatibleDC(hdc);
 
-            let hbmold = SelectObject(hdcmem, bitmap as _);
+            let hbmold = SelectObject(hdctmp, bitmap as _);
 
             BitBlt(
-                hdc,
+                hdctmp,
                 0,
                 0,
                 TV_WIDTH as i32,
                 TV_HEIGHT as i32,
-                hdcmem,
+                hdctmp,
                 0,
                 0,
                 SRCCOPY,
             );
 
-            SetStretchBltMode(hdc, COLORONCOLOR);
+            SetStretchBltMode(hdctmp, COLORONCOLOR);
+
+            let area_width = ctrl.size().0 as f64;
+            let area_height = ctrl.size().1 as f64;
+
+            // Got from the GTK UI code
+            let scale_width = area_width / TV_WIDTH as f64;
+            let scale_height = area_height / TV_HEIGHT as f64;
+
+            let scale_smallest;
+            let mut top = 0.;
+            let mut left = 0.;
+
+            if scale_width > scale_height {
+                scale_smallest = scale_height;
+                left = (area_width - (TV_WIDTH as f64 * scale_smallest)) / 2.;
+            } else {
+                scale_smallest = scale_width;
+                top = (area_height - (TV_HEIGHT as f64 * scale_smallest)) / 2.;
+            };
+
+            let new_width = (TV_WIDTH as f64 * scale_smallest) as i32;
+            let new_height = (TV_HEIGHT as f64 * scale_smallest) as i32;
+
             StretchBlt(
                 hdc,
-                0,
-                0,
-                ctrl.size().0 as i32,
-                ctrl.size().1 as i32,
-                hdc,
+                left as i32,
+                top as i32,
+                new_width,
+                new_height,
+                hdctmp,
                 0,
                 0,
                 TV_WIDTH as i32,
@@ -118,8 +143,8 @@ impl ProviderApp {
                 SRCCOPY,
             );
 
-            SelectObject(hdcmem, hbmold);
-            DeleteDC(hdcmem);
+            SelectObject(hdctmp, hbmold);
+            DeleteDC(hdctmp);
             DeleteObject(bitmap as _);
         }
 
