@@ -11,7 +11,7 @@ pub enum CartridgeError {
     HeaderError,
     TooLargeFile(u64),
     ExtensionError,
-    MapperNotImplemented(u8),
+    MapperNotImplemented(u16),
     Others,
 }
 

@@ -16,9 +16,8 @@ impl Mapper0 {
 }
 
 impl Mapper for Mapper0 {
-    fn init(&mut self, prg_count: u8, is_chr_ram: bool, chr_count: u8, _sram_count: u8) {
+    fn init(&mut self, prg_count: u8, is_chr_ram: bool, _chr_count: u8, _sram_count: u8) {
         // the only allowed options
-        assert!(chr_count <= 1);
         assert!(prg_count == 1 || prg_count == 2);
 
         self.has_32kb_prg_rom = prg_count == 2;

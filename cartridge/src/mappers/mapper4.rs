@@ -127,6 +127,9 @@ pub struct Mapper4 {
     /// false if the last accessed pattern table address is $0000
     /// true  if the last accessed pattern table address is $1000
     last_pattern_table: Cell<bool>,
+
+    /// is PRG ram present?
+    has_prg_ram: bool,
 }
 
 impl Mapper4 {
@@ -156,6 +159,7 @@ impl Mapper4 {
             chr_count: 0,
             prg_count: 0,
             last_pattern_table: Cell::new(false),
+            has_prg_ram: false,
         }
     }
 
@@ -181,14 +185,44 @@ impl Mapper4 {
 
         self.last_pattern_table.set(current_pattern_table);
     }
+
+    fn map_ppu(&self, address: u16) -> MappingResult {
+        let is_2k = (address & 0x1000 == 0) ^ self.chr_bank_2k_1000;
+
+        let mut bank = if is_2k {
+            if address & 0x0800 == 0 {
+                self.chr_bank_r0
+            } else {
+                self.chr_bank_r1
+            }
+        } else {
+            match (address >> 10) & 0b11 {
+                0 => self.chr_bank_r2,
+                1 => self.chr_bank_r3,
+                2 => self.chr_bank_r4,
+                3 => self.chr_bank_r5,
+                _ => unreachable!(),
+            }
+        } as usize;
+
+        bank %= self.chr_count as usize;
+
+        let mask = if is_2k { 0x7FF } else { 0x3FF };
+
+        let start_of_bank = bank * 0x400;
+
+        MappingResult::Allowed(start_of_bank + (address & mask) as usize)
+    }
 }
 
 impl Mapper for Mapper4 {
-    fn init(&mut self, prg_count: u8, is_chr_ram: bool, chr_count: u8, _sram_count: u8) {
+    fn init(&mut self, prg_count: u8, is_chr_ram: bool, chr_count: u8, sram_count: u8) {
         self.prg_count = prg_count * 2;
         self.chr_count = chr_count as u16 * 8;
 
         self.is_chr_ram = is_chr_ram;
+
+        self.has_prg_ram = sram_count != 0;
     }
 
     fn map_read(&self, address: u16, device: Device) -> MappingResult {
@@ -196,7 +230,7 @@ impl Mapper for Mapper4 {
             Device::CPU => {
                 match address {
                     0x6000..=0x7FFF => {
-                        if self.prg_ram_enabled {
+                        if self.prg_ram_enabled && self.has_prg_ram {
                             MappingResult::Allowed(address as usize & 0x1FFF)
                         } else {
                             MappingResult::Denied
@@ -238,31 +272,7 @@ impl Mapper for Mapper4 {
                 if address < 0x2000 {
                     self.handle_irq_counter(address);
 
-                    let is_2k = (address & 0x1000 == 0) ^ self.chr_bank_2k_1000;
-
-                    let mut bank = if is_2k {
-                        if address & 0x0800 == 0 {
-                            self.chr_bank_r0
-                        } else {
-                            self.chr_bank_r1
-                        }
-                    } else {
-                        match (address >> 10) & 0b11 {
-                            0 => self.chr_bank_r2,
-                            1 => self.chr_bank_r3,
-                            2 => self.chr_bank_r4,
-                            3 => self.chr_bank_r5,
-                            _ => unreachable!(),
-                        }
-                    } as usize;
-
-                    bank %= self.chr_count as usize;
-
-                    let mask = if is_2k { 0x7FF } else { 0x3FF };
-
-                    let start_of_bank = bank * 0x400;
-
-                    MappingResult::Allowed(start_of_bank + (address & mask) as usize)
+                    self.map_ppu(address)
                 } else {
                     unreachable!();
                 }
@@ -275,7 +285,7 @@ impl Mapper for Mapper4 {
             Device::CPU => {
                 match address {
                     0x6000..=0x7FFF => {
-                        if self.prg_ram_enabled && self.prg_ram_allow_writes {
+                        if self.prg_ram_enabled && self.prg_ram_allow_writes && self.has_prg_ram {
                             MappingResult::Allowed(address as usize & 0x1FFF)
                         } else {
                             MappingResult::Denied
@@ -346,7 +356,7 @@ impl Mapper for Mapper4 {
             Device::PPU => {
                 // CHR RAM
                 if self.is_chr_ram && address <= 0x1FFF {
-                    MappingResult::Allowed(address as usize)
+                    self.map_ppu(address)
                 } else {
                     MappingResult::Denied
                 }

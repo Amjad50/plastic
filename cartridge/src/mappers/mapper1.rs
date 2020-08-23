@@ -90,6 +90,10 @@ pub struct Mapper1 {
 
     /// in 16kb units
     prg_count: u8,
+
+    // TODO: add support for SOROM, SUROM and SXROM which support bank switching PRG RAM
+    /// in 8kb units
+    prg_ram_count: u8,
 }
 
 impl Mapper1 {
@@ -107,6 +111,8 @@ impl Mapper1 {
 
             chr_count: 0,
             prg_count: 0,
+
+            prg_ram_count: 0,
         }
     }
 
@@ -157,16 +163,45 @@ impl Mapper1 {
 
         self.prg_ram_enable && snrom_prg_ram_enabled
     }
+
+    fn map_ppu(&self, address: u16) -> MappingResult {
+        let mut bank = if self.is_chr_8kb_mode() {
+            self.chr_0_bank & 0b11110
+        } else {
+            if address <= 0x0FFF {
+                self.chr_0_bank
+            } else if address >= 0x1000 && address <= 0x1FFF {
+                self.chr_1_bank
+            } else {
+                unreachable!()
+            }
+        } as usize;
+
+        bank %= self.chr_count as usize;
+
+        let start_of_bank = 0x1000 * bank;
+
+        let mask = if self.is_chr_8kb_mode() {
+            0x1FFF
+        } else {
+            0xFFF
+        };
+
+        // add the offset
+        MappingResult::Allowed(start_of_bank + (address & mask) as usize)
+    }
 }
 
 impl Mapper for Mapper1 {
-    fn init(&mut self, prg_count: u8, is_chr_ram: bool, chr_count: u8, _sram_count: u8) {
+    fn init(&mut self, prg_count: u8, is_chr_ram: bool, chr_count: u8, sram_count: u8) {
         self.prg_count = prg_count;
         self.chr_count = chr_count * 2; // since this passed as the number of 8kb banks
         self.is_chr_ram = is_chr_ram;
 
         self.prg_bank = prg_count - 1; // power-up, should be all set?
         self.control_register = 0b11100; // power-up state
+
+        self.prg_ram_count = sram_count;
 
         self.reset_shift_register();
     }
@@ -176,7 +211,7 @@ impl Mapper for Mapper1 {
             Device::CPU => {
                 match address {
                     0x6000..=0x7FFF => {
-                        if self.is_prg_ram_enabled() {
+                        if self.is_prg_ram_enabled() && self.prg_ram_count > 0 {
                             MappingResult::Allowed(address as usize & 0x1FFF)
                         } else {
                             MappingResult::Denied
@@ -239,30 +274,7 @@ impl Mapper for Mapper1 {
             }
             Device::PPU => {
                 if address < 0x2000 {
-                    let mut bank = if self.is_chr_8kb_mode() {
-                        self.chr_0_bank & 0b11110
-                    } else {
-                        if address <= 0x0FFF {
-                            self.chr_0_bank
-                        } else if address >= 0x1000 && address <= 0x1FFF {
-                            self.chr_1_bank
-                        } else {
-                            unreachable!()
-                        }
-                    } as usize;
-
-                    bank %= self.chr_count as usize;
-
-                    let start_of_bank = 0x1000 * bank;
-
-                    let mask = if self.is_chr_8kb_mode() {
-                        0x1FFF
-                    } else {
-                        0xFFF
-                    };
-
-                    // add the offset
-                    MappingResult::Allowed(start_of_bank + (address & mask) as usize)
+                    self.map_ppu(address)
                 } else {
                     unreachable!()
                 }
@@ -275,7 +287,7 @@ impl Mapper for Mapper1 {
             Device::CPU => {
                 match address {
                     0x6000..=0x7FFF => {
-                        if self.is_prg_ram_enabled() {
+                        if self.is_prg_ram_enabled() && self.prg_ram_count > 0 {
                             MappingResult::Allowed(address as usize & 0x1FFF)
                         } else {
                             MappingResult::Denied
@@ -317,7 +329,7 @@ impl Mapper for Mapper1 {
             Device::PPU => {
                 // CHR RAM
                 if self.is_chr_ram && address <= 0x1FFF {
-                    MappingResult::Allowed(address as usize)
+                    self.map_ppu(address)
                 } else {
                     MappingResult::Denied
                 }

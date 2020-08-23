@@ -10,26 +10,143 @@ use std::{
     path::Path,
 };
 
+struct INesHeader {
+    // in 16kb units
+    prg_rom_size: u16,
+    // in 8kb units
+    chr_rom_size: u16,
+    is_chr_ram: bool,
+    hardwired_mirroring_vertical: bool,
+    has_prg_ram_battery: bool,
+    contain_trainer_data: bool,
+    use_hardwaired_4_screen_mirroring: bool,
+    mapper_id: u16,
+    submapper_id: u8,
+    prg_wram_size: u32,
+    prg_sram_size: u32,
+    chr_wram_size: u32,
+    chr_sram_size: u32,
+}
+
+impl INesHeader {
+    fn from_bytes(mut header: [u8; 16]) -> Result<Self, CartridgeError> {
+        // decode header
+        Self::check_magic(&header[0..4])?;
+
+        let prg_size_low = header[4] as u16;
+        let chr_size_low = header[5] as u16;
+        let is_chr_ram = chr_size_low == 0;
+
+        let hardwired_mirroring_vertical = header[6] & 1 != 0;
+        header[6] >>= 1;
+        let has_prg_ram_battery = header[6] & 1 != 0;
+        header[6] >>= 1;
+        let contain_trainer_data = header[6] & 1 != 0;
+        header[6] >>= 1;
+        let use_hardwaired_4_screen_mirroring = header[6] & 1 != 0;
+        header[6] >>= 1;
+        let mapper_id_low = (header[6] & 0xF) as u16;
+
+        let console_type = header[7] & 0x3;
+        header[7] >>= 2;
+        let is_nes_2 = (header[7] & 0x3) == 2;
+        header[7] >>= 2;
+        let mapper_id_middle = (header[7] & 0xF) as u16;
+
+        if !is_nes_2 {
+            let prg_ram_size = if header[8] == 0 { 1 } else { header[8] };
+            let ntcs_tv_system = header[9] & 1 == 0;
+
+            if header[9] >> 1 != 0 {
+                return Err(CartridgeError::HeaderError);
+            }
+
+            let is_prg_ram_present = (header[10] >> 4) & 1 == 0;
+            let board_has_bus_conflict = (header[10] >> 5) & 1 != 0;
+
+            for i in 12..=15 {
+                if header[i] != 0 {
+                    return Err(CartridgeError::HeaderError);
+                }
+            }
+            Ok(Self {
+                prg_rom_size: prg_size_low,
+                chr_rom_size: chr_size_low,
+                is_chr_ram,
+                hardwired_mirroring_vertical,
+                has_prg_ram_battery,
+                contain_trainer_data,
+                use_hardwaired_4_screen_mirroring,
+                mapper_id: mapper_id_middle << 4 | mapper_id_low,
+                submapper_id: 0,
+                prg_wram_size: prg_ram_size as u32 * 0x2000,
+                prg_sram_size: prg_ram_size as u32 * 0x2000,
+                chr_wram_size: 0x2000, // can only use 8kb
+                chr_sram_size: 0x2000,
+            })
+        } else {
+            let mapper_id_high = (header[8] & 0xF) as u16;
+            header[8] >>= 4;
+            let submapper_id = header[8] & 0xF;
+
+            let prg_size_high = (header[9] & 0xF) as u16;
+            let chr_size_high = ((header[9] >> 4) & 0xF) as u16;
+
+            let shift_size = (header[10] & 0xF) as u32;
+            let prg_wram_size_bytes = if shift_size != 0 { 64 << shift_size } else { 0 };
+            header[10] >>= 4;
+            let shift_size = (header[10] & 0xF) as u32;
+            let prg_sram_size_bytes = if shift_size != 0 { 64 << shift_size } else { 0 };
+
+            let shift_size = (header[11] & 0xF) as u32;
+            let chr_wram_size_bytes = if shift_size != 0 { 64 << shift_size } else { 0 };
+            header[11] >>= 4;
+            let shift_size = (header[11] & 0xF) as u32;
+            let chr_sram_size_bytes = if shift_size != 0 { 64 << shift_size } else { 0 };
+
+            // TODO: implement the rest
+
+            Ok(Self {
+                prg_rom_size: prg_size_high << 8 | prg_size_low,
+                chr_rom_size: chr_size_high << 8 | chr_size_low,
+                is_chr_ram,
+                hardwired_mirroring_vertical,
+                has_prg_ram_battery,
+                contain_trainer_data,
+                use_hardwaired_4_screen_mirroring,
+                mapper_id: mapper_id_high << 8 | mapper_id_middle << 4 | mapper_id_low,
+                submapper_id,
+                prg_wram_size: prg_wram_size_bytes,
+                prg_sram_size: prg_sram_size_bytes,
+                chr_wram_size: chr_wram_size_bytes,
+                chr_sram_size: chr_sram_size_bytes,
+            })
+        }
+    }
+
+    fn empty() -> Self {
+        Self::from_bytes([0x4E, 0x45, 0x53, 0x1A, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap()
+    }
+
+    fn check_magic(header: &[u8]) -> Result<(), CartridgeError> {
+        let real = [0x4E, 0x45, 0x53, 0x1A];
+
+        if header == real {
+            Ok(())
+        } else {
+            Err(CartridgeError::HeaderError)
+        }
+    }
+}
+
 pub struct Cartridge {
     file_path: Box<Path>,
-    // header
-    _size_prg: u8,
-    _size_chr: u8,
-    _is_chr_ram: bool,
-    _mapper_id: u8,
-    mirroring_vertical: bool,
-    contain_sram: bool,
-    sram_size: u8,
-    _contain_trainer: bool,
-    use_4_screen_mirroring: bool,
-    _vs_unisystem: bool,       // don't know what is this (flag 7)
-    _playchoice_10_hint: bool, // not used
-    _is_nes_2: bool,
+    header: INesHeader,
 
     _trainer_data: Vec<u8>,
     pub(crate) prg_data: Vec<u8>,
     pub(crate) chr_data: Vec<u8>,
-    sram_data: Vec<u8>,
+    prg_ram_data: Vec<u8>,
 
     mapper: Box<dyn Mapper>,
 
@@ -47,79 +164,51 @@ impl Cartridge {
                 file.read_exact(&mut header)?;
 
                 // decode header
-                Cartridge::check_magic(&header[0..4])?;
+                let header = INesHeader::from_bytes(header)?;
 
-                let size_prg = header[4];
-                let is_chr_ram = header[5] == 0;
-                let size_chr = if is_chr_ram { 1 } else { header[5] };
-
-                let mirroring_vertical = header[6] & 1 != 0;
-                header[6] >>= 1;
-                let contain_sram = header[6] & 1 != 0;
-                header[6] >>= 1;
-                let contain_trainer = header[6] & 1 != 0;
-                header[6] >>= 1;
-                let use_4_screen_mirroring = header[6] & 1 != 0;
-                header[6] >>= 1;
-                let lower_mapper = header[6]; // the rest
-
-                let vs_unisystem = header[7] & 1 != 0;
-                header[7] >>= 1;
-                let _playchoice_10_hint = header[7] & 1 != 0;
-                header[7] >>= 1;
-                let is_nes_2 = (header[7] & 0b11) == 2;
-                header[7] >>= 2;
-                let upper_mapper = header[7]; // the rest
-
-                // in 8kb units
-                let sram_size = if header[8] == 0 { 1 } else { header[8] };
-
-                let sram_data = if contain_sram {
+                let sram_data = if header.has_prg_ram_battery {
                     // try to load old save data
                     if let Ok(data) =
-                        Self::load_sram_file(file_path.as_ref(), sram_size as usize * 1024 * 8)
+                        Self::load_sram_file(file_path.as_ref(), header.prg_sram_size as usize)
                     {
                         data
                     } else {
-                        vec![0; sram_size as usize * 1024 * 8]
+                        vec![0; header.prg_sram_size as usize]
                     }
                 } else {
-                    vec![0; sram_size as usize * 1024 * 8]
+                    vec![0; header.prg_wram_size as usize]
                 };
 
-                let mapper_id = upper_mapper << 4 | lower_mapper;
+                println!("mapper {}", header.mapper_id);
 
                 // initialize the mapper first, so that if it is not supported yet,
                 // panic
-                let mapper = Self::get_mapper(mapper_id, size_prg, size_chr, is_chr_ram, sram_size)
-                    .ok_or(CartridgeError::MapperNotImplemented(mapper_id))?;
+                let mapper = Self::get_mapper(&header)?;
 
                 let mut trainer_data = Vec::new();
 
                 // read training data if present
-                if contain_trainer {
+                if header.contain_trainer_data {
                     trainer_data.resize(512, 0);
                     file.read_exact(&mut trainer_data)?;
                 }
 
                 // read PRG data
-                let mut prg_data = vec![0; (size_prg as usize) * 16 * 1024];
+                let mut prg_data = vec![0; (header.prg_rom_size as usize) * 16 * 1024];
                 file.read_exact(&mut prg_data)?;
 
                 // read CHR data
-                let mut chr_data = vec![0; (size_chr as usize) * 8 * 1024];
-                if !is_chr_ram {
-                    file.read_exact(&mut chr_data)?;
-                }
+                let chr_data = if !header.is_chr_ram {
+                    let mut data = vec![0; (header.chr_rom_size as usize) * 8 * 1024];
+                    file.read_exact(&mut data)?;
 
-                if is_nes_2 {
-                    // print a warning message just to know which games need INES2.
-                    eprintln!(
-                        "[WARN], the cartridge header is in INES2.0 format, but \
-                this emulator only supports INES1.0, the game might work \
-                but mostly it will be buggy"
-                    );
-                }
+                    data
+                } else {
+                    // TODO: there is no way of knowing if we are using CHR WRAM or SRAM
+                    let ram_size = header.chr_wram_size;
+
+                    vec![0; ram_size as usize]
+                };
 
                 // there are missing parts
                 let current = file.seek(SeekFrom::Current(0))?;
@@ -129,22 +218,11 @@ impl Cartridge {
                 } else {
                     Ok(Self {
                         file_path: file_path.as_ref().to_path_buf().into_boxed_path(),
-                        _size_prg: size_prg,
-                        _size_chr: size_chr,
-                        _is_chr_ram: is_chr_ram,
-                        _mapper_id: mapper_id,
-                        mirroring_vertical,
-                        contain_sram,
-                        sram_size,
-                        _contain_trainer: contain_trainer,
-                        use_4_screen_mirroring,
-                        _vs_unisystem: vs_unisystem,
-                        _playchoice_10_hint,
-                        _is_nes_2: is_nes_2,
+                        header,
                         _trainer_data: trainer_data,
                         prg_data,
                         chr_data,
-                        sram_data,
+                        prg_ram_data: sram_data,
                         mapper,
 
                         is_empty: false,
@@ -162,50 +240,19 @@ impl Cartridge {
         Self {
             // should not be used
             file_path: Path::new("").to_path_buf().into_boxed_path(),
-            _size_prg: 0,
-            _size_chr: 0,
-            _is_chr_ram: false,
-            _mapper_id: 0,
-            mirroring_vertical: false,
-            contain_sram: false,
-            sram_size: 0,
-            _contain_trainer: false,
-            use_4_screen_mirroring: false,
-            _vs_unisystem: false,
-            _playchoice_10_hint: false,
-            _is_nes_2: false,
+            header: INesHeader::empty(),
             _trainer_data: Vec::new(),
             prg_data: Vec::new(),
             chr_data: Vec::new(),
-            sram_data: Vec::new(),
+            prg_ram_data: Vec::new(),
             mapper: Box::new(Mapper0::new()),
 
             is_empty: true,
         }
     }
 
-    pub fn is_vertical_mirroring(&self) -> bool {
-        self.mirroring_vertical
-    }
-
-    fn check_magic(header: &[u8]) -> Result<(), CartridgeError> {
-        let real = [0x4E, 0x45, 0x53, 0x1A];
-
-        if header == real {
-            Ok(())
-        } else {
-            Err(CartridgeError::HeaderError)
-        }
-    }
-
-    fn get_mapper(
-        mapper_id: u8,
-        prg_count: u8,
-        chr_count: u8,
-        is_chr_ram: bool,
-        sram_size: u8,
-    ) -> Option<Box<dyn Mapper>> {
-        let mut mapper: Box<dyn Mapper> = match mapper_id {
+    fn get_mapper(header: &INesHeader) -> Result<Box<dyn Mapper>, CartridgeError> {
+        let mut mapper: Box<dyn Mapper> = match header.mapper_id {
             0 => Box::new(Mapper0::new()),
             1 => Box::new(Mapper1::new()),
             2 => Box::new(Mapper2::new()),
@@ -216,15 +263,29 @@ impl Cartridge {
             10 => Box::new(Mapper10::new()),
             11 => Box::new(Mapper11::new()),
             _ => {
-                return None;
+                return Err(CartridgeError::MapperNotImplemented(header.mapper_id));
             }
         };
 
+        // FIXME: fix parameters types to support INES2.0
         // should always call init in a new mapper, as it is the only way
         // they share a constructor
-        mapper.init(prg_count, is_chr_ram, chr_count, sram_size);
+        mapper.init(
+            header.prg_rom_size as u8,
+            header.is_chr_ram,
+            if !header.is_chr_ram {
+                header.chr_rom_size as u8
+            } else {
+                (header.chr_wram_size / 0x2000) as u8
+            },
+            if header.has_prg_ram_battery {
+                header.prg_sram_size / 0x2000
+            } else {
+                header.prg_wram_size / 0x2000
+            } as u8,
+        );
 
-        Some(mapper)
+        Ok(mapper)
     }
 
     fn load_sram_file<P: AsRef<Path>>(path: P, sram_size: usize) -> Result<Vec<u8>, SramError> {
@@ -246,9 +307,9 @@ impl Cartridge {
 
         let mut file = File::create(&path)?;
 
-        let size = file.write(&self.sram_data)?;
+        let size = file.write(&self.prg_ram_data)?;
 
-        if size != self.sram_size as usize * 1024 * 8 {
+        if size != self.header.prg_sram_size as usize {
             file.sync_all()?;
             // remove the file so it will not be loaded next time the game is run
             std::fs::remove_file(path).expect("Could not remove `nes.sav` file");
@@ -277,9 +338,10 @@ impl Bus for Cartridge {
         if let MappingResult::Allowed(new_address) = result {
             match device {
                 Device::CPU => match address {
-                    0x6000..=0x7FFF => {
-                        *self.sram_data.get(new_address).expect("SRAM out of bounds")
-                    }
+                    0x6000..=0x7FFF => *self
+                        .prg_ram_data
+                        .get(new_address)
+                        .expect("SRAM out of bounds"),
                     0x8000..=0xFFFF => *self.prg_data.get(new_address).expect("PRG out of bounds"),
                     _ => {
                         unreachable!();
@@ -310,7 +372,7 @@ impl Bus for Cartridge {
                 Device::CPU => match address {
                     0x6000..=0x7FFF => {
                         *self
-                            .sram_data
+                            .prg_ram_data
                             .get_mut(new_address)
                             .expect("SRAM out of bounds") = data;
                     }
@@ -346,11 +408,11 @@ impl MirroringProvider for Cartridge {
             return MirroringMode::Vertical;
         }
 
-        if self.use_4_screen_mirroring {
+        if self.header.use_hardwaired_4_screen_mirroring {
             MirroringMode::FourScreen
         } else {
             if self.mapper.is_hardwired_mirrored() {
-                if self.mirroring_vertical {
+                if self.header.hardwired_mirroring_vertical {
                     MirroringMode::Vertical
                 } else {
                     MirroringMode::Horizontal
@@ -364,7 +426,7 @@ impl MirroringProvider for Cartridge {
 
 impl Drop for Cartridge {
     fn drop(&mut self) {
-        if !self.is_empty && self.contain_sram {
+        if !self.is_empty && self.header.has_prg_ram_battery {
             self.save_sram_file().unwrap();
         }
     }

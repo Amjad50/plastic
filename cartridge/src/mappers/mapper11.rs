@@ -82,7 +82,11 @@ impl Mapper for Mapper11 {
             Device::PPU => {
                 // CHR RAM
                 if self.is_chr_ram && address <= 0x1FFF {
-                    MappingResult::Allowed(address as usize)
+                    let bank = self.chr_bank % self.chr_count;
+
+                    let start_of_bank = 0x2000 * bank as usize;
+
+                    MappingResult::Allowed(start_of_bank + (address & 0x1FFF) as usize)
                 } else {
                     MappingResult::Denied
                 }

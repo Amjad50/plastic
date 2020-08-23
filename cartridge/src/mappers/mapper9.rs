@@ -75,6 +75,9 @@ pub struct Mapper9 {
 
     /// in 8kb units
     prg_count: u8,
+
+    /// does it have prg ram
+    has_prg_ram: bool,
 }
 
 impl Mapper9 {
@@ -91,12 +94,13 @@ impl Mapper9 {
             is_chr_ram: false,
             chr_count: 0,
             prg_count: 0,
+            has_prg_ram: false,
         }
     }
 }
 
 impl Mapper for Mapper9 {
-    fn init(&mut self, prg_count: u8, is_chr_ram: bool, chr_count: u8, _sram_count: u8) {
+    fn init(&mut self, prg_count: u8, is_chr_ram: bool, chr_count: u8, sram_count: u8) {
         self.prg_count = prg_count * 2;
 
         // because 0xA000-0xFFFF holds the last 3 banks (fixed)
@@ -105,12 +109,19 @@ impl Mapper for Mapper9 {
         self.chr_count = chr_count * 2;
 
         self.is_chr_ram = is_chr_ram;
+        self.has_prg_ram = sram_count != 0;
     }
 
     fn map_read(&self, address: u16, device: Device) -> MappingResult {
         match device {
             Device::CPU => match address {
-                0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
+                0x6000..=0x7FFF => {
+                    if self.has_prg_ram {
+                        MappingResult::Allowed(address as usize & 0x1FFF)
+                    } else {
+                        MappingResult::Denied
+                    }
+                }
                 0x8000..=0xFFFF => {
                     let mut bank = match address {
                         0x8000..=0x9FFF => self.prg_bank,
@@ -178,7 +189,13 @@ impl Mapper for Mapper9 {
     fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult {
         match device {
             Device::CPU => match address {
-                0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
+                0x6000..=0x7FFF => {
+                    if self.has_prg_ram {
+                        MappingResult::Allowed(address as usize & 0x1FFF)
+                    } else {
+                        MappingResult::Denied
+                    }
+                }
                 0x8000..=0xFFFF => {
                     match address {
                         0xA000..=0xAFFF => self.prg_bank = data & 0xF,

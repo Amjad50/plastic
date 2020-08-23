@@ -41,7 +41,7 @@ impl Mapper for Mapper7 {
         match device {
             Device::CPU => {
                 match address {
-                    0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
+                    0x6000..=0x7FFF => MappingResult::Denied,
                     0x8000..=0xFFFF => {
                         let bank = self.prg_bank % self.prg_count;
 
@@ -68,7 +68,7 @@ impl Mapper for Mapper7 {
     fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult {
         match device {
             Device::CPU => match address {
-                0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
+                0x6000..=0x7FFF => MappingResult::Denied,
                 0x8000..=0xFFFF => {
                     self.prg_bank = data & 0x7;
                     self.is_mirroring_screen_high_bank = data & 0x10 != 0;
