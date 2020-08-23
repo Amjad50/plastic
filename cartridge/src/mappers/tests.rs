@@ -279,8 +279,7 @@ mod mappers_tests {
         )
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn holy_mapperel_m10_p128k_c64k_s8k_test() -> Result<(), TestError> {
         run_holy_mapperel_test(
             "./tests/roms/holy-mapperel-bin-0.02/testroms/M10_P128K_C64K_S8K.nes",
@@ -304,8 +303,7 @@ mod mappers_tests {
         )
     }
 
-    // FIXME: this test is still failing, need INES2.0 to specify 32kb chr ram
-    // #[test]
+    #[test]
     fn holy_mapperel_m11_p64k_cr32k_v_test() -> Result<(), TestError> {
         run_holy_mapperel_test(
             "./tests/roms/holy-mapperel-bin-0.02/testroms/M11_P64K_CR32K_V.nes",
