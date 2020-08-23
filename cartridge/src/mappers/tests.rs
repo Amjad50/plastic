@@ -347,8 +347,7 @@ mod mappers_tests {
         )
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn holy_mapperel_m66_p64k_c16k_v_test() -> Result<(), TestError> {
         run_holy_mapperel_test(
             "./tests/roms/holy-mapperel-bin-0.02/testroms/M66_P64K_C16K_V.nes",

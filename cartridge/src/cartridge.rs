@@ -262,6 +262,7 @@ impl Cartridge {
             9 => Box::new(Mapper9::new()),
             10 => Box::new(Mapper10::new()),
             11 => Box::new(Mapper11::new()),
+            66 => Box::new(Mapper66::new()),
             _ => {
                 return Err(CartridgeError::MapperNotImplemented(header.mapper_id));
             }
