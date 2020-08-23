@@ -10,7 +10,10 @@ use native_windows_derive as nwd;
 use native_windows_gui as nwg;
 
 use nwd::NwgUi;
-use nwg::{keys, EventData, ExternCanvas, NativeUi, Timer, Window};
+use nwg::{
+    keys, EventData, ExternCanvas, FileDialog, FileDialogAction, Menu, MenuItem, NativeUi, Timer,
+    Window,
+};
 use winapi::um::{
     wingdi::{
         BitBlt, CreateBitmap, CreateCompatibleDC, CreateSolidBrush, DeleteDC, DeleteObject,
@@ -47,6 +50,32 @@ pub struct ProviderApp {
     #[nwg_events(OnTimerTick: [ProviderApp::timer_tick(SELF)])]
     timer: Timer,
 
+    #[nwg_control(parent: window, text: "&File", disabled: false, popup: false)]
+    file_menu: Menu,
+
+    #[nwg_control(parent: file_menu, text: "&Open", disabled: false, check: false)]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::menu_action_open(SELF)])]
+    file_menu_open_action: MenuItem,
+
+    #[nwg_control(parent: file_menu, text: "&Quit", disabled: false, check: false)]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::menu_action_quit(SELF)])]
+    file_menu_quit_action: MenuItem,
+
+    #[nwg_control(parent: window, text: "&Game", disabled: false, popup: false)]
+    game_menu: Menu,
+
+    #[nwg_control(parent: game_menu, text: "&Reset", disabled: false, check: false)]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::menu_action_reset(SELF)])]
+    game_menu_reset_action: MenuItem,
+
+    #[nwg_control(parent: game_menu, text: "&Pause", disabled: false, check: false)]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::menu_action_pause(SELF)])]
+    game_menu_pause_action: MenuItem,
+
+    #[nwg_control(parent: game_menu, text: "&Resume", disabled: false, check: false)]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::menu_action_resume(SELF)])]
+    game_menu_resume_action: MenuItem,
+
     ui_to_nes_sender: Sender<UiEvent>,
     image: Arc<Mutex<Vec<u8>>>,
     ctrl_state: Arc<Mutex<StandardNESControllerState>>,
@@ -64,6 +93,14 @@ impl ProviderApp {
             window: Default::default(),
             canvas: Default::default(),
             timer: Default::default(),
+            file_menu: Default::default(),
+            file_menu_open_action: Default::default(),
+            file_menu_quit_action: Default::default(),
+            game_menu: Default::default(),
+            game_menu_reset_action: Default::default(),
+            game_menu_pause_action: Default::default(),
+            game_menu_resume_action: Default::default(),
+
             ui_to_nes_sender,
             image,
             ctrl_state,
@@ -119,6 +156,47 @@ impl ProviderApp {
             }
             _ => {}
         }
+    }
+
+    fn menu_action_open(&self) {
+        let mut file_dialog = Default::default();
+
+        FileDialog::builder()
+            .title("Select NES ROM")
+            .action(FileDialogAction::Open)
+            .multiselect(false)
+            // FIXME: filters does not work
+            // .filters("NES ROM(.nes)")
+            .build(&mut file_dialog)
+            .unwrap();
+
+        if file_dialog.run(Some(&self.window)) {
+            if let Ok(filename) = file_dialog.get_selected_item() {
+                if filename.ends_with(".nes") {
+                    self.ui_to_nes_sender
+                        .send(UiEvent::LoadRom(filename))
+                        .unwrap();
+                }
+            }
+        }
+    }
+
+    fn menu_action_quit(&self) {
+        nwg::stop_thread_dispatch();
+    }
+
+    fn menu_action_reset(&self) {
+        self.ui_to_nes_sender.send(UiEvent::Reset).unwrap()
+    }
+
+    fn menu_action_pause(&self) {
+        self.ui_to_nes_sender.send(UiEvent::Pause).unwrap();
+        self.paused.store(true, Ordering::Relaxed);
+    }
+
+    fn menu_action_resume(&self) {
+        self.ui_to_nes_sender.send(UiEvent::Resume).unwrap();
+        self.paused.store(false, Ordering::Relaxed);
     }
 
     fn paint(&self, ctrl: &ExternCanvas, data: &EventData) {
