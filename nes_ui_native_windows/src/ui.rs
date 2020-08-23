@@ -10,7 +10,7 @@ use native_windows_derive as nwd;
 use native_windows_gui as nwg;
 
 use nwd::NwgUi;
-use nwg::{EventData, ExternCanvas, NativeUi, Timer, Window};
+use nwg::{keys, EventData, ExternCanvas, NativeUi, Timer, Window};
 use winapi::um::{
     wingdi::{
         BitBlt, CreateBitmap, CreateCompatibleDC, CreateSolidBrush, DeleteDC, DeleteObject,
@@ -33,6 +33,9 @@ pub struct ProviderApp {
         OnResize:         [ProviderApp::window_resize(SELF, CTRL)],
         OnWindowMaximize: [ProviderApp::window_resize(SELF, CTRL)],
         OnWindowMinimize: [ProviderApp::window_resize(SELF, CTRL)],
+
+        OnKeyPress:   [ProviderApp::key_pressed(SELF, EVT_DATA)],
+        OnKeyRelease: [ProviderApp::key_released(SELF, EVT_DATA)],
     )]
     window: Window,
 
@@ -69,6 +72,38 @@ impl ProviderApp {
 impl ProviderApp {
     fn window_resize(&self, ctrl: &Window) {
         self.canvas.set_size(ctrl.size().0, ctrl.size().1);
+    }
+
+    fn key_pressed(&self, data: &EventData) {
+        let mut ctrl = self.ctrl_state.lock().unwrap();
+
+        match data.on_key() {
+            keys::_J => ctrl.press(StandardNESKey::B),
+            keys::_K => ctrl.press(StandardNESKey::A),
+            keys::_U => ctrl.press(StandardNESKey::Select),
+            keys::_I => ctrl.press(StandardNESKey::Start),
+            keys::_W => ctrl.press(StandardNESKey::Up),
+            keys::_S => ctrl.press(StandardNESKey::Down),
+            keys::_A => ctrl.press(StandardNESKey::Left),
+            keys::_D => ctrl.press(StandardNESKey::Right),
+            _ => {}
+        }
+    }
+
+    fn key_released(&self, data: &EventData) {
+        let mut ctrl = self.ctrl_state.lock().unwrap();
+
+        match data.on_key() {
+            keys::_J => ctrl.release(StandardNESKey::B),
+            keys::_K => ctrl.release(StandardNESKey::A),
+            keys::_U => ctrl.release(StandardNESKey::Select),
+            keys::_I => ctrl.release(StandardNESKey::Start),
+            keys::_W => ctrl.release(StandardNESKey::Up),
+            keys::_S => ctrl.release(StandardNESKey::Down),
+            keys::_A => ctrl.release(StandardNESKey::Left),
+            keys::_D => ctrl.release(StandardNESKey::Right),
+            _ => {}
+        }
     }
 
     fn paint(&self, ctrl: &ExternCanvas, data: &EventData) {
