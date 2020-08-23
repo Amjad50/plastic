@@ -70,7 +70,7 @@ impl Mapper for Mapper7 {
             Device::CPU => match address {
                 0x6000..=0x7FFF => MappingResult::Denied,
                 0x8000..=0xFFFF => {
-                    self.prg_bank = data & 0x7;
+                    self.prg_bank = data & 0xF;
                     self.is_mirroring_screen_high_bank = data & 0x10 != 0;
 
                     MappingResult::Denied
