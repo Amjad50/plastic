@@ -93,6 +93,43 @@ impl Mapper10 {
             prg_count: 0,
         }
     }
+
+    fn map_ppu(&self, address: u16) -> MappingResult {
+        let mut bank = if address & 0x1000 == 0 {
+            // set latch 0
+            if address == 0x0FD8 {
+                self.latch_0.set(0xFD);
+            } else if address == 0x0FE8 {
+                self.latch_0.set(0xFE);
+            }
+
+            match self.latch_0.get() {
+                0xFD => self.chr_fd_0000_bank,
+                0xFE => self.chr_fe_0000_bank,
+                _ => unreachable!(),
+            }
+        } else {
+            // set latch 1
+            if address & 0x8 != 0 {
+                let middle_byte = (address >> 4) & 0xFF;
+                if middle_byte == 0xFD || middle_byte == 0xFE {
+                    self.latch_1.set(middle_byte as u8);
+                }
+            }
+
+            match self.latch_1.get() {
+                0xFD => self.chr_fd_1000_bank,
+                0xFE => self.chr_fe_1000_bank,
+                _ => unreachable!(),
+            }
+        } as usize;
+
+        bank %= self.chr_count as usize;
+
+        let start_of_bank = bank * 0x1000;
+
+        MappingResult::Allowed(start_of_bank + (address & 0xFFF) as usize)
+    }
 }
 
 impl Mapper for Mapper10 {
@@ -128,40 +165,7 @@ impl Mapper for Mapper10 {
             },
             Device::PPU => {
                 if address < 0x2000 {
-                    let mut bank = if address & 0x1000 == 0 {
-                        // set latch 0
-                        if address == 0x0FD8 {
-                            self.latch_0.set(0xFD);
-                        } else if address == 0x0FE8 {
-                            self.latch_0.set(0xFE);
-                        }
-
-                        match self.latch_0.get() {
-                            0xFD => self.chr_fd_0000_bank,
-                            0xFE => self.chr_fe_0000_bank,
-                            _ => unreachable!(),
-                        }
-                    } else {
-                        // set latch 1
-                        if address & 0x8 != 0 {
-                            let middle_byte = (address >> 4) & 0xFF;
-                            if middle_byte == 0xFD || middle_byte == 0xFE {
-                                self.latch_1.set(middle_byte as u8);
-                            }
-                        }
-
-                        match self.latch_1.get() {
-                            0xFD => self.chr_fd_1000_bank,
-                            0xFE => self.chr_fe_1000_bank,
-                            _ => unreachable!(),
-                        }
-                    } as usize;
-
-                    bank %= self.chr_count as usize;
-
-                    let start_of_bank = bank * 0x1000;
-
-                    MappingResult::Allowed(start_of_bank + (address & 0xFFF) as usize)
+                    self.map_ppu(address)
                 } else {
                     unreachable!();
                 }
@@ -191,7 +195,7 @@ impl Mapper for Mapper10 {
             Device::PPU => {
                 // CHR RAM
                 if self.is_chr_ram && address <= 0x1FFF {
-                    MappingResult::Allowed(address as usize)
+                    self.map_ppu(address)
                 } else {
                     MappingResult::Denied
                 }

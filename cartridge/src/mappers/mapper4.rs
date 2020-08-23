@@ -187,6 +187,8 @@ impl Mapper4 {
     }
 
     fn map_ppu(&self, address: u16) -> MappingResult {
+        self.handle_irq_counter(address);
+
         let is_2k = (address & 0x1000 == 0) ^ self.chr_bank_2k_1000;
 
         let mut bank = if is_2k {
@@ -270,8 +272,6 @@ impl Mapper for Mapper4 {
             }
             Device::PPU => {
                 if address < 0x2000 {
-                    self.handle_irq_counter(address);
-
                     self.map_ppu(address)
                 } else {
                     unreachable!();

@@ -20,6 +20,14 @@ impl Mapper3 {
             is_chr_ram: false,
         }
     }
+
+    fn map_ppu(&self, address: u16) -> MappingResult {
+        let bank = self.chr_bank % self.chr_count;
+
+        let start_of_bank = 0x2000 * bank as usize;
+
+        MappingResult::Allowed(start_of_bank + (address & 0x1FFF) as usize)
+    }
 }
 
 impl Mapper for Mapper3 {
@@ -57,11 +65,7 @@ impl Mapper for Mapper3 {
             }
             Device::PPU => {
                 if address < 0x2000 {
-                    let bank = self.chr_bank % self.chr_count;
-
-                    let start_of_bank = 0x2000 * bank as usize;
-
-                    MappingResult::Allowed(start_of_bank + (address & 0x1FFF) as usize)
+                    self.map_ppu(address)
                 } else {
                     unreachable!()
                 }
@@ -88,9 +92,8 @@ impl Mapper for Mapper3 {
                 _ => unreachable!(),
             },
             Device::PPU => {
-                // CHR RAM
                 if self.is_chr_ram && address <= 0x1FFF {
-                    MappingResult::Allowed(address as usize)
+                    self.map_ppu(address)
                 } else {
                     MappingResult::Denied
                 }
