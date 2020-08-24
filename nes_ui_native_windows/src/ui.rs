@@ -165,8 +165,7 @@ impl ProviderApp {
             .title("Select NES ROM")
             .action(FileDialogAction::Open)
             .multiselect(false)
-            // FIXME: filters does not work
-            // .filters("NES ROM(.nes)")
+            .filters("NES ROM(*.nes)")
             .build(&mut file_dialog)
             .unwrap();
 
