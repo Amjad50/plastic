@@ -129,6 +129,15 @@ impl ProviderApp {
             keys::_S => ctrl.press(StandardNESKey::Down),
             keys::_A => ctrl.press(StandardNESKey::Left),
             keys::_D => ctrl.press(StandardNESKey::Right),
+            keys::ESCAPE => {
+                if self.paused.load(Ordering::Relaxed) {
+                    self.ui_to_nes_sender.send(UiEvent::Resume).unwrap();
+                    self.paused.store(false, Ordering::Relaxed);
+                } else {
+                    self.ui_to_nes_sender.send(UiEvent::Pause).unwrap();
+                    self.paused.store(true, Ordering::Relaxed);
+                }
+            }
             _ => {}
         }
     }
@@ -145,18 +154,6 @@ impl ProviderApp {
             keys::_S => ctrl.release(StandardNESKey::Down),
             keys::_A => ctrl.release(StandardNESKey::Left),
             keys::_D => ctrl.release(StandardNESKey::Right),
-
-            // FIXME: for some reason ESCAPE is not detected on press and only
-            //  on release
-            keys::ESCAPE => {
-                if self.paused.load(Ordering::Relaxed) {
-                    self.ui_to_nes_sender.send(UiEvent::Resume).unwrap();
-                    self.paused.store(false, Ordering::Relaxed);
-                } else {
-                    self.ui_to_nes_sender.send(UiEvent::Pause).unwrap();
-                    self.paused.store(true, Ordering::Relaxed);
-                }
-            }
             _ => {}
         }
     }
