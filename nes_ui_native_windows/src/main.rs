@@ -1,10 +1,12 @@
+#[cfg(target_os = "windows")]
 mod ui;
 
-use nes_ui_base::nes::NES;
-use std::env::args;
-use ui::NwgProvider;
-
+#[cfg(target_os = "windows")]
 fn main() {
+    use nes_ui_base::nes::NES;
+    use std::env::args;
+    use ui::NwgProvider;
+
     let args = args().collect::<Vec<String>>();
 
     let nes = if args.len() >= 2 {
@@ -21,4 +23,9 @@ fn main() {
             eprintln!("[ERROR] {}", err);
         }
     }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn main() {
+    eprintln!("This package can only be compiled to windows");
 }

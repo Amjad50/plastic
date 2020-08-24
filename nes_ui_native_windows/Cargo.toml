@@ -6,7 +6,8 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
+# this package as a whole is only for windows
+[target.'cfg(windows)'.dependencies]
 nes_ui_base = { path = "../nes_ui_base" }
 
 native-windows-gui = "^1.0.3"
