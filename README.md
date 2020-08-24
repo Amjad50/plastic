@@ -54,8 +54,6 @@ Using this design, I have implemented some providers which have
 different purposes:
 
 #### SFML
-![screenshot SFML](images/SFML_UI.png)
-
 [SFML][SFML] is a game development UI library, it has a good and
 easy to use API and is the most performing UI in the list.
 
@@ -64,8 +62,6 @@ easy to use API and is the most performing UI in the list.
 2. Has support for gamepad (only tested with PS4).
 
 #### GTK
-![screenshot SFML](images/GTK_UI.png)
-
 [GTK][GTK] is a casual GUI library that is used to make all kinds
 of applications and not designed for games.
 
@@ -81,8 +77,22 @@ different in performance even after adding the debugger.
 #### Advantages
 1. Ability to add buttons and menus which enable easier integration
    for debuggers and anything similar.
-2. Ability to open a NES file through the menu.
+2. Ability to open a NES file through the menu or by dragging the .NES
+   file into the app.
 3. Can run without specifying a ROM from the command line.
+4. Ability to pause and resume emulation through `<ESC>` key and from the menues.
+#### Disadvantages
+1. Does not offer gamepad support, but it can be added through
+   other external libraries.
+
+
+#### Native Windows GUI
+Has the same UI and usages as the [GTK](#gtk) version, but is targetted for windows
+as GTK require additional libraries to work for windows.
+
+#### Advantages (in addition to GTK)
+1. Run on the native windows APIs, which is fast and does not need any additional
+   libraries.
 #### Disadvantages
 1. Does not offer gamepad support, but it can be added through
    other external libraries.
@@ -91,7 +101,7 @@ different in performance even after adding the debugger.
 [![TUI demo](https://img.youtube.com/vi/cMO89-Xljr8/0.jpg)](https://www.youtube.com/watch?v=cMO89-Xljr8)
 
 This is just for fun, but it is actually working way better than
-I expected. Check the demo.
+I expected. Check the [demo](https://www.youtube.com/watch?v=cMO89-Xljr8).
 
 I used [gilrs][gilrs] for gamepad support and its working very
 nicely, keyboard on the other hand is not very responsive, so it
