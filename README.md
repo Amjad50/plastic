@@ -57,7 +57,7 @@ different purposes:
 [SFML][SFML] is a game development UI library, it has a good and
 easy to use API and is the most performing UI in the list.
 
-#### Advantages
+##### Advantages
 1. Designed for Canvas and raw drawing, which makes it faster.
 2. Has support for gamepad (only tested with PS4).
 
@@ -74,14 +74,14 @@ I haven't added anything specific to GTK yet. But it has almost the
 same performance as SFML, so hopefully there will not be much
 different in performance even after adding the debugger.
 
-#### Advantages
+##### Advantages
 1. Ability to add buttons and menus which enable easier integration
    for debuggers and anything similar.
 2. Ability to open a NES file through the menu or by dragging the .NES
    file into the app.
 3. Can run without specifying a ROM from the command line.
 4. Ability to pause and resume emulation through `<ESC>` key and from the menues.
-#### Disadvantages
+##### Disadvantages
 1. Does not offer gamepad support, but it can be added through
    other external libraries.
 
@@ -90,10 +90,10 @@ different in performance even after adding the debugger.
 Has the same UI and usages as the [GTK](#gtk) version, but is targetted for windows
 as GTK require additional libraries to work for windows.
 
-#### Advantages (in addition to GTK)
+##### Advantages (in addition to GTK)
 1. Run on the native windows APIs, which is fast and does not need any additional
    libraries.
-#### Disadvantages
+##### Disadvantages
 1. Does not offer gamepad support, but it can be added through
    other external libraries.
 
