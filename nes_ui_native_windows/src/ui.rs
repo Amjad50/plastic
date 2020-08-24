@@ -27,7 +27,8 @@ pub struct ProviderApp {
     #[nwg_control(
         size: (TV_WIDTH as i32 * 3, TV_HEIGHT as i32 * 3),
         title: "Plastic",
-        flags: "WINDOW|VISIBLE|MAIN_WINDOW|RESIZABLE"
+        flags: "WINDOW|VISIBLE|MAIN_WINDOW|RESIZABLE",
+        accept_files: true
     )]
     #[nwg_events(
         OnWindowClose: [nwg::stop_thread_dispatch()],
@@ -39,6 +40,8 @@ pub struct ProviderApp {
 
         OnKeyPress:   [ProviderApp::key_pressed(SELF, EVT_DATA)],
         OnKeyRelease: [ProviderApp::key_released(SELF, EVT_DATA)],
+
+        OnFileDrop: [ProviderApp::file_drop(SELF, EVT_DATA)],
     )]
     window: Window,
 
@@ -155,6 +158,18 @@ impl ProviderApp {
                 }
             }
             _ => {}
+        }
+    }
+
+    fn file_drop(&self, data: &EventData) {
+        let drop_files = data.on_file_drop();
+
+        if drop_files.len() > 0 {
+            if let Some(filename) = drop_files.files().iter().find(|e| e.ends_with(".nes")) {
+                self.ui_to_nes_sender
+                    .send(UiEvent::LoadRom(filename.to_string()))
+                    .unwrap();
+            }
         }
     }
 
