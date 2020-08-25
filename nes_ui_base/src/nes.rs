@@ -206,7 +206,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
         let mut ui = self.ui.take().unwrap();
 
-        std::thread::spawn(move || {
+        let ui_thread_handler = std::thread::spawn(move || {
             ui.run_ui_loop(ui_to_nes_sender.clone(), image, ctrl_state);
             ui_to_nes_sender.send(UiEvent::Exit).unwrap();
         });
@@ -305,5 +305,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
             last = std::time::Instant::now();
         }
+
+        ui_thread_handler.join().unwrap();
     }
 }
