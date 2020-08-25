@@ -35,6 +35,20 @@ This is a personal project for fun and to experience emulating hardware and conn
 - [x] Controller:
   controllable using the keyboard and controller (tested with PS4 controller)
 
+### Components graph
+![dep graph](./images/depgraph.png)
+
+> Blue lines mean test dependency
+
+> [`nes_ui_base`](./nes_ui_base/) is where the NES components are connected and emulated.
+
+generated using [cargo-depgraph](https://sr.ht/~jplatte/cargo-depgraph/):
+
+```
+cargo depgraph --all-deps --exclude gtk,gio,glib,gdk,cairo-rs,native-windows-gui,native-windows-derive,winapi,sfml,tui,crossterm,gilrs,cpal,lazy_static | dot -Tpng > images/depgraph.rs
+```
+
+
 ### Interfaces
 One advantage of this emulator is the great abstraction, for example, adding UI
 handlers for the emulator is very easy and straight forward. All you have to do
