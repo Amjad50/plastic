@@ -117,12 +117,16 @@ impl Bus for CPUBus {
             0x4000..=0x4013 => self.apu.borrow().read(address, device),
             0x4014 => self.ppu.borrow().read(address, device),
             0x4015 => self.apu.borrow().read(address, device),
-            0x4017 => self.apu.borrow().read(address, device),
-            0x6000..=0xFFFF => self.cartridge.borrow().read(address, device),
-            _ => {
-                // ignored
+            0x4016 => {
+                // controller
                 0
             }
+            0x4017 => self.apu.borrow().read(address, device),
+            0x4018..=0x401F => {
+                // unused CPU test mode registers
+                0
+            }
+            0x4020..=0xFFFF => self.cartridge.borrow().read(address, device),
         }
     }
     fn write(&mut self, address: u16, data: u8, device: Device) {
@@ -135,14 +139,17 @@ impl Bus for CPUBus {
             0x4000..=0x4013 => self.apu.borrow_mut().write(address, data, device),
             0x4014 => self.ppu.borrow_mut().write(address, data, device),
             0x4015 => self.apu.borrow_mut().write(address, data, device),
+            0x4016 => {
+                // controller
+            }
             0x4017 => self.apu.borrow_mut().write(address, data, device),
-            0x6000..=0xFFFF => self
+            0x4018..=0x401F => {
+                // unused CPU test mode registers
+            }
+            0x4020..=0xFFFF => self
                 .cartridge
                 .borrow_mut()
                 .write(address, data, Device::CPU),
-            _ => {
-                // ignored
-            }
         };
     }
 }

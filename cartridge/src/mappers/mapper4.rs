@@ -267,6 +267,7 @@ impl Mapper for Mapper4 {
 
                         MappingResult::Allowed(start_of_bank + (address & 0x1FFF) as usize)
                     }
+                    0x4020..=0x5FFF => MappingResult::Denied,
                     _ => unreachable!(),
                 }
             }
@@ -350,6 +351,7 @@ impl Mapper for Mapper4 {
 
                         MappingResult::Denied
                     }
+                    0x4020..=0x5FFF => MappingResult::Denied,
                     _ => unreachable!(),
                 }
             }

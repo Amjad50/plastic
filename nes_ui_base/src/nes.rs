@@ -91,11 +91,11 @@ impl Bus for CPUBus {
             0x4015 => self.apu.borrow().read(address, device),
             0x4016 => self.contoller.read(address, device),
             0x4017 => self.apu.borrow().read(address, device),
-            0x6000..=0xFFFF => self.cartridge.borrow().read(address, device),
-            _ => {
-                // println!("unimplemented read cpu from {:04X}", address);
+            0x4018..=0x401F => {
+                // unused CPU test mode registers
                 0
             }
+            0x4020..=0xFFFF => self.cartridge.borrow().read(address, device),
         }
     }
     fn write(&mut self, address: u16, data: u8, device: Device) {
@@ -110,11 +110,13 @@ impl Bus for CPUBus {
             0x4015 => self.apu.borrow_mut().write(address, data, device),
             0x4016 => self.contoller.write(address, data, device),
             0x4017 => self.apu.borrow_mut().write(address, data, device),
-            0x6000..=0xFFFF => self
+            0x4018..=0x401F => {
+                // unused CPU test mode registers
+            }
+            0x4020..=0xFFFF => self
                 .cartridge
                 .borrow_mut()
                 .write(address, data, Device::CPU),
-            _ => {} // println!("unimplemented write cpu to {:04X}", address),
         };
     }
 }

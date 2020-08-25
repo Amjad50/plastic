@@ -44,6 +44,7 @@ impl Mapper for Mapper0 {
                             }) as usize,
                         )
                     }
+                    0x4020..=0x5FFF => MappingResult::Denied,
                     _ => unreachable!(),
                 }
             }

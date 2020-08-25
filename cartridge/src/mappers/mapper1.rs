@@ -279,6 +279,7 @@ impl Mapper for Mapper1 {
                         // add the offset
                         MappingResult::Allowed(start_of_bank + (address & mask) as usize)
                     }
+                    0x4020..=0x5FFF => MappingResult::Denied,
                     _ => unreachable!(),
                 }
             }
@@ -327,6 +328,7 @@ impl Mapper for Mapper1 {
                         }
                         MappingResult::Denied
                     }
+                    0x4020..=0x5FFF => MappingResult::Denied,
                     _ => unreachable!(),
                 }
             }

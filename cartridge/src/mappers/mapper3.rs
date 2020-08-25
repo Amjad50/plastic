@@ -60,6 +60,7 @@ impl Mapper for Mapper3 {
                             }) as usize,
                         )
                     }
+                    0x4020..=0x5FFF => MappingResult::Denied,
                     _ => unreachable!(),
                 }
             }
@@ -89,6 +90,7 @@ impl Mapper for Mapper3 {
 
                     MappingResult::Denied
                 }
+                0x4020..=0x5FFF => MappingResult::Denied,
                 _ => unreachable!(),
             },
             Device::PPU => {
