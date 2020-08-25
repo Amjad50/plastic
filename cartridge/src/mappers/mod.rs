@@ -8,6 +8,7 @@ mod mapper9;
 
 mod mapper10;
 mod mapper11;
+mod mapper12;
 
 mod mapper66;
 
@@ -23,5 +24,6 @@ pub use mapper9::Mapper9;
 
 pub use mapper10::Mapper10;
 pub use mapper11::Mapper11;
+pub use mapper12::Mapper12;
 
 pub use mapper66::Mapper66;
