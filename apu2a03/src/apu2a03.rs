@@ -3,7 +3,7 @@ use crate::channels::{Dmc, NoiseWave, SquarePulse, TriangleWave};
 use crate::envelope::EnvelopedChannel;
 use crate::length_counter::LengthCountedChannel;
 use crate::mixer::Mixer;
-use crate::tone_source::{APUChannel, APUChannelPlayer, BufferedChannel, Filter, TimedAPUChannel};
+use crate::tone_source::{APUChannel, APUChannelPlayer, BufferedChannel, TimedAPUChannel};
 use common::interconnection::{APUCPUConnection, CpuIrqProvider};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -39,9 +39,6 @@ pub struct APU2A03 {
 
     interrupt_flag: Cell<bool>,
     request_interrupt_flag_change: Cell<bool>,
-
-    filter: Filter,
-    filter_counter: u8,
 
     player: Option<rodio::Sink>,
 }
@@ -95,9 +92,6 @@ impl APU2A03 {
             interrupt_flag: Cell::new(false),
             request_interrupt_flag_change: Cell::new(false),
 
-            filter: Filter::new(),
-            filter_counter: 0,
-
             player: Self::get_player(buffered_channel.clone()),
         }
     }
@@ -111,7 +105,12 @@ impl APU2A03 {
         if formats.count() > 0 {
             let sink = rodio::Sink::new(&device);
 
-            sink.append(APUChannelPlayer::from_clone(channel.clone()));
+            let low_pass_player = rodio::source::Source::low_pass(
+                APUChannelPlayer::from_clone(channel.clone()),
+                10000,
+            );
+
+            sink.append(low_pass_player);
             sink.set_volume(0.15);
 
             sink.pause();
@@ -513,15 +512,10 @@ impl APU2A03 {
         }
 
         // after how many apu clocks a sample should be recorded
-        // for now its 44100 * 8 and that is only due to the filter used, as it supports
-        // that only for now.
-        let samples_every_n_apu_clock =
-            (self.apu_freq / (crate::SAMPLE_RATE as f64 * 8.)) - self.offset;
+        let samples_every_n_apu_clock = (self.apu_freq / (crate::SAMPLE_RATE as f64)) - self.offset;
 
         if self.cycle % 300 == 0 {
             if let Ok(mut buffered_channel) = self.buffered_channel.lock() {
-                // buffered_channel.set_max_sample_limit(samples_every_n_apu_clock as usize);
-
                 let change = if buffered_channel.get_is_overusing() {
                     0.001
                 } else if buffered_channel.get_is_underusing() {
@@ -538,14 +532,8 @@ impl APU2A03 {
         self.sample_counter += 1.0;
         if self.sample_counter >= samples_every_n_apu_clock {
             let output = self.mixer.get_output();
-            let output = self.filter.apply(output);
 
-            if self.filter_counter == 8 {
-                self.filter_counter = 0;
-                self.buffered_channel.lock().unwrap().recored_sample(output);
-            } else {
-                self.filter_counter += 1;
-            }
+            self.buffered_channel.lock().unwrap().recored_sample(output);
 
             self.sample_counter -= samples_every_n_apu_clock;
         }
