@@ -51,6 +51,10 @@ pub struct CPU6502<T: Bus> {
     dma_remaining: u16,
     dma_address: u8,
 
+    /// a buffer to hold the next_instruction before execution,
+    /// check `run_next` for more info
+    next_instruction: Option<(Instruction, u8)>,
+
     bus: Rc<RefCell<T>>,
     ppu: Rc<RefCell<dyn PPUCPUConnection>>,
     apu: Rc<RefCell<dyn APUCPUConnection>>,
@@ -69,7 +73,7 @@ where
     ) -> Self {
         CPU6502 {
             reg_pc: 0,
-            reg_sp: 0xFD, // FIXME: not 100% about this
+            reg_sp: 0,
             reg_a: 0,
             reg_x: 0,
             reg_y: 0,
@@ -82,6 +86,8 @@ where
 
             dma_remaining: 0,
             dma_address: 0,
+
+            next_instruction: None,
 
             bus,
             ppu,
@@ -119,6 +125,8 @@ where
         self.bus.borrow_mut().write(address, data, Device::CPU);
     }
 
+    /// decods the operand of an instruction and returnrs
+    /// (the decoded_operand, base cycle time for the instruction, has crossed page)
     fn decode_operand(&self, instruction: &Instruction) -> (u16, u8, bool) {
         if instruction.is_operand_address() {
             match instruction.addressing_mode {
@@ -346,6 +354,8 @@ where
 
         let pc = high << 8 | low;
         self.reg_pc = pc;
+
+        self.cycles_to_wait += 7;
     }
 
     // is_soft should be only from BRK
@@ -441,7 +451,7 @@ where
     pub fn run_next(&mut self) -> CPURunState {
         self.check_and_run_dmc_transfer();
 
-        if self.cycles_to_wait == 0 {
+        if self.cycles_to_wait == 0 && self.next_instruction.is_none() {
             // are we still executing the DMA transfer instruction?
             if self.dma_remaining > 0 {
                 self.dma_remaining -= 1;
@@ -458,29 +468,60 @@ where
                 // since it should read in one cycle and write in the other cycle
                 self.cycles_to_wait = 1;
                 CPURunState::DmaTransfere
+            } else if self.nmi_pin_status
+                || (self.irq_pin_status
+                    && !(self.reg_status & (StatusFlag::InterruptDisable as u8) != 0))
+            {
+                // execute interrupt
+                // hardware side interrupt
+                self.execute_interrupt(false, self.nmi_pin_status);
+                CPURunState::StartingInterrupt
             } else {
-                // interrupts waiting
-                if self.nmi_pin_status
-                    || (self.irq_pin_status
-                        && !(self.reg_status & (StatusFlag::InterruptDisable as u8) != 0))
-                {
-                    // hardware side interrupt
-                    self.execute_interrupt(false, self.nmi_pin_status);
-                    CPURunState::StartingInterrupt
-                } else {
-                    // check for NMI and DMA and apply them only after the next
-                    // instruction
-                    self.check_for_nmi_dma();
-                    // check if there is pending IRQs from cartridge
-                    self.check_for_irq();
+                // check for NMI and DMA and apply them only after the next
+                // instruction
+                self.check_for_nmi_dma();
+                // check if there is pending IRQs from cartridge
+                self.check_for_irq();
 
-                    // fetch
-                    let instruction = self.fetch_next_instruction();
+                // reload the next instruction in `the next_instruction` buffer
+                let instruction = self.fetch_next_instruction();
+                let (_, mut cycle_time, _) = self.decode_operand(&instruction);
 
-                    // decode and execute
-                    self.run_instruction(&instruction)
+                // only the JMP instruction has lesser time than the base time
+                if instruction.opcode == Opcode::Jmp {
+                    // this instruction has only `Absolute` and `Relative` as adressing modes
+                    cycle_time = if instruction.addressing_mode == AddressingMode::Absolute {
+                        3
+                    } else {
+                        5
+                    };
                 }
+
+                // wait for the base time minus this cycle
+                self.cycles_to_wait += cycle_time - 1;
+
+                self.next_instruction = Some((instruction, cycle_time));
+
+                CPURunState::Waiting
             }
+        } else if self.cycles_to_wait == 1 && self.next_instruction.is_some() {
+            // on the last clock, run the instruction that was saved
+
+            // this can be seen as `self.cycles_to_wait -= 1;` because we
+            // know its 1 in this stage
+            self.cycles_to_wait = 0;
+
+            let (instruction, cycle_time) = self.next_instruction.take().unwrap();
+
+            let return_state = self.run_instruction(&instruction);
+
+            // `run_instruction` will set `self.cycles_to_wait` to the amount
+            // of cycles to wait minus 1, but before we have already waited
+            // `cycle_time` cycles (excluding this one), so subtract that
+            // and if anything remains then wait for it
+            self.cycles_to_wait -= cycle_time - 1;
+
+            return_state
         } else {
             self.cycles_to_wait -= 1;
             CPURunState::Waiting
