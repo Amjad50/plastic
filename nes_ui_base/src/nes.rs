@@ -276,19 +276,22 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
             for _ in 0..N {
                 self.cpu.run_next();
-                self.cpu.run_next();
-
-                self.apu.borrow_mut().clock();
-
                 {
                     let mut ppu = self.ppu.borrow_mut();
                     ppu.clock();
                     ppu.clock();
                     ppu.clock();
+                }
+
+                self.cpu.run_next();
+                {
+                    let mut ppu = self.ppu.borrow_mut();
                     ppu.clock();
                     ppu.clock();
                     ppu.clock();
                 }
+
+                self.apu.borrow_mut().clock();
             }
 
             if let Some(d) =

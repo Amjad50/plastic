@@ -213,6 +213,8 @@ impl NES {
     }
 
     pub fn clock(&mut self) -> CPURunState {
+        let return_value = self.cpu.run_next();
+
         {
             let mut ppu = self.ppu.borrow_mut();
 
@@ -226,7 +228,7 @@ impl NES {
         }
         self.is_apu_clock = !self.is_apu_clock;
 
-        self.cpu.run_next()
+        return_value
     }
 
     pub fn clock_until_infinite_loop(&mut self) {
