@@ -141,8 +141,7 @@ mod ppu_tests {
         run_sprite_hit_test("./tests/roms/sprite_hit_tests/08.double_height.nes")
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn sprite_hit_test_09_timing_basics() -> Result<(), TestError> {
         run_sprite_hit_test("./tests/roms/sprite_hit_tests/09.timing_basics.nes")
     }
@@ -171,8 +170,7 @@ mod ppu_tests {
         )
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn ppu_vbl_nmi_test_03_vbl_clear_time() -> Result<(), TestError> {
         run_ppu_vbl_nmi_test_and_sprite_overflow(
             "./tests/roms/ppu_vbl_nmi/rom_singles/03-vbl_clear_time.nes",
@@ -186,16 +184,14 @@ mod ppu_tests {
         )
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn ppu_vbl_nmi_test_05_nmi_timing() -> Result<(), TestError> {
         run_ppu_vbl_nmi_test_and_sprite_overflow(
             "./tests/roms/ppu_vbl_nmi/rom_singles/05-nmi_timing.nes",
         )
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn ppu_vbl_nmi_test_06_suppression() -> Result<(), TestError> {
         run_ppu_vbl_nmi_test_and_sprite_overflow(
             "./tests/roms/ppu_vbl_nmi/rom_singles/06-suppression.nes",
@@ -209,8 +205,7 @@ mod ppu_tests {
         )
     }
 
-    // FIXME: this test is still failing
-    // #[test]
+    #[test]
     fn ppu_vbl_nmi_test_08_nmi_off_timing() -> Result<(), TestError> {
         run_ppu_vbl_nmi_test_and_sprite_overflow(
             "./tests/roms/ppu_vbl_nmi/rom_singles/08-nmi_off_timing.nes",

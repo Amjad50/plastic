@@ -164,8 +164,9 @@ where
             reg_status: Cell::new(StatusReg::empty()),
             reg_oam_addr: Cell::new(0),
 
+            // this would result in it starting from 0,0 next cycle
             scanline: 261, // start from -1 scanline
-            cycle: 0,
+            cycle: 340,    // last cycle
 
             vram_address_cur: Cell::new(0),
             vram_address_top_left: 0,
@@ -209,14 +210,20 @@ where
                 // reset w_mode
                 self.w_toggle.set(false);
 
-                if self.scanline == 241 && self.cycle <= 2 {
+                if self.scanline == 241 {
                     // Race Condition Warning: Reading PPUSTATUS within two
                     // cycles of the start of vertical blank will return 0 in bit 7
                     // but clear the latch anyway, causing NMI to not occur that frame
-                    self.reg_status
-                        .set(StatusReg::from_bits(self.reg_status.get().bits & 0x7F).unwrap());
-                    self.nmi_pin_status.set(false);
-                    self.nmi_occured_in_this_frame.set(true);
+                    if self.cycle <= 2 {
+                        self.reg_status
+                            .set(StatusReg::from_bits(self.reg_status.get().bits & 0x7F).unwrap());
+                    }
+                    // for NMI it has quite a different range
+                    // source: tests
+                    if self.cycle >= 2 && self.cycle <= 4 {
+                        self.nmi_pin_status.set(false);
+                        self.nmi_occured_in_this_frame.set(true);
+                    }
                 }
                 let result = self.reg_status.get().bits;
                 //  reading the status register will clear bit 7
@@ -279,10 +286,16 @@ where
                         self.nmi_occured_in_this_frame.set(true);
                     }
                 } else {
-                    // in case if the NMI flag was disabled, then mark as nmi
-                    // never occurred on this frame, even if it has
-                    // meaning, that in some cases 2 NMI can occur
-                    self.nmi_occured_in_this_frame.set(false);
+                    // if the NMI is disabled, stop the NMI (if the flag was set)
+                    if self.scanline == 241 && self.cycle <= 4 {
+                        self.nmi_pin_status.set(false);
+                        self.nmi_occured_in_this_frame.set(true);
+                    } else {
+                        // in case if the NMI flag was disabled, then mark as nmi
+                        // never occurred on this frame, even if it has
+                        // meaning, that in some cases 2 NMI can occur
+                        self.nmi_occured_in_this_frame.set(false);
+                    }
                 }
             }
             Register::Mask => self.reg_mask.bits = data,
@@ -966,40 +979,50 @@ where
             261 => {
                 // pre-render
 
-                if self.cycle == 1 {
-                    // reset nmi_occured_in_this_frame
-                    self.nmi_occured_in_this_frame.set(false);
-                    // clear v-blank
-                    self.reg_status.get_mut().remove(StatusReg::VERTICAL_BLANK);
-                    // clear sprite overflow
-                    self.reg_status.get_mut().remove(StatusReg::SPRITE_OVERFLOW);
-                    // clear sprite 0 hit
-                    self.reg_status.get_mut().remove(StatusReg::SPRITE_0_HIT);
+                match self.cycle {
+                    0 => {
+                        // FIXME: for some reason the test only worked when doing it here
 
-                    if self.reg_mask.rendering_enabled() {
-                        self.restore_rendering_scroll_x();
-                        self.restore_rendering_scroll_y();
+                        // clear sprite 0 hit
+                        self.reg_status.get_mut().remove(StatusReg::SPRITE_0_HIT)
+                    }
+                    2 => {
+                        // reset nmi_occured_in_this_frame
+                        self.nmi_occured_in_this_frame.set(false);
+                    }
+                    1 => {
+                        // clear sprite overflow
+                        self.reg_status.get_mut().remove(StatusReg::SPRITE_OVERFLOW);
+                        // clear v-blank
+                        self.reg_status.get_mut().remove(StatusReg::VERTICAL_BLANK);
 
-                        self.restore_nametable();
+                        if self.reg_mask.rendering_enabled() {
+                            self.restore_rendering_scroll_x();
+                            self.restore_rendering_scroll_y();
 
-                        // load next 2 bytes
-                        for _ in 0..2 {
-                            for i in 0..=1 {
-                                // as this is the first time, shift the registers
-                                // as we are reloading 2 times
-                                self.bg_pattern_shift_registers[i] =
-                                    self.bg_pattern_shift_registers[i].wrapping_shl(8);
-                                self.bg_palette_shift_registers[i] =
-                                    self.bg_palette_shift_registers[i].wrapping_shl(8);
+                            self.restore_nametable();
+
+                            // load next 2 bytes
+                            for _ in 0..2 {
+                                for i in 0..=1 {
+                                    // as this is the first time, shift the registers
+                                    // as we are reloading 2 times
+                                    self.bg_pattern_shift_registers[i] =
+                                        self.bg_pattern_shift_registers[i].wrapping_shl(8);
+                                    self.bg_palette_shift_registers[i] =
+                                        self.bg_palette_shift_registers[i].wrapping_shl(8);
+                                }
+                                self.reload_background_shift_registers();
+                                self.increment_coarse_x_scroll();
                             }
-                            self.reload_background_shift_registers();
-                            self.increment_coarse_x_scroll();
                         }
                     }
-                }
-                // reload all of them in one go
-                if self.cycle == 257 {
-                    self.reload_sprite_shift_registers();
+
+                    257 => {
+                        // reload all of them in one go
+                        self.reload_sprite_shift_registers();
+                    }
+                    _ => {}
                 }
             }
             0..=239 => {
