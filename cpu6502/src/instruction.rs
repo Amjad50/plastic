@@ -180,19 +180,8 @@ const ADDRESSING_MODES: [AddressingMode; 256] = [
     Implied,    AbsoluteY,      Implied,        AbsoluteY,      AbsoluteX,      AbsoluteX,      AbsoluteX,      AbsoluteX,      // F8
 ];
 
+// public
 impl AddressingMode {
-    pub fn get_instruction_len(&self) -> usize {
-        // mapped table for length of each type
-        [2, 2, 2, 2, 3, 2, 2, 3, 3, 3, 1, 2, 1][*self as usize]
-    }
-
-    pub fn is_operand_address(&self) -> bool {
-        // these do not have address as operand
-        !(self == &AddressingMode::Accumulator
-            || self == &AddressingMode::Implied
-            || self == &AddressingMode::Immediate)
-    }
-
     pub fn can_cross_page(&self) -> bool {
         self == &AddressingMode::IndirectY
             || self == &AddressingMode::AbsoluteX
@@ -200,23 +189,28 @@ impl AddressingMode {
     }
 }
 
-impl Instruction {
-    pub fn from_byte(byte: u8) -> Result<Instruction, ()> {
-        Ok(Instruction {
-            opcode_byte: byte,
-            operand: 0,
-            opcode: OPCODES[byte as usize],
-            addressing_mode: ADDRESSING_MODES[byte as usize],
-        })
+// private
+impl AddressingMode {
+    fn get_instruction_len(&self) -> usize {
+        match self {
+            AddressingMode::Immediate => 2,
+            AddressingMode::ZeroPage => 2,
+            AddressingMode::ZeroPageIndexX => 2,
+            AddressingMode::ZeroPageIndexY => 2,
+            AddressingMode::Indirect => 3,
+            AddressingMode::XIndirect => 2,
+            AddressingMode::IndirectY => 2,
+            AddressingMode::Absolute => 3,
+            AddressingMode::AbsoluteX => 3,
+            AddressingMode::AbsoluteY => 3,
+            AddressingMode::Accumulator => 1,
+            AddressingMode::Relative => 2,
+            AddressingMode::Implied => 1,
+        }
     }
 
-    pub fn get_instruction_len(&self) -> usize {
-        // the length of the instruction depend on the type of its addressing mode
-        self.addressing_mode.get_instruction_len()
-    }
-
-    pub fn get_base_cycle_time(&self) -> u8 {
-        match self.addressing_mode {
+    fn get_base_cycle_time(&self) -> u8 {
+        match self {
             AddressingMode::Immediate => 2,
             AddressingMode::ZeroPage => 3, // or 5 for memory change
             AddressingMode::ZeroPageIndexX => 4, // or 6 for memory change
@@ -231,6 +225,35 @@ impl Instruction {
             AddressingMode::Relative => 2,
             AddressingMode::Implied => 2, // should be overridden by instructions execution
         }
+    }
+
+    fn is_operand_address(&self) -> bool {
+        // these do not have address as operand
+        !(self == &AddressingMode::Accumulator
+            || self == &AddressingMode::Implied
+            || self == &AddressingMode::Immediate)
+    }
+}
+
+impl Instruction {
+    pub fn from_byte(byte: u8) -> Instruction {
+        Instruction {
+            opcode_byte: byte,
+            operand: 0,
+            opcode: OPCODES[byte as usize],
+            addressing_mode: ADDRESSING_MODES[byte as usize],
+        }
+    }
+
+    pub fn get_instruction_len(&self) -> usize {
+        // the length of the instruction depend on the type of its addressing mode
+        self.addressing_mode.get_instruction_len()
+    }
+
+    pub fn get_base_cycle_time(&self) -> u8 {
+        // the base cycle time of the instruction depend on the type of its
+        // addressing mode
+        self.addressing_mode.get_base_cycle_time()
     }
 
     pub fn is_operand_address(&self) -> bool {

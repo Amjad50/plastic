@@ -532,14 +532,7 @@ where
         let opcode = self.read_bus(self.reg_pc);
         self.reg_pc += 1;
 
-        let mut instruction = match Instruction::from_byte(opcode) {
-            Ok(instruction) => instruction,
-            Err(_) => panic!(
-                "Invalid instruction {:02X} at {:04X}",
-                opcode,
-                self.reg_pc - 1
-            ),
-        };
+        let mut instruction = Instruction::from_byte(opcode);
 
         let mut operand = 0;
         // low
