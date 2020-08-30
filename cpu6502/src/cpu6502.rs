@@ -62,6 +62,7 @@ pub struct CPU6502<T: Bus> {
     irq_providers: Vec<Rc<RefCell<dyn CpuIrqProvider>>>,
 }
 
+// public
 impl<T> CPU6502<T>
 where
     T: Bus,
@@ -101,6 +102,121 @@ where
         self.irq_providers.push(provider);
     }
 
+    pub fn reset(&mut self) {
+        // reset registers and other variables
+        self.reg_pc = 0;
+        self.reg_sp = 0;
+        self.reg_a = 0;
+        self.reg_x = 0;
+        self.reg_y = 0;
+        self.reg_status = 0;
+
+        self.nmi_pin_status = false;
+        self.irq_pin_status = false;
+
+        self.cycles_to_wait = 0;
+
+        self.dma_remaining = 0;
+        self.dma_address = 0;
+
+        self.set_flag(StatusFlag::InterruptDisable);
+        self.reg_sp = 0xFD; //reset
+
+        let low = self.read_bus(RESET_VECTOR_ADDRESS) as u16;
+        let high = self.read_bus(RESET_VECTOR_ADDRESS + 1) as u16;
+
+        let pc = high << 8 | low;
+        self.reg_pc = pc;
+
+        self.cycles_to_wait += 7;
+    }
+
+    pub fn run_next(&mut self) -> CPURunState {
+        self.check_and_run_dmc_transfer();
+
+        if self.cycles_to_wait == 0 && self.next_instruction.is_none() {
+            // are we still executing the DMA transfer instruction?
+            if self.dma_remaining > 0 {
+                self.dma_remaining -= 1;
+                {
+                    // send one byte at a time
+                    let oma_address = (255 - self.dma_remaining) & 0xFF;
+                    let cpu_address = (self.dma_address as u16) << 8 | oma_address;
+
+                    let data = self.read_bus(cpu_address);
+
+                    self.ppu.borrow_mut().send_oam_data(oma_address as u8, data);
+                }
+
+                // since it should read in one cycle and write in the other cycle
+                self.cycles_to_wait = 1;
+                CPURunState::DmaTransfere
+            } else if self.nmi_pin_status
+                || (self.irq_pin_status
+                    && !(self.reg_status & (StatusFlag::InterruptDisable as u8) != 0))
+            {
+                // execute interrupt
+                // hardware side interrupt
+                self.execute_interrupt(false, self.nmi_pin_status);
+                CPURunState::StartingInterrupt
+            } else {
+                // check for NMI and DMA and apply them only after the next
+                // instruction
+                self.check_for_nmi_dma();
+                // check if there is pending IRQs from cartridge
+                self.check_for_irq();
+
+                // reload the next instruction in `the next_instruction` buffer
+                let instruction = self.fetch_next_instruction();
+                let (_, mut cycle_time, _) = self.decode_operand(&instruction);
+
+                // only the JMP instruction has lesser time than the base time
+                if instruction.opcode == Opcode::Jmp {
+                    // this instruction has only `Absolute` and `Relative` as adressing modes
+                    cycle_time = if instruction.addressing_mode == AddressingMode::Absolute {
+                        3
+                    } else {
+                        5
+                    };
+                }
+
+                // wait for the base time minus this cycle
+                self.cycles_to_wait += cycle_time - 1;
+
+                self.next_instruction = Some((instruction, cycle_time));
+
+                CPURunState::Waiting
+            }
+        } else if self.cycles_to_wait == 1 && self.next_instruction.is_some() {
+            // on the last clock, run the instruction that was saved
+
+            // this can be seen as `self.cycles_to_wait -= 1;` because we
+            // know its 1 in this stage
+            self.cycles_to_wait = 0;
+
+            let (instruction, cycle_time) = self.next_instruction.take().unwrap();
+
+            let return_state = self.run_instruction(&instruction);
+
+            // `run_instruction` will set `self.cycles_to_wait` to the amount
+            // of cycles to wait minus 1, but before we have already waited
+            // `cycle_time` cycles (excluding this one), so subtract that
+            // and if anything remains then wait for it
+            self.cycles_to_wait -= cycle_time - 1;
+
+            return_state
+        } else {
+            self.cycles_to_wait -= 1;
+            CPURunState::Waiting
+        }
+    }
+}
+
+// private
+impl<T> CPU6502<T>
+where
+    T: Bus,
+{
     fn set_flag(&mut self, flag: StatusFlag) {
         self.reg_status |= flag as u8;
     }
@@ -247,6 +363,11 @@ where
         }
     }
 
+    fn update_zero_negative_flags(&mut self, result: u8) {
+        self.set_flag_status(StatusFlag::Zero, result == 0);
+        self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+    }
+
     fn run_bitwise_operation<F>(&mut self, decoded_operand: u16, is_operand_address: bool, f: F)
     where
         F: Fn(u8, u8) -> u8,
@@ -259,8 +380,7 @@ where
 
         let result = f(operand, self.reg_a);
 
-        self.set_flag_status(StatusFlag::Zero, result == 0);
-        self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+        self.update_zero_negative_flags(result);
 
         self.reg_a = result;
     }
@@ -274,8 +394,7 @@ where
 
         let result = (register as u16).wrapping_sub(operand as u16);
 
-        self.set_flag_status(StatusFlag::Zero, result == 0);
-        self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+        self.update_zero_negative_flags(result as u8);
         self.set_flag_status(StatusFlag::Carry, result & 0xff00 == 0);
     }
 
@@ -306,15 +425,14 @@ where
         )
     }
 
-    fn load(&mut self, decoded_operand: u16, is_operand_address: bool) -> u8 {
+    fn run_load_instruction(&mut self, decoded_operand: u16, is_operand_address: bool) -> u8 {
         let operand = if is_operand_address {
             self.read_bus(decoded_operand)
         } else {
             decoded_operand as u8
         };
 
-        self.set_flag_status(StatusFlag::Zero, operand == 0);
-        self.set_flag_status(StatusFlag::Negative, operand & 0x80 != 0);
+        self.update_zero_negative_flags(operand);
 
         operand
     }
@@ -327,35 +445,6 @@ where
     fn pull_stack(&mut self) -> u8 {
         self.reg_sp = self.reg_sp.wrapping_add(1);
         self.read_bus(0x0100 | self.reg_sp as u16)
-    }
-
-    pub fn reset(&mut self) {
-        // reset registers and other variables
-        self.reg_pc = 0;
-        self.reg_sp = 0;
-        self.reg_a = 0;
-        self.reg_x = 0;
-        self.reg_y = 0;
-        self.reg_status = 0;
-
-        self.nmi_pin_status = false;
-        self.irq_pin_status = false;
-
-        self.cycles_to_wait = 0;
-
-        self.dma_remaining = 0;
-        self.dma_address = 0;
-
-        self.set_flag(StatusFlag::InterruptDisable);
-        self.reg_sp = 0xFD; //reset
-
-        let low = self.read_bus(RESET_VECTOR_ADDRESS) as u16;
-        let high = self.read_bus(RESET_VECTOR_ADDRESS + 1) as u16;
-
-        let pc = high << 8 | low;
-        self.reg_pc = pc;
-
-        self.cycles_to_wait += 7;
     }
 
     // is_soft should be only from BRK
@@ -583,9 +672,8 @@ where
                     (((result as u8 ^ self.reg_a) & 0x80) != 0)
                         && !(((operand ^ self.reg_a) & 0x80) != 0),
                 );
+                self.update_zero_negative_flags(result as u8);
                 self.set_flag_status(StatusFlag::Carry, result & 0xff00 != 0);
-                self.set_flag_status(StatusFlag::Zero, result as u8 == 0);
-                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
                 self.reg_a = result as u8;
             }
             Opcode::Asl => {
@@ -602,8 +690,7 @@ where
                 // modify the value
                 operand <<= 1;
 
-                self.set_flag_status(StatusFlag::Zero, operand == 0);
-                self.set_flag_status(StatusFlag::Negative, operand & 0x80 != 0);
+                self.update_zero_negative_flags(operand);
 
                 if is_operand_address {
                     // save back
@@ -632,8 +719,7 @@ where
                 // modify the value
                 operand >>= 1;
 
-                self.set_flag_status(StatusFlag::Zero, operand == 0);
-                self.set_flag_status(StatusFlag::Negative, false);
+                self.update_zero_negative_flags(operand);
 
                 if is_operand_address {
                     // save back
@@ -665,8 +751,9 @@ where
                 // modify the value
                 operand <<= 1;
                 operand |= old_carry;
-                self.set_flag_status(StatusFlag::Zero, operand == 0);
-                self.set_flag_status(StatusFlag::Negative, operand & 0x80 != 0);
+
+                self.update_zero_negative_flags(operand);
+
                 if is_operand_address {
                     // save back
                     self.write_bus(decoded_operand, operand);
@@ -697,8 +784,9 @@ where
                 // modify the value
                 operand >>= 1;
                 operand |= old_carry << 7;
-                self.set_flag_status(StatusFlag::Zero, operand == 0);
-                self.set_flag_status(StatusFlag::Negative, operand & 0x80 != 0);
+
+                self.update_zero_negative_flags(operand);
+
                 if is_operand_address {
                     // save back
                     self.write_bus(decoded_operand, operand);
@@ -745,8 +833,8 @@ where
                         && ((operand ^ self.reg_a) & 0x80 != 0),
                 );
                 self.set_flag_status(StatusFlag::Carry, !(result & 0xff00 != 0));
-                self.set_flag_status(StatusFlag::Zero, result as u8 == 0);
-                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+                self.update_zero_negative_flags(result as u8);
+
                 self.reg_a = result as u8;
             }
             Opcode::Bit => {
@@ -851,8 +939,7 @@ where
 
                 let result = self.read_bus(decoded_operand).wrapping_sub(1);
 
-                self.set_flag_status(StatusFlag::Zero, result == 0);
-                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+                self.update_zero_negative_flags(result);
 
                 // put back
                 self.write_bus(decoded_operand, result);
@@ -868,8 +955,7 @@ where
 
                 let result = self.read_bus(decoded_operand).wrapping_add(1);
 
-                self.set_flag_status(StatusFlag::Zero, result == 0);
-                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+                self.update_zero_negative_flags(result);
 
                 // put back
                 self.write_bus(decoded_operand, result);
@@ -960,13 +1046,13 @@ where
                 cycle_time = 6;
             }
             Opcode::Lda => {
-                self.reg_a = self.load(decoded_operand, is_operand_address);
+                self.reg_a = self.run_load_instruction(decoded_operand, is_operand_address);
             }
             Opcode::Ldx => {
-                self.reg_x = self.load(decoded_operand, is_operand_address);
+                self.reg_x = self.run_load_instruction(decoded_operand, is_operand_address);
             }
             Opcode::Ldy => {
-                self.reg_y = self.load(decoded_operand, is_operand_address);
+                self.reg_y = self.run_load_instruction(decoded_operand, is_operand_address);
             }
             Opcode::Nop => {
                 // NOTHING
@@ -974,64 +1060,56 @@ where
             Opcode::Dex => {
                 let result = self.reg_x.wrapping_sub(1);
 
-                self.set_flag_status(StatusFlag::Zero, result == 0);
-                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+                self.update_zero_negative_flags(result);
 
                 self.reg_x = result;
             }
             Opcode::Dey => {
                 let result = self.reg_y.wrapping_sub(1);
 
-                self.set_flag_status(StatusFlag::Zero, result == 0);
-                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+                self.update_zero_negative_flags(result);
 
                 self.reg_y = result;
             }
             Opcode::Inx => {
                 let result = self.reg_x.wrapping_add(1);
 
-                self.set_flag_status(StatusFlag::Zero, result == 0);
-                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+                self.update_zero_negative_flags(result);
 
                 self.reg_x = result;
             }
             Opcode::Iny => {
                 let result = self.reg_y.wrapping_add(1);
 
-                self.set_flag_status(StatusFlag::Zero, result == 0);
-                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+                self.update_zero_negative_flags(result);
 
                 self.reg_y = result;
             }
             Opcode::Tax => {
                 let result = self.reg_a;
 
-                self.set_flag_status(StatusFlag::Zero, result == 0);
-                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+                self.update_zero_negative_flags(result);
 
                 self.reg_x = result;
             }
             Opcode::Tay => {
                 let result = self.reg_a;
 
-                self.set_flag_status(StatusFlag::Zero, result == 0);
-                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+                self.update_zero_negative_flags(result);
 
                 self.reg_y = result;
             }
             Opcode::Txa => {
                 let result = self.reg_x;
 
-                self.set_flag_status(StatusFlag::Zero, result == 0);
-                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+                self.update_zero_negative_flags(result);
 
                 self.reg_a = result;
             }
             Opcode::Tya => {
                 let result = self.reg_y;
 
-                self.set_flag_status(StatusFlag::Zero, result == 0);
-                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+                self.update_zero_negative_flags(result);
 
                 self.reg_a = result;
             }
@@ -1050,9 +1128,7 @@ where
             Opcode::Pla => {
                 let result = self.pull_stack();
 
-                // update flags
-                self.set_flag_status(StatusFlag::Zero, result == 0);
-                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+                self.update_zero_negative_flags(result);
 
                 self.reg_a = result;
 
@@ -1087,8 +1163,7 @@ where
             Opcode::Tsx => {
                 let result = self.reg_sp;
 
-                self.set_flag_status(StatusFlag::Zero, result == 0);
-                self.set_flag_status(StatusFlag::Negative, result & 0x80 != 0);
+                self.update_zero_negative_flags(result);
 
                 self.reg_x = result;
             }
@@ -1309,7 +1384,7 @@ where
                 let (result, overflow) =
                     (self.reg_x & self.reg_a).overflowing_sub(decoded_operand as u8);
 
-                self.reg_x = self.load(result as u16, false);
+                self.reg_x = self.run_load_instruction(result as u16, false);
 
                 self.set_flag_status(StatusFlag::Carry, !overflow);
             }
@@ -1381,7 +1456,7 @@ where
                 let value = self.read_bus(decoded_operand);
 
                 //set the flags
-                let result = self.load((value & self.reg_sp) as u16, false);
+                let result = self.run_load_instruction((value & self.reg_sp) as u16, false);
 
                 self.reg_a = result;
                 self.reg_x = result;
