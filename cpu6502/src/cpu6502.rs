@@ -244,122 +244,113 @@ where
     /// decods the operand of an instruction and returnrs
     /// (the decoded_operand, base cycle time for the instruction, has crossed page)
     fn decode_operand(&self, instruction: &Instruction) -> (u16, u8, bool) {
-        if instruction.is_operand_address() {
-            match instruction.addressing_mode {
-                AddressingMode::ZeroPage => (
-                    instruction.operand & 0xff,
-                    instruction.get_base_cycle_time(),
-                    false,
-                ),
-                AddressingMode::ZeroPageIndexX => (
-                    (instruction.operand + self.reg_x as u16) & 0xff,
-                    instruction.get_base_cycle_time(),
-                    false,
-                ),
+        match instruction.addressing_mode {
+            AddressingMode::ZeroPage => (
+                instruction.operand & 0xff,
+                instruction.get_base_cycle_time(),
+                false,
+            ),
+            AddressingMode::ZeroPageIndexX => (
+                (instruction.operand + self.reg_x as u16) & 0xff,
+                instruction.get_base_cycle_time(),
+                false,
+            ),
 
-                AddressingMode::ZeroPageIndexY => (
-                    (instruction.operand + self.reg_y as u16) & 0xff,
-                    instruction.get_base_cycle_time(),
-                    false,
-                ),
+            AddressingMode::ZeroPageIndexY => (
+                (instruction.operand + self.reg_y as u16) & 0xff,
+                instruction.get_base_cycle_time(),
+                false,
+            ),
 
-                AddressingMode::Indirect => {
-                    let low = self.read_bus(instruction.operand) as u16;
-                    // if the indirect vector is at the last of the page (0xff) then
-                    // wrap around on the same page
-                    let high = self.read_bus(if instruction.operand & 0xff == 0xff {
-                        instruction.operand & 0xff00
-                    } else {
-                        instruction.operand + 1
-                    }) as u16;
+            AddressingMode::Indirect => {
+                let low = self.read_bus(instruction.operand) as u16;
+                // if the indirect vector is at the last of the page (0xff) then
+                // wrap around on the same page
+                let high = self.read_bus(if instruction.operand & 0xff == 0xff {
+                    instruction.operand & 0xff00
+                } else {
+                    instruction.operand + 1
+                }) as u16;
 
-                    (high << 8 | low, instruction.get_base_cycle_time(), false)
-                }
-                AddressingMode::XIndirect => {
-                    let location_indirect =
-                        instruction.operand.wrapping_add(self.reg_x as u16) & 0xff;
-                    let low = self.read_bus(location_indirect) as u16;
-                    let high = self.read_bus((location_indirect + 1) & 0xFF) as u16;
-                    (high << 8 | low, instruction.get_base_cycle_time(), false)
-                }
-                AddressingMode::IndirectY => {
-                    let location_indirect = instruction.operand & 0xff;
-                    let low = self.read_bus(location_indirect) as u16;
-                    let high = self.read_bus((location_indirect + 1) & 0xFF) as u16;
-
-                    let unindxed_address = high << 8 | low;
-                    let result = unindxed_address + self.reg_y as u16;
-
-                    let page_cross = if is_on_same_page(unindxed_address, result) {
-                        0
-                    } else {
-                        1
-                    };
-
-                    (
-                        result,
-                        instruction.get_base_cycle_time() + page_cross,
-                        page_cross == 1,
-                    )
-                }
-                AddressingMode::Absolute => (
-                    instruction.operand,
-                    instruction.get_base_cycle_time(),
-                    false,
-                ),
-                AddressingMode::AbsoluteX => {
-                    let result = instruction.operand + self.reg_x as u16;
-                    let page_cross = if is_on_same_page(instruction.operand, result) {
-                        0
-                    } else {
-                        1
-                    };
-
-                    (
-                        result,
-                        instruction.get_base_cycle_time() + page_cross,
-                        page_cross == 1,
-                    )
-                }
-                AddressingMode::AbsoluteY => {
-                    let result = instruction.operand + self.reg_y as u16;
-                    let page_cross = if is_on_same_page(instruction.operand, result) {
-                        0
-                    } else {
-                        1
-                    };
-
-                    (
-                        result,
-                        instruction.get_base_cycle_time() + page_cross,
-                        page_cross == 1,
-                    )
-                }
-                AddressingMode::Relative => {
-                    let sign_extended_operand = instruction.operand
-                        | if instruction.operand & 0x80 != 0 {
-                            0xFF00
-                        } else {
-                            0x0000
-                        };
-                    (
-                        self.reg_pc.wrapping_add(sign_extended_operand),
-                        instruction.get_base_cycle_time(),
-                        false,
-                    )
-                }
-                AddressingMode::Immediate
-                | AddressingMode::Accumulator
-                | AddressingMode::Implied => {
-                    unreachable!();
-                }
+                (high << 8 | low, instruction.get_base_cycle_time(), false)
             }
-        } else {
-            (
+            AddressingMode::XIndirect => {
+                let location_indirect = instruction.operand.wrapping_add(self.reg_x as u16) & 0xff;
+                let low = self.read_bus(location_indirect) as u16;
+                let high = self.read_bus((location_indirect + 1) & 0xFF) as u16;
+                (high << 8 | low, instruction.get_base_cycle_time(), false)
+            }
+            AddressingMode::IndirectY => {
+                let location_indirect = instruction.operand & 0xff;
+                let low = self.read_bus(location_indirect) as u16;
+                let high = self.read_bus((location_indirect + 1) & 0xFF) as u16;
+
+                let unindxed_address = high << 8 | low;
+                let result = unindxed_address + self.reg_y as u16;
+
+                let page_cross = if is_on_same_page(unindxed_address, result) {
+                    0
+                } else {
+                    1
+                };
+
+                (
+                    result,
+                    instruction.get_base_cycle_time() + page_cross,
+                    page_cross == 1,
+                )
+            }
+            AddressingMode::Absolute => (
                 instruction.operand,
                 instruction.get_base_cycle_time(),
                 false,
-            )
+            ),
+            AddressingMode::AbsoluteX => {
+                let result = instruction.operand + self.reg_x as u16;
+                let page_cross = if is_on_same_page(instruction.operand, result) {
+                    0
+                } else {
+                    1
+                };
+
+                (
+                    result,
+                    instruction.get_base_cycle_time() + page_cross,
+                    page_cross == 1,
+                )
+            }
+            AddressingMode::AbsoluteY => {
+                let result = instruction.operand + self.reg_y as u16;
+                let page_cross = if is_on_same_page(instruction.operand, result) {
+                    0
+                } else {
+                    1
+                };
+
+                (
+                    result,
+                    instruction.get_base_cycle_time() + page_cross,
+                    page_cross == 1,
+                )
+            }
+            AddressingMode::Relative => {
+                let sign_extended_operand = instruction.operand
+                    | if instruction.operand & 0x80 != 0 {
+                        0xFF00
+                    } else {
+                        0x0000
+                    };
+                (
+                    self.reg_pc.wrapping_add(sign_extended_operand),
+                    instruction.get_base_cycle_time(),
+                    false,
+                )
+            }
+            AddressingMode::Immediate | AddressingMode::Accumulator | AddressingMode::Implied => (
+                instruction.operand,
+                instruction.get_base_cycle_time(),
+                false,
+            ),
         }
     }
 
@@ -622,18 +613,23 @@ where
         self.reg_pc += 1;
 
         let mut instruction = Instruction::from_byte(opcode);
+        let len = instruction.get_instruction_len();
 
         let mut operand = 0;
-        // low
-        if instruction.get_instruction_len() > 1 {
-            operand |= self.read_bus(self.reg_pc) as u16;
-            self.reg_pc += 1;
+
+        match len {
+            2 => {
+                operand |= self.read_bus(self.reg_pc) as u16;
+            }
+            3 => {
+                operand |= self.read_bus(self.reg_pc) as u16;
+                operand |= (self.read_bus(self.reg_pc + 1) as u16) << 8;
+            }
+            _ => {}
         }
-        // high
-        if instruction.get_instruction_len() > 2 {
-            operand |= (self.read_bus(self.reg_pc) as u16) << 8;
-            self.reg_pc += 1;
-        }
+
+        // 1 => ( +0 ), 2 => ( +1 ), 3 => ( +2 )
+        self.reg_pc += (len - 1) as u16;
 
         instruction.operand = operand;
 
