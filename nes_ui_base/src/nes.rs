@@ -45,6 +45,10 @@ impl CPUBus {
             contoller,
         }
     }
+
+    fn reset_ram(&mut self) {
+        self.ram = [0; 0x800];
+    }
 }
 
 impl PPUBus {
@@ -124,6 +128,7 @@ impl Bus for CPUBus {
 pub struct NES<P: UiProvider + Send + 'static> {
     cartridge: Rc<RefCell<Cartridge>>,
     cpu: CPU6502<CPUBus>,
+    cpubus: Rc<RefCell<CPUBus>>,
     ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
     apu: Rc<RefCell<APU2A03>>,
     image: Arc<Mutex<Vec<u8>>>,
@@ -164,8 +169,9 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         let ctrl_state = ctrl.get_primary_controller_state();
 
         let cpubus = CPUBus::new(cartridge.clone(), ppu.clone(), apu.clone(), ctrl);
+        let cpubus = Rc::new(RefCell::new(cpubus));
 
-        let mut cpu = CPU6502::new(Rc::new(RefCell::new(cpubus)), ppu.clone(), apu.clone());
+        let mut cpu = CPU6502::new(cpubus.clone(), ppu.clone(), apu.clone());
         cpu.add_irq_provider(cartridge.clone());
         cpu.add_irq_provider(apu.clone());
 
@@ -174,6 +180,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         Self {
             cartridge,
             cpu,
+            cpubus,
             ppu,
             apu,
             image,
@@ -187,6 +194,8 @@ impl<P: UiProvider + Send + 'static> NES<P> {
     pub fn reset(&mut self) {
         self.cpu.reset();
 
+        self.cpubus.borrow_mut().reset_ram();
+
         let ppubus = PPUBus::new(self.cartridge.clone());
 
         self.ppu.borrow_mut().reset(ppubus);
@@ -194,9 +203,6 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         self.apu.replace(APU2A03::new());
 
         self.paused = self.cartridge.borrow().is_empty();
-        // TODO: implement reset for cartridge if needed
-        // self.cartridge.borrow_mut().reset();
-        // FIXME: added a way to reset CPU BUS
     }
 
     /// calculate a new view based on the window size
