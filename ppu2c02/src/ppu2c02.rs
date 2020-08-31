@@ -44,11 +44,8 @@ impl ControlReg {
     }
 
     pub fn sprite_height(&self) -> u8 {
-        if self.intersects(Self::SPRITE_SIZE) {
-            16
-        } else {
-            8
-        }
+        // if SPRITE_SIZE is 1, then it will be (8 << 1) == 16, else it will be 8
+        8 << self.intersects(Self::SPRITE_SIZE) as u8
     }
 }
 
@@ -780,12 +777,9 @@ where
 
         let palette = high_palette_bit << 1 | low_palette_bit;
 
-        // if background is not enabled, return NONE, but still shift the registers
-        if !self.reg_mask.background_enabled() {
-            (0, 0)
-        } else {
-            (color_bit, palette)
-        }
+        let background_enabled = self.reg_mask.background_enabled() as u8;
+        // if background is not enabled, it will be multiplied by zero which is zero
+        (color_bit * background_enabled, palette * background_enabled)
     }
 
     fn get_sprites_first_non_transparent_pixel(&mut self) -> (u8, u8, bool, bool) {
@@ -830,12 +824,14 @@ where
             }
         }
 
-        // if sprites is not enabled, return NONE, but still shift the registers
-        if !self.reg_mask.sprites_enabled() {
-            (0, 0, false, false)
-        } else {
-            (color_bits, palette, background_priority, is_sprite_0)
-        }
+        let sprites_enabled = self.reg_mask.sprites_enabled();
+        // if sprites is not enabled, this will be (0, 0, false, false)
+        (
+            color_bits * sprites_enabled as u8,
+            palette * sprites_enabled as u8,
+            background_priority && sprites_enabled,
+            is_sprite_0 && sprites_enabled,
+        )
     }
 
     /// this method fetches background and sprite pixels, check overflow for
