@@ -47,28 +47,40 @@ impl INesHeader {
         header[6] >>= 1;
         let mapper_id_low = (header[6] & 0xF) as u16;
 
-        let console_type = header[7] & 0x3;
+        let mut console_type = header[7] & 0x3;
         header[7] >>= 2;
-        let is_nes_2 = (header[7] & 0x3) == 2;
+        let ines_2_ident = header[7] & 0x3;
         header[7] >>= 2;
-        let mapper_id_middle = (header[7] & 0xF) as u16;
+        let mut mapper_id_middle = (header[7] & 0xF) as u16;
 
-        if !is_nes_2 {
-            let prg_ram_size = if header[8] == 0 { 1 } else { header[8] };
-            let ntcs_tv_system = header[9] & 1 == 0;
-
-            if header[9] >> 1 != 0 {
-                return Err(CartridgeError::HeaderError);
-            }
-
-            let is_prg_ram_present = (header[10] >> 4) & 1 == 0;
-            let board_has_bus_conflict = (header[10] >> 5) & 1 != 0;
-
+        if ines_2_ident == 0 {
+            let mut is_archaic_ines = false;
             for i in 12..=15 {
                 if header[i] != 0 {
-                    return Err(CartridgeError::HeaderError);
+                    is_archaic_ines = true;
                 }
             }
+
+            let prg_ram_size;
+
+            if !is_archaic_ines {
+                prg_ram_size = if header[8] == 0 { 1 } else { header[8] };
+                let ntcs_tv_system = header[9] & 1 == 0;
+
+                if header[9] >> 1 != 0 {
+                    return Err(CartridgeError::HeaderError);
+                }
+
+                let is_prg_ram_present = (header[10] >> 4) & 1 == 0;
+                let board_has_bus_conflict = (header[10] >> 5) & 1 != 0;
+            } else {
+                // ignore `header[7]` data
+                console_type = 0;
+                mapper_id_middle = 0;
+
+                prg_ram_size = 1;
+            }
+
             Ok(Self {
                 prg_rom_size: prg_size_low,
                 chr_rom_size: chr_size_low,
