@@ -18,8 +18,6 @@ pub enum Event<I> {
 /// type is handled in its own thread and returned to a common `Receiver`
 pub struct Events {
     rx: mpsc::Receiver<Event<KeyEvent>>,
-    input_handle: thread::JoinHandle<()>,
-    tick_handle: thread::JoinHandle<()>,
     stopped: Arc<AtomicBool>,
 }
 
@@ -30,7 +28,7 @@ impl Events {
 
         enable_raw_mode().unwrap();
 
-        let input_handle = {
+        {
             let tx = tx.clone();
             thread::spawn(move || loop {
                 if let Ok(_) = poll(Duration::from_millis(10)) {
@@ -42,7 +40,8 @@ impl Events {
                 }
             })
         };
-        let tick_handle = {
+
+        {
             let stopped = stopped.clone();
             thread::spawn(move || loop {
                 if !stopped.load(Ordering::Relaxed) {
@@ -53,12 +52,7 @@ impl Events {
                 thread::sleep(tick_rate);
             })
         };
-        Events {
-            rx,
-            input_handle,
-            tick_handle,
-            stopped,
-        }
+        Events { rx, stopped }
     }
 
     pub fn set_stopped_state(&self, state: bool) {

@@ -102,56 +102,60 @@ impl UiProvider for GtkProvider {
 
         window.set_size_request((TV_WIDTH * 3) as i32, (TV_HEIGHT * 3) as i32);
 
-        let ctrl_state_clone = ctrl_state.clone();
-        let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
-        let paused_clone = self.paused.clone();
-        window.connect_key_press_event(move |_, event| {
-            let mut ctrl = ctrl_state_clone.lock().unwrap();
+        {
+            let ctrl_state = ctrl_state.clone();
+            let ui_to_nes_sender = ui_to_nes_sender.clone();
+            let paused = self.paused.clone();
+            window.connect_key_press_event(move |_, event| {
+                let mut ctrl = ctrl_state.lock().unwrap();
 
-            match keyval_to_upper(event.get_keyval()) {
-                key::J => ctrl.press(StandardNESKey::B),
-                key::K => ctrl.press(StandardNESKey::A),
-                key::U => ctrl.press(StandardNESKey::Select),
-                key::I => ctrl.press(StandardNESKey::Start),
-                key::W => ctrl.press(StandardNESKey::Up),
-                key::S => ctrl.press(StandardNESKey::Down),
-                key::A => ctrl.press(StandardNESKey::Left),
-                key::D => ctrl.press(StandardNESKey::Right),
-                key::R if event.get_state().intersects(ModifierType::CONTROL_MASK) => {
-                    ui_to_nes_sender_clone.send(UiEvent::Reset).unwrap()
-                }
-                key::Escape => {
-                    if paused_clone.load(Ordering::Relaxed) {
-                        ui_to_nes_sender_clone.send(UiEvent::Resume).unwrap();
-                        paused_clone.store(false, Ordering::Relaxed);
-                    } else {
-                        ui_to_nes_sender_clone.send(UiEvent::Pause).unwrap();
-                        paused_clone.store(true, Ordering::Relaxed);
+                match keyval_to_upper(event.get_keyval()) {
+                    key::J => ctrl.press(StandardNESKey::B),
+                    key::K => ctrl.press(StandardNESKey::A),
+                    key::U => ctrl.press(StandardNESKey::Select),
+                    key::I => ctrl.press(StandardNESKey::Start),
+                    key::W => ctrl.press(StandardNESKey::Up),
+                    key::S => ctrl.press(StandardNESKey::Down),
+                    key::A => ctrl.press(StandardNESKey::Left),
+                    key::D => ctrl.press(StandardNESKey::Right),
+                    key::R if event.get_state().intersects(ModifierType::CONTROL_MASK) => {
+                        ui_to_nes_sender.send(UiEvent::Reset).unwrap()
                     }
+                    key::Escape => {
+                        if paused.load(Ordering::Relaxed) {
+                            ui_to_nes_sender.send(UiEvent::Resume).unwrap();
+                            paused.store(false, Ordering::Relaxed);
+                        } else {
+                            ui_to_nes_sender.send(UiEvent::Pause).unwrap();
+                            paused.store(true, Ordering::Relaxed);
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
-            }
 
-            Inhibit(false)
-        });
+                Inhibit(false)
+            });
+        }
 
-        let ctrl_state_clone = ctrl_state.clone();
-        window.connect_key_release_event(move |_, event| {
-            let mut ctrl = ctrl_state_clone.lock().unwrap();
-            match gdk::keyval_to_upper(event.get_keyval()) {
-                key::J => ctrl.release(StandardNESKey::B),
-                key::K => ctrl.release(StandardNESKey::A),
-                key::U => ctrl.release(StandardNESKey::Select),
-                key::I => ctrl.release(StandardNESKey::Start),
-                key::W => ctrl.release(StandardNESKey::Up),
-                key::S => ctrl.release(StandardNESKey::Down),
-                key::A => ctrl.release(StandardNESKey::Left),
-                key::D => ctrl.release(StandardNESKey::Right),
-                _ => {}
-            }
+        {
+            let ctrl_state = ctrl_state.clone();
+            window.connect_key_release_event(move |_, event| {
+                let mut ctrl = ctrl_state.lock().unwrap();
+                match gdk::keyval_to_upper(event.get_keyval()) {
+                    key::J => ctrl.release(StandardNESKey::B),
+                    key::K => ctrl.release(StandardNESKey::A),
+                    key::U => ctrl.release(StandardNESKey::Select),
+                    key::I => ctrl.release(StandardNESKey::Start),
+                    key::W => ctrl.release(StandardNESKey::Up),
+                    key::S => ctrl.release(StandardNESKey::Down),
+                    key::A => ctrl.release(StandardNESKey::Left),
+                    key::D => ctrl.release(StandardNESKey::Right),
+                    _ => {}
+                }
 
-            Inhibit(false)
-        });
+                Inhibit(false)
+            });
+        }
 
         // Support for dragging a new file into the emulator
         const DRAG_ID: u32 = 100;
@@ -165,70 +169,82 @@ impl UiProvider for GtkProvider {
             DragAction::COPY,
         );
 
-        let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
-        window.connect_drag_data_received(move |_, _, _x, _y, data, info, _| {
-            if info == DRAG_ID {
-                if let Some(text) = data.get_text() {
-                    let text = text.trim_start_matches("file://");
+        {
+            let ui_to_nes_sender = ui_to_nes_sender.clone();
+            window.connect_drag_data_received(move |_, _, _x, _y, data, info, _| {
+                if info == DRAG_ID {
+                    if let Some(text) = data.get_text() {
+                        let text = text.trim_start_matches("file://");
 
-                    // we don't want to panic and exit, just ignore if corrupted
-                    if text.ends_with(".nes") {
-                        ui_to_nes_sender_clone
-                            .send(UiEvent::LoadRom(text.to_owned()))
+                        // we don't want to panic and exit, just ignore if corrupted
+                        if text.ends_with(".nes") {
+                            ui_to_nes_sender
+                                .send(UiEvent::LoadRom(text.to_owned()))
+                                .unwrap();
+                        }
+                    }
+                }
+            });
+        }
+
+        {
+            let ui_to_nes_sender = ui_to_nes_sender.clone();
+            menu_action_reset.connect_activate(move |_| {
+                ui_to_nes_sender.send(UiEvent::Reset).unwrap();
+            });
+        }
+
+        {
+            let ui_to_nes_sender = ui_to_nes_sender.clone();
+            let paused = self.paused.clone();
+            menu_action_pause.connect_activate(move |_| {
+                ui_to_nes_sender.send(UiEvent::Pause).unwrap();
+                paused.store(true, Ordering::Relaxed);
+            });
+        }
+
+        {
+            let ui_to_nes_sender = ui_to_nes_sender.clone();
+            let paused = self.paused.clone();
+            menu_action_resume.connect_activate(move |_| {
+                ui_to_nes_sender.send(UiEvent::Resume).unwrap();
+                paused.store(false, Ordering::Relaxed);
+            });
+        }
+
+        {
+            let app = app.clone();
+            menu_action_quit.connect_activate(move |_| app.quit());
+        }
+
+        {
+            let ui_to_nes_sender = ui_to_nes_sender.clone();
+            menu_action_open.connect_activate(move |_| {
+                let dialog = FileChooserDialog::with_buttons::<Window>(
+                    Some("Select NES ROM"),
+                    None,
+                    FileChooserAction::Open,
+                    &[
+                        ("_Cancel", ResponseType::Cancel),
+                        ("_Open", ResponseType::Accept),
+                    ],
+                );
+
+                let filter = FileFilter::new();
+                filter.add_mime_type("application/x-nes-rom");
+                dialog.set_filter(&filter);
+
+                let result = dialog.run();
+                if result == ResponseType::Accept {
+                    if let Some(file) = dialog.get_filename() {
+                        ui_to_nes_sender
+                            .send(UiEvent::LoadRom(file.to_string_lossy().to_string()))
                             .unwrap();
                     }
                 }
-            }
-        });
-
-        let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
-        menu_action_reset.connect_activate(move |_| {
-            ui_to_nes_sender_clone.send(UiEvent::Reset).unwrap();
-        });
-
-        let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
-        let paused_clone = self.paused.clone();
-        menu_action_pause.connect_activate(move |_| {
-            ui_to_nes_sender_clone.send(UiEvent::Pause).unwrap();
-            paused_clone.store(true, Ordering::Relaxed);
-        });
-
-        let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
-        let paused_clone = self.paused.clone();
-        menu_action_resume.connect_activate(move |_| {
-            ui_to_nes_sender_clone.send(UiEvent::Resume).unwrap();
-            paused_clone.store(false, Ordering::Relaxed);
-        });
-
-        let app_clone = app.clone();
-        menu_action_quit.connect_activate(move |_| app_clone.quit());
-
-        let ui_to_nes_sender_clone = ui_to_nes_sender.clone();
-        menu_action_open.connect_activate(move |_| {
-            let dialog = FileChooserDialog::with_buttons::<Window>(
-                Some("Select NES ROM"),
-                None,
-                FileChooserAction::Open,
-                &[
-                    ("_Cancel", ResponseType::Cancel),
-                    ("_Open", ResponseType::Accept),
-                ],
-            );
-
-            let filter = FileFilter::new();
-            filter.add_mime_type("application/x-nes-rom");
-            dialog.set_filter(&filter);
-
-            let result = dialog.run();
-            if result == ResponseType::Accept {
-                if let Some(file) = dialog.get_filename() {
-                    ui_to_nes_sender_clone
-                        .send(UiEvent::LoadRom(file.to_string_lossy().to_string()))
-                        .unwrap();
-                }
-            }
-            dialog.close();
-        });
+                dialog.close();
+            });
+        }
 
         app.connect_activate(move |app| {
             app.add_window(&window);
