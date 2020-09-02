@@ -1,12 +1,13 @@
 use super::{
     error::{CartridgeError, SramError},
-    mapper::{Mapper, MappingResult},
+    mapper::{BankMapping, BankMappingType, Mapper},
     mappers::*,
 };
 use common::{interconnection::CpuIrqProvider, Bus, Device, MirroringMode, MirroringProvider};
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
+    ops::RangeInclusive,
     path::Path,
 };
 
@@ -160,7 +161,23 @@ pub struct Cartridge {
     pub(crate) chr_data: Vec<u8>,
     prg_ram_data: Vec<u8>,
 
+    /// mapping of range 0x6000-0x7FFF, divided by the smallest block offered
+    /// by the mapper
+    cpu_ram_memory_mapping: Vec<BankMapping>,
+
+    /// mapping of range 0x8000-0xFFFF, divided by the smallest block offered
+    /// by the mapper, note that this can be mapped to RAM in some mappers
+    /// like MMC5, but only part of it
+    cpu_rom_memory_mapping: Vec<BankMapping>,
+
+    /// mapping of range 0x0000-0x1FFFF, divided by the smallest block offered
+    /// by the mapper
+    ppu_memory_mapping: Vec<BankMapping>,
+
     mapper: Box<dyn Mapper>,
+
+    /// cached here for faster usage
+    mapper_register_write_range: RangeInclusive<u16>,
 
     is_empty: bool,
 }
@@ -195,7 +212,7 @@ impl Cartridge {
 
                 // initialize the mapper first, so that if it is not supported yet,
                 // panic
-                let mapper = Self::get_mapper(&header)?;
+                let (mapper, initial_bank_mappings) = Self::get_mapper(&header)?;
 
                 let mut trainer_data = Vec::new();
 
@@ -228,17 +245,54 @@ impl Cartridge {
                 if current != end {
                     Err(CartridgeError::TooLargeFile(end - current))
                 } else {
-                    Ok(Self {
+                    // these should be overriden all in the call to `apply_bank_mapping`
+                    let cpu_ram_memory_mapping = vec![
+                        BankMapping {
+                            ty: BankMappingType::CpuRam,
+                            to: 0,
+                            read: false,
+                            write: false,
+                        };
+                        0x2000 / mapper.cpu_ram_bank_size() as usize
+                    ];
+                    let cpu_rom_memory_mapping = vec![
+                        BankMapping {
+                            ty: BankMappingType::CpuRom,
+                            to: 0,
+                            read: false,
+                            write: false,
+                        };
+                        0x8000 / mapper.cpu_rom_bank_size() as usize
+                    ];
+                    let ppu_memory_mapping = vec![
+                        BankMapping {
+                            ty: BankMappingType::Ppu,
+                            to: 0,
+                            read: false,
+                            write: false,
+                        };
+                        0x2000 / mapper.ppu_bank_size() as usize
+                    ];
+
+                    let mut cartridge = Self {
                         file_path: file_path.as_ref().to_path_buf().into_boxed_path(),
                         header,
                         _trainer_data: trainer_data,
                         prg_data,
                         chr_data,
                         prg_ram_data: sram_data,
+                        cpu_ram_memory_mapping,
+                        cpu_rom_memory_mapping,
+                        ppu_memory_mapping,
+                        mapper_register_write_range: mapper.registers_memory_range(),
                         mapper,
 
                         is_empty: false,
-                    })
+                    };
+
+                    cartridge.apply_bank_mapping(initial_bank_mappings);
+
+                    Ok(cartridge)
                 }
             } else {
                 Err(CartridgeError::ExtensionError)
@@ -257,25 +311,34 @@ impl Cartridge {
             prg_data: Vec::new(),
             chr_data: Vec::new(),
             prg_ram_data: Vec::new(),
+
+            cpu_ram_memory_mapping: Vec::new(),
+            cpu_rom_memory_mapping: Vec::new(),
+            ppu_memory_mapping: Vec::new(),
+
             mapper: Box::new(Mapper0::new()),
+
+            mapper_register_write_range: 2..=1,
 
             is_empty: true,
         }
     }
 
-    fn get_mapper(header: &INesHeader) -> Result<Box<dyn Mapper>, CartridgeError> {
+    fn get_mapper(
+        header: &INesHeader,
+    ) -> Result<(Box<dyn Mapper>, Vec<(BankMappingType, u8, BankMapping)>), CartridgeError> {
         let mut mapper: Box<dyn Mapper> = match header.mapper_id {
             0 => Box::new(Mapper0::new()),
-            1 => Box::new(Mapper1::new()),
-            2 => Box::new(Mapper2::new()),
-            3 => Box::new(Mapper3::new()),
-            4 => Box::new(Mapper4::new()),
-            7 => Box::new(Mapper7::new()),
-            9 => Box::new(Mapper9::new()),
-            10 => Box::new(Mapper10::new()),
-            11 => Box::new(Mapper11::new()),
-            12 => Box::new(Mapper12::new()),
-            66 => Box::new(Mapper66::new()),
+            // 1 => Box::new(Mapper1::new()),
+            // 2 => Box::new(Mapper2::new()),
+            // 3 => Box::new(Mapper3::new()),
+            // 4 => Box::new(Mapper4::new()),
+            // 7 => Box::new(Mapper7::new()),
+            // 9 => Box::new(Mapper9::new()),
+            // 10 => Box::new(Mapper10::new()),
+            // 11 => Box::new(Mapper11::new()),
+            // 12 => Box::new(Mapper12::new()),
+            // 66 => Box::new(Mapper66::new()),
             _ => {
                 return Err(CartridgeError::MapperNotImplemented(header.mapper_id));
             }
@@ -284,7 +347,7 @@ impl Cartridge {
         // FIXME: fix parameters types to support INES2.0
         // should always call init in a new mapper, as it is the only way
         // they share a constructor
-        mapper.init(
+        let initial_bank_mappings = mapper.init(
             header.prg_rom_size as u8,
             header.is_chr_ram,
             if !header.is_chr_ram {
@@ -299,7 +362,66 @@ impl Cartridge {
             } as u8,
         );
 
-        Ok(mapper)
+        Ok((mapper, initial_bank_mappings))
+    }
+
+    fn apply_bank_mapping(&mut self, bank_mappings: Vec<(BankMappingType, u8, BankMapping)>) {
+        for (memory_type, index, mapping) in bank_mappings {
+            let index = index as usize;
+            match memory_type {
+                BankMappingType::CpuRam => self.cpu_ram_memory_mapping[index] = mapping,
+                BankMappingType::CpuRom => self.cpu_rom_memory_mapping[index] = mapping,
+                BankMappingType::Ppu => self.ppu_memory_mapping[index] = mapping,
+            }
+        }
+    }
+
+    fn map_address(&self, address: u16, device: Device) -> (BankMapping, usize) {
+        let (bank_mapping, offset_address) = match device {
+            Device::CPU => match address {
+                0x6000..=0x7FFF => {
+                    let address_offset = address as usize & 0x1FFF;
+                    let bank_size = self.mapper.cpu_ram_bank_size() as usize;
+                    let mapping_index = address_offset / bank_size;
+                    let offset_to_bank = address_offset & (bank_size - 1);
+                    let bank = self.cpu_ram_memory_mapping[mapping_index];
+
+                    (bank, offset_to_bank)
+                }
+                0x8000..=0xFFFF => {
+                    let address_offset = address as usize & 0x7FFF;
+                    let bank_size = self.mapper.cpu_rom_bank_size() as usize;
+                    let mapping_index = address_offset / bank_size;
+                    let offset_to_bank = address_offset & (bank_size - 1);
+                    let bank = self.cpu_rom_memory_mapping[mapping_index];
+
+                    (bank, offset_to_bank)
+                }
+                _ => unreachable!(),
+            },
+            Device::PPU => match address {
+                0x0000..=0x1FFF => {
+                    let address_offset = address as usize & 0x1FFF;
+                    let bank_size = self.mapper.ppu_bank_size() as usize;
+                    let mapping_index = address_offset / bank_size;
+                    let offset_to_bank = address_offset & (bank_size - 1);
+                    let bank = self.ppu_memory_mapping[mapping_index];
+
+                    (bank, offset_to_bank)
+                }
+                _ => unreachable!(),
+            },
+        };
+
+        let bank_size = match bank_mapping.ty {
+            BankMappingType::CpuRam => self.mapper.cpu_ram_bank_size(),
+            BankMappingType::CpuRom => self.mapper.cpu_rom_bank_size(),
+            BankMappingType::Ppu => self.mapper.ppu_bank_size(),
+        };
+
+        let new_address = (bank_mapping.to * bank_size) as usize + offset_address;
+
+        (bank_mapping, new_address)
     }
 
     fn load_sram_file<P: AsRef<Path>>(path: P, sram_size: usize) -> Result<Vec<u8>, SramError> {
@@ -347,27 +469,13 @@ impl Bus for Cartridge {
             };
         }
 
-        let result = self.mapper.map_read(address, device);
+        let (bank_mapping, new_address) = self.map_address(address, device);
 
-        if let MappingResult::Allowed(new_address) = result {
-            match device {
-                Device::CPU => match address {
-                    0x6000..=0x7FFF => *self
-                        .prg_ram_data
-                        .get(new_address)
-                        .expect("SRAM out of bounds"),
-                    0x8000..=0xFFFF => *self.prg_data.get(new_address).expect("PRG out of bounds"),
-                    _ => {
-                        unreachable!();
-                    }
-                },
-                Device::PPU => {
-                    if address <= 0x1FFF {
-                        *self.chr_data.get(new_address).expect("CHR out of bounds")
-                    } else {
-                        unreachable!();
-                    }
-                }
+        if bank_mapping.read {
+            match bank_mapping.ty {
+                BankMappingType::CpuRam => self.prg_ram_data[new_address],
+                BankMappingType::CpuRom => self.prg_data[new_address],
+                BankMappingType::Ppu => self.chr_data[new_address],
             }
         } else {
             0
@@ -378,38 +486,19 @@ impl Bus for Cartridge {
             return;
         }
 
-        // send the write signal, this might trigger bank change
-        let result = self.mapper.map_write(address, data, device);
+        if self.mapper_register_write_range.contains(&address) {
+            self.mapper.write_register(address, data);
+        } else {
+            let (bank_mapping, new_address) = self.map_address(address, device);
 
-        if let MappingResult::Allowed(new_address) = result {
-            match device {
-                Device::CPU => match address {
-                    0x6000..=0x7FFF => {
-                        *self
-                            .prg_ram_data
-                            .get_mut(new_address)
-                            .expect("SRAM out of bounds") = data;
-                    }
-                    0x8000..=0xFFFF => {
-                        *self
-                            .prg_data
-                            .get_mut(new_address)
-                            .expect("PRG out of bounds") = data;
-                    }
-                    _ => {
-                        unreachable!();
-                    }
-                },
-                Device::PPU => {
-                    if address <= 0x1FFF {
-                        *self
-                            .chr_data
-                            .get_mut(new_address)
-                            .expect("CHR out of bounds") = data;
-                    } else {
-                        unreachable!();
-                    }
-                }
+            if bank_mapping.write {
+                let result = match bank_mapping.ty {
+                    BankMappingType::CpuRam => &mut self.prg_ram_data[new_address],
+                    BankMappingType::CpuRom => &mut self.prg_data[new_address],
+                    BankMappingType::Ppu => &mut self.chr_data[new_address],
+                };
+
+                *result = data;
             }
         }
     }

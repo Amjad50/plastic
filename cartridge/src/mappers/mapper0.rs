@@ -1,77 +1,88 @@
-use crate::mapper::{Mapper, MappingResult};
-use common::Device;
+use crate::mapper::{BankMapping, BankMappingType, Mapper};
 
-pub struct Mapper0 {
-    has_32kb_prg_rom: bool,
-    is_chr_ram: bool,
-}
+pub struct Mapper0 {}
 
 impl Mapper0 {
     pub fn new() -> Self {
-        Self {
-            has_32kb_prg_rom: false,
-            is_chr_ram: false,
-        }
+        Self {}
     }
 }
 
 impl Mapper for Mapper0 {
-    fn init(&mut self, prg_count: u8, is_chr_ram: bool, _chr_count: u8, _sram_count: u8) {
+    fn init(
+        &mut self,
+        prg_count: u8,
+        is_chr_ram: bool,
+        _chr_count: u8,
+        sram_count: u8,
+    ) -> Vec<(BankMappingType, u8, BankMapping)> {
         // the only allowed options
         assert!(prg_count == 1 || prg_count == 2);
 
-        self.has_32kb_prg_rom = prg_count == 2;
-        self.is_chr_ram = is_chr_ram;
+        let has_32kb_prg_rom = prg_count == 2;
+
+        vec![
+            (
+                BankMappingType::CpuRam,
+                0,
+                BankMapping {
+                    ty: BankMappingType::CpuRam,
+                    to: 0,
+                    read: sram_count > 0,
+                    write: sram_count > 0,
+                },
+            ),
+            (
+                BankMappingType::CpuRom,
+                0,
+                BankMapping {
+                    ty: BankMappingType::CpuRom,
+                    to: 0,
+                    read: true,
+                    write: false,
+                },
+            ),
+            (
+                BankMappingType::CpuRom,
+                1,
+                BankMapping {
+                    ty: BankMappingType::CpuRom,
+                    to: if has_32kb_prg_rom { 1 } else { 0 },
+                    read: true,
+                    write: false,
+                },
+            ),
+            (
+                BankMappingType::Ppu,
+                0,
+                BankMapping {
+                    ty: BankMappingType::Ppu,
+                    to: 0,
+                    read: true,
+                    write: is_chr_ram,
+                },
+            ),
+        ]
     }
 
-    fn map_read(&self, address: u16, device: Device) -> MappingResult {
-        match device {
-            Device::CPU => {
-                match address {
-                    0x6000..=0x7FFF => MappingResult::Denied,
-                    0x8000..=0xFFFF => {
-                        // 0x7FFF is for mapping 0x8000-0xFFFF to 0x0000-0x7FFF
-                        // which is the range of the array
-                        MappingResult::Allowed(
-                            (if self.has_32kb_prg_rom {
-                                address & 0x7FFF
-                            } else {
-                                // in case of the array being half of the size (i.e.
-                                // not 32KB, then the range of the address will be only
-                                // 0x8000-0xBFFF, and 0xC000-0xFFFF will mirror the
-                                // previous range
-                                address & 0xBFFF & 0x7FFF
-                            }) as usize,
-                        )
-                    }
-                    0x4020..=0x5FFF => MappingResult::Denied,
-                    _ => unreachable!(),
-                }
-            }
-            Device::PPU => {
-                // it does not matter if its a ram or rom, same array location
-                if address < 0x2000 {
-                    // only one fixed memory
-                    MappingResult::Allowed(address as usize)
-                } else {
-                    unreachable!()
-                }
-            }
-        }
+    fn cpu_ram_bank_size(&self) -> u16 {
+        0x2000
     }
 
-    fn map_write(&mut self, address: u16, _: u8, device: Device) -> MappingResult {
-        // only for RAMs
+    fn cpu_rom_bank_size(&self) -> u16 {
+        0x4000
+    }
 
-        match device {
-            Device::CPU => MappingResult::Denied,
-            Device::PPU => {
-                if self.is_chr_ram && address <= 0x1FFF {
-                    MappingResult::Allowed(address as usize)
-                } else {
-                    MappingResult::Denied
-                }
-            }
-        }
+    fn ppu_bank_size(&self) -> u16 {
+        0x2000
+    }
+
+    fn registers_memory_range(&self) -> std::ops::RangeInclusive<u16> {
+        // empty bounds
+        2..=1
+    }
+
+    fn write_register(&mut self, _address: u16, _data: u8) -> Vec<(u8, BankMapping)> {
+        unreachable!()
     }
 }

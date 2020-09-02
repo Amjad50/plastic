@@ -1,24 +1,51 @@
-use common::{Device, MirroringMode};
+use common::MirroringMode;
+use std::ops::RangeInclusive;
 
-pub enum MappingResult {
-    Allowed(usize),
-    Denied,
+#[derive(Clone, Copy)]
+pub enum BankMappingType {
+    CpuRam,
+    CpuRom,
+    Ppu,
+}
+
+#[derive(Clone, Copy)]
+pub struct BankMapping {
+    /// type of the mapping (type is reserved, ty is being used)
+    pub ty: BankMappingType,
+    /// the bank in the whole memory to map to
+    pub to: u16,
+    /// allow read
+    pub read: bool,
+    /// allow write
+    pub write: bool,
 }
 
 pub trait Mapper {
-    fn init(&mut self, pgr_count: u8, is_chr_ram: bool, chr_count: u8, sram_count: u8);
+    /// initialize the mapper, should be called first.
+    /// Returnes the initial bank mappings, should include ALL banks
+    fn init(
+        &mut self,
+        pgr_count: u8,
+        is_chr_ram: bool,
+        chr_count: u8,
+        sram_count: u8,
+    ) -> Vec<(BankMappingType, u8, BankMapping)>;
 
-    /// takes `address` to map from and `device`, then return `result`
-    /// if `result` is `MappingResult::Allowed`, then the `real_address` is
-    /// the `usize` value, but if `result` is `MappingResult::Denied`, then there
-    /// is no address to read from
-    fn map_read(&self, address: u16, device: Device) -> MappingResult;
+    /// return the bank size in (bytes units) that should be used
+    fn cpu_ram_bank_size(&self) -> u16;
 
-    /// takes `address` to map from and `device`, then return `result`
-    /// if `result` is `MappingResult::Allowed`, then the `real_address` is
-    /// the `usize` value, but if `result` is `MappingResult::Denied`, then there
-    /// is no address to write to
-    fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult;
+    /// return the bank size in (bytes units) that should be used
+    fn cpu_rom_bank_size(&self) -> u16;
+
+    /// return the bank size (in bytes units) that should be used
+    fn ppu_bank_size(&self) -> u16;
+
+    /// the range of the CPU which are registers of this mapper
+    fn registers_memory_range(&self) -> RangeInclusive<u16>;
+
+    /// write to the register and get where it changed, returns a set of banks
+    /// that should be changed
+    fn write_register(&mut self, address: u16, data: u8) -> Vec<(u8, BankMapping)>;
 
     fn is_hardwired_mirrored(&self) -> bool {
         true
