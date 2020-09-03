@@ -150,6 +150,29 @@ impl INesHeader {
             Err(CartridgeError::HeaderError)
         }
     }
+
+    /// returns the number of banks
+    fn get_active_chr_data_size(&self, chr_bank_size: u16) -> u16 {
+        if !self.is_chr_ram {
+            (self.chr_rom_size as u32 * 0x2000 / chr_bank_size as u32) as u16
+        } else {
+            (self.chr_wram_size / chr_bank_size as u32) as u16
+        }
+    }
+
+    /// returns the number of banks
+    fn get_active_prg_ram_size(&self, prg_ram_bank_size: u16) -> u16 {
+        ((if self.has_prg_ram_battery {
+            self.prg_sram_size
+        } else {
+            self.prg_wram_size
+        }) / prg_ram_bank_size as u32) as u16
+    }
+
+    /// returns the number of banks
+    fn get_active_prg_rom_size(&self, prg_rom_bank_size: u16) -> u16 {
+        (self.prg_rom_size as u32 * 0x4000 / prg_rom_bank_size as u32) as u16
+    }
 }
 
 pub struct Cartridge {
@@ -329,7 +352,7 @@ impl Cartridge {
     ) -> Result<(Box<dyn Mapper>, Vec<(BankMappingType, u8, BankMapping)>), CartridgeError> {
         let mut mapper: Box<dyn Mapper> = match header.mapper_id {
             0 => Box::new(Mapper0::new()),
-            // 1 => Box::new(Mapper1::new()),
+            1 => Box::new(Mapper1::new()),
             // 2 => Box::new(Mapper2::new()),
             // 3 => Box::new(Mapper3::new()),
             // 4 => Box::new(Mapper4::new()),
@@ -348,18 +371,10 @@ impl Cartridge {
         // should always call init in a new mapper, as it is the only way
         // they share a constructor
         let initial_bank_mappings = mapper.init(
-            header.prg_rom_size as u8,
+            header.get_active_prg_rom_size(mapper.cpu_rom_bank_size()),
             header.is_chr_ram,
-            if !header.is_chr_ram {
-                header.chr_rom_size as u8
-            } else {
-                (header.chr_wram_size / 0x2000) as u8
-            },
-            if header.has_prg_ram_battery {
-                header.prg_sram_size / 0x2000
-            } else {
-                header.prg_wram_size / 0x2000
-            } as u8,
+            header.get_active_chr_data_size(mapper.ppu_bank_size()),
+            header.get_active_prg_ram_size(mapper.cpu_ram_bank_size()),
         );
 
         Ok((mapper, initial_bank_mappings))
@@ -397,6 +412,19 @@ impl Cartridge {
 
                     (bank, offset_to_bank)
                 }
+                0x4200..=0x5FFF => {
+                    // not used now
+                    (
+                        // just for the return value
+                        BankMapping {
+                            ty: BankMappingType::CpuRam,
+                            to: 0,
+                            read: false,
+                            write: false,
+                        },
+                        0,
+                    )
+                }
                 _ => unreachable!(),
             },
             Device::PPU => match address {
@@ -413,13 +441,30 @@ impl Cartridge {
             },
         };
 
-        let bank_size = match bank_mapping.ty {
-            BankMappingType::CpuRam => self.mapper.cpu_ram_bank_size(),
-            BankMappingType::CpuRom => self.mapper.cpu_rom_bank_size(),
-            BankMappingType::Ppu => self.mapper.ppu_bank_size(),
+        let (bank_count, bank_size) = match bank_mapping.ty {
+            BankMappingType::CpuRam => (
+                self.header
+                    .get_active_prg_ram_size(self.mapper.cpu_ram_bank_size()),
+                self.mapper.cpu_ram_bank_size(),
+            ),
+            BankMappingType::CpuRom => (
+                self.header
+                    .get_active_prg_rom_size(self.mapper.cpu_rom_bank_size()),
+                self.mapper.cpu_rom_bank_size(),
+            ),
+            BankMappingType::Ppu => (
+                self.header
+                    .get_active_chr_data_size(self.mapper.ppu_bank_size()),
+                self.mapper.ppu_bank_size(),
+            ),
         };
 
-        let new_address = (bank_mapping.to * bank_size) as usize + offset_address;
+        let bank = if bank_count != 0 {
+            bank_mapping.to as usize % bank_count as usize
+        } else {
+            0
+        };
+        let new_address = (bank * bank_size as usize) + offset_address;
 
         (bank_mapping, new_address)
     }
@@ -487,7 +532,8 @@ impl Bus for Cartridge {
         }
 
         if self.mapper_register_write_range.contains(&address) {
-            self.mapper.write_register(address, data);
+            let mapping_result = self.mapper.write_register(address, data);
+            self.apply_bank_mapping(mapping_result);
         } else {
             let (bank_mapping, new_address) = self.map_address(address, device);
 

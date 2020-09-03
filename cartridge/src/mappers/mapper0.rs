@@ -11,10 +11,10 @@ impl Mapper0 {
 impl Mapper for Mapper0 {
     fn init(
         &mut self,
-        prg_count: u8,
+        prg_count: u16,
         is_chr_ram: bool,
-        _chr_count: u8,
-        sram_count: u8,
+        _chr_count: u16,
+        sram_count: u16,
     ) -> Vec<(BankMappingType, u8, BankMapping)> {
         // the only allowed options
         assert!(prg_count == 1 || prg_count == 2);
@@ -82,7 +82,11 @@ impl Mapper for Mapper0 {
         2..=1
     }
 
-    fn write_register(&mut self, _address: u16, _data: u8) -> Vec<(u8, BankMapping)> {
+    fn write_register(
+        &mut self,
+        _address: u16,
+        _data: u8,
+    ) -> Vec<(BankMappingType, u8, BankMapping)> {
         unreachable!()
     }
 }

@@ -25,10 +25,10 @@ pub trait Mapper {
     /// Returnes the initial bank mappings, should include ALL banks
     fn init(
         &mut self,
-        pgr_count: u8,
+        pgr_count: u16,
         is_chr_ram: bool,
-        chr_count: u8,
-        sram_count: u8,
+        chr_count: u16,
+        sram_count: u16,
     ) -> Vec<(BankMappingType, u8, BankMapping)>;
 
     /// return the bank size in (bytes units) that should be used
@@ -45,7 +45,8 @@ pub trait Mapper {
 
     /// write to the register and get where it changed, returns a set of banks
     /// that should be changed
-    fn write_register(&mut self, address: u16, data: u8) -> Vec<(u8, BankMapping)>;
+    fn write_register(&mut self, address: u16, data: u8)
+        -> Vec<(BankMappingType, u8, BankMapping)>;
 
     fn is_hardwired_mirrored(&self) -> bool {
         true

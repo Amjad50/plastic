@@ -1,5 +1,5 @@
-use crate::mapper::{Mapper, MappingResult};
-use common::{Device, MirroringMode};
+use crate::mapper::{BankMapping, BankMappingType, Mapper};
+use common::MirroringMode;
 
 pub struct Mapper1 {
     writing_shift_register: u8,
@@ -163,184 +163,198 @@ impl Mapper1 {
         self.prg_ram_enable && snrom_prg_ram_enabled
     }
 
-    fn map_ppu(&self, address: u16) -> MappingResult {
-        let mut bank = if self.is_chr_8kb_mode() {
-            self.chr_0_bank & 0b11110
+    fn get_ppu_bank(&self, is_low_bank: bool) -> u16 {
+        (if self.is_chr_8kb_mode() {
+            // if its not the low bank, then take the next bank
+            (self.chr_0_bank & 0b11110) + !is_low_bank as u8
         } else {
-            if address <= 0x0FFF {
+            if is_low_bank {
                 self.chr_0_bank
-            } else if address >= 0x1000 && address <= 0x1FFF {
-                self.chr_1_bank
             } else {
-                unreachable!()
+                self.chr_1_bank
             }
-        } as usize;
-
-        bank %= self.chr_count as usize;
-
-        let start_of_bank = 0x1000 * bank;
-
-        let mask = if self.is_chr_8kb_mode() {
-            0x1FFF
-        } else {
-            0xFFF
-        };
-
-        // add the offset
-        MappingResult::Allowed(start_of_bank + (address & mask) as usize)
+        }) as u16
     }
 
-    fn map_prg_ram(&self, address: u16) -> MappingResult {
-        if self.is_prg_ram_enabled() && self.prg_ram_count > 0 {
-            let bank = if self.prg_ram_count > 1 {
-                if self.is_chr_8kb_mode() {
-                    (self.chr_0_bank >> 2) & 0x3
+    fn get_prg_rom_bank(&self, is_low_bank: bool) -> u16 {
+        let mut bank = if self.is_prg_32kb_mode() {
+            // if its not a low bank, then add one to it to get the next bank
+            (self.get_prg_bank() & 0b11110) + !is_low_bank as u8
+        } else {
+            if is_low_bank {
+                if self.is_first_prg_chunk_fixed() {
+                    0
                 } else {
-                    (self.chr_1_bank >> 2) & 0x3
+                    self.get_prg_bank()
                 }
             } else {
-                0
-            } as usize;
-            MappingResult::Allowed(bank * 0x2000 + (address & 0x1FFF) as usize)
-        } else {
-            MappingResult::Denied
+                if self.is_first_prg_chunk_fixed() {
+                    self.get_prg_bank()
+                } else {
+                    // last bank
+                    self.prg_count - 1
+                }
+            }
+        } as u16;
+
+        if self.prg_count > 16 && self.chr_count == 2 {
+            let prg_high_bit_512_mode = if self.is_chr_8kb_mode() {
+                self.chr_0_bank & 0x10
+            } else {
+                self.chr_1_bank & 0x10
+            } as u16;
+
+            bank |= prg_high_bit_512_mode;
         }
+
+        bank
+    }
+
+    fn get_prg_ram_bank(&self) -> u16 {
+        (if self.prg_ram_count > 1 {
+            if self.is_chr_8kb_mode() {
+                (self.chr_0_bank >> 2) & 0x3
+            } else {
+                (self.chr_1_bank >> 2) & 0x3
+            }
+        } else {
+            0
+        }) as u16
+    }
+
+    fn get_mappings(&self) -> Vec<(BankMappingType, u8, BankMapping)> {
+        let is_prg_ram_enabled = self.is_prg_ram_enabled() && self.prg_ram_count > 0;
+        vec![
+            (
+                BankMappingType::CpuRam,
+                0,
+                BankMapping {
+                    ty: BankMappingType::CpuRam,
+                    to: self.get_prg_ram_bank(),
+                    read: is_prg_ram_enabled,
+                    write: is_prg_ram_enabled,
+                },
+            ),
+            (
+                BankMappingType::CpuRom,
+                0,
+                BankMapping {
+                    ty: BankMappingType::CpuRom,
+                    to: self.get_prg_rom_bank(true),
+                    read: true,
+                    write: false,
+                },
+            ),
+            (
+                BankMappingType::CpuRom,
+                1,
+                BankMapping {
+                    ty: BankMappingType::CpuRom,
+                    to: self.get_prg_rom_bank(false),
+                    read: true,
+                    write: false,
+                },
+            ),
+            (
+                BankMappingType::Ppu,
+                0,
+                BankMapping {
+                    ty: BankMappingType::Ppu,
+                    to: self.get_ppu_bank(true),
+                    read: true,
+                    write: self.is_chr_ram,
+                },
+            ),
+            (
+                BankMappingType::Ppu,
+                1,
+                BankMapping {
+                    ty: BankMappingType::Ppu,
+                    to: self.get_ppu_bank(false),
+                    read: true,
+                    write: self.is_chr_ram,
+                },
+            ),
+        ]
     }
 }
 
 impl Mapper for Mapper1 {
-    fn init(&mut self, prg_count: u8, is_chr_ram: bool, chr_count: u8, sram_count: u8) {
-        self.prg_count = prg_count;
-        self.chr_count = chr_count * 2; // since this passed as the number of 8kb banks
+    fn init(
+        &mut self,
+        prg_count: u16,
+        is_chr_ram: bool,
+        chr_count: u16,
+        sram_count: u16,
+    ) -> Vec<(BankMappingType, u8, BankMapping)> {
+        self.prg_count = prg_count as u8;
+        self.chr_count = chr_count as u8;
         self.is_chr_ram = is_chr_ram;
 
-        self.prg_bank = prg_count - 1; // power-up, should be all set?
+        self.prg_bank = prg_count as u8 - 1; // power-up, should be all set?
         self.control_register = 0b11100; // power-up state
 
-        self.prg_ram_count = sram_count;
+        self.prg_ram_count = sram_count as u8;
 
         self.reset_shift_register();
+
+        self.get_mappings()
     }
 
-    fn map_read(&self, address: u16, device: Device) -> MappingResult {
-        match device {
-            Device::CPU => {
+    fn write_register(
+        &mut self,
+        address: u16,
+        data: u8,
+    ) -> Vec<(BankMappingType, u8, BankMapping)> {
+        let mut ret_val = Vec::new();
+
+        if data & 0x80 != 0 {
+            self.reset_shift_register();
+        } else {
+            let should_save = self.writing_shift_register & 1 != 0;
+            // shift
+            self.writing_shift_register >>= 1;
+            self.writing_shift_register |= (data & 1) << 4;
+
+            // reached the end, then save
+            if should_save {
+                let result = self.writing_shift_register & 0b11111;
                 match address {
-                    0x6000..=0x7FFF => self.map_prg_ram(address),
-                    0x8000..=0xFFFF => {
-                        let mut bank = if self.is_prg_32kb_mode() {
-                            // ignore last bit
-                            self.get_prg_bank() & 0b11110
-                        } else {
-                            if address >= 0x8000 && address <= 0xBFFF {
-                                if self.is_first_prg_chunk_fixed() {
-                                    0
-                                } else {
-                                    self.get_prg_bank()
-                                }
-                            } else if address >= 0xC000 {
-                                if self.is_first_prg_chunk_fixed() {
-                                    self.get_prg_bank()
-                                } else {
-                                    // last bank
-                                    self.prg_count - 1
-                                }
-                            } else {
-                                unreachable!();
-                            }
-                        } as usize;
-
-                        if self.prg_count > 16 && self.chr_count == 2 {
-                            let prg_high_bit_512_mode = if self.is_chr_8kb_mode() {
-                                self.chr_0_bank & 0x10
-                            } else {
-                                self.chr_1_bank & 0x10
-                            } as usize;
-
-                            bank |= prg_high_bit_512_mode;
-                        }
-
-                        bank %= self.prg_count as usize;
-
-                        let start_of_bank = 0x4000 * bank;
-
-                        let last_bank = 0x4000 * (self.prg_count - 1) as usize;
-
-                        // since banks can be odd in number, we don't want to go out
-                        // of bounds, but this solution does mirroring, in case of
-                        // a possible out of bounds, but not sure what is the correct
-                        // solution
-                        let mask = if self.is_prg_32kb_mode() && start_of_bank != last_bank {
-                            0x7FFF
-                        } else {
-                            0x3FFF
-                        };
-
-                        // add the offset
-                        MappingResult::Allowed(start_of_bank + (address & mask) as usize)
+                    0x8000..=0x9FFF => self.control_register = result,
+                    0xA000..=0xBFFF => self.chr_0_bank = result,
+                    0xC000..=0xDFFF => self.chr_1_bank = result,
+                    0xE000..=0xFFFF => {
+                        self.prg_bank = result & 0xF;
+                        self.prg_ram_enable = result & 0x10 == 0;
                     }
-                    0x4020..=0x5FFF => MappingResult::Denied,
-                    _ => unreachable!(),
+                    _ => {
+                        unreachable!();
+                    }
                 }
-            }
-            Device::PPU => {
-                if address < 0x2000 {
-                    self.map_ppu(address)
-                } else {
-                    unreachable!()
-                }
+
+                ret_val.extend(self.get_mappings());
+
+                self.reset_shift_register();
             }
         }
+
+        ret_val
     }
 
-    fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult {
-        match device {
-            Device::CPU => {
-                match address {
-                    0x6000..=0x7FFF => self.map_prg_ram(address),
-                    0x8000..=0xFFFF => {
-                        if data & 0x80 != 0 {
-                            self.reset_shift_register();
-                        } else {
-                            let should_save = self.writing_shift_register & 1 != 0;
-                            // shift
-                            self.writing_shift_register >>= 1;
-                            self.writing_shift_register |= (data & 1) << 4;
+    fn cpu_ram_bank_size(&self) -> u16 {
+        0x2000
+    }
 
-                            // reached the end, then save
-                            if should_save {
-                                let result = self.writing_shift_register & 0b11111;
-                                match address {
-                                    0x8000..=0x9FFF => self.control_register = result,
-                                    0xA000..=0xBFFF => self.chr_0_bank = result,
-                                    0xC000..=0xDFFF => self.chr_1_bank = result,
-                                    0xE000..=0xFFFF => {
-                                        self.prg_bank = result & 0xF;
-                                        self.prg_ram_enable = result & 0x10 == 0;
-                                    }
-                                    _ => {
-                                        unreachable!();
-                                    }
-                                }
+    fn cpu_rom_bank_size(&self) -> u16 {
+        0x4000
+    }
 
-                                self.reset_shift_register();
-                            }
-                        }
-                        MappingResult::Denied
-                    }
-                    0x4020..=0x5FFF => MappingResult::Denied,
-                    _ => unreachable!(),
-                }
-            }
-            Device::PPU => {
-                // CHR RAM
-                if self.is_chr_ram && address <= 0x1FFF {
-                    self.map_ppu(address)
-                } else {
-                    MappingResult::Denied
-                }
-            }
-        }
+    fn ppu_bank_size(&self) -> u16 {
+        0x1000
+    }
+
+    fn registers_memory_range(&self) -> std::ops::RangeInclusive<u16> {
+        0x8000..=0xFFFF
     }
 
     fn is_hardwired_mirrored(&self) -> bool {
