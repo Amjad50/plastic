@@ -392,11 +392,15 @@ impl Cartridge {
     }
 
     fn map_address(&self, address: u16, device: Device) -> (BankMapping, usize) {
+        let cpu_ram_bank_size = self.mapper.cpu_ram_bank_size();
+        let cpu_rom_bank_size = self.mapper.cpu_rom_bank_size();
+        let ppu_bank_size = self.mapper.ppu_bank_size();
+
         let (bank_mapping, offset_address) = match device {
             Device::CPU => match address {
                 0x6000..=0x7FFF => {
                     let address_offset = address as usize & 0x1FFF;
-                    let bank_size = self.mapper.cpu_ram_bank_size() as usize;
+                    let bank_size = cpu_ram_bank_size as usize;
                     let mapping_index = address_offset / bank_size;
                     let offset_to_bank = address_offset & (bank_size - 1);
                     let bank = self.cpu_ram_memory_mapping[mapping_index];
@@ -405,7 +409,7 @@ impl Cartridge {
                 }
                 0x8000..=0xFFFF => {
                     let address_offset = address as usize & 0x7FFF;
-                    let bank_size = self.mapper.cpu_rom_bank_size() as usize;
+                    let bank_size = cpu_rom_bank_size as usize;
                     let mapping_index = address_offset / bank_size;
                     let offset_to_bank = address_offset & (bank_size - 1);
                     let bank = self.cpu_rom_memory_mapping[mapping_index];
@@ -430,7 +434,7 @@ impl Cartridge {
             Device::PPU => match address {
                 0x0000..=0x1FFF => {
                     let address_offset = address as usize & 0x1FFF;
-                    let bank_size = self.mapper.ppu_bank_size() as usize;
+                    let bank_size = ppu_bank_size as usize;
                     let mapping_index = address_offset / bank_size;
                     let offset_to_bank = address_offset & (bank_size - 1);
                     let bank = self.ppu_memory_mapping[mapping_index];
@@ -443,19 +447,16 @@ impl Cartridge {
 
         let (bank_count, bank_size) = match bank_mapping.ty {
             BankMappingType::CpuRam => (
-                self.header
-                    .get_active_prg_ram_size(self.mapper.cpu_ram_bank_size()),
-                self.mapper.cpu_ram_bank_size(),
+                self.header.get_active_prg_ram_size(cpu_ram_bank_size),
+                cpu_ram_bank_size,
             ),
             BankMappingType::CpuRom => (
-                self.header
-                    .get_active_prg_rom_size(self.mapper.cpu_rom_bank_size()),
-                self.mapper.cpu_rom_bank_size(),
+                self.header.get_active_prg_rom_size(cpu_rom_bank_size),
+                cpu_rom_bank_size,
             ),
             BankMappingType::Ppu => (
-                self.header
-                    .get_active_chr_data_size(self.mapper.ppu_bank_size()),
-                self.mapper.ppu_bank_size(),
+                self.header.get_active_chr_data_size(ppu_bank_size),
+                ppu_bank_size,
             ),
         };
 
