@@ -57,11 +57,13 @@ impl EnvelopeGenerator {
             if self.divider_counter == 0 {
                 self.divider_counter = self.divider_reload_value;
 
-                self.decay_level = if self.loop_flag {
-                    15
-                } else {
-                    self.decay_level.saturating_sub(1)
-                };
+                if self.decay_level > 0 {
+                    // SAFETY: it cannot wrap around as it only subtracts when
+                    // its bigger than 0
+                    self.decay_level -= 1;
+                } else if self.loop_flag {
+                    self.decay_level = 15;
+                }
             } else {
                 self.divider_counter = self.divider_counter.saturating_sub(1);
             }
