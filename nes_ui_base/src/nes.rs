@@ -276,7 +276,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
             }
 
             if self.paused {
-                std::thread::sleep(std::time::Duration::from_secs(1));
+                std::thread::sleep(std::time::Duration::from_millis(50));
                 continue;
             }
 
