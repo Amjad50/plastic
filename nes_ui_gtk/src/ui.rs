@@ -40,7 +40,7 @@ impl UiProvider for GtkProvider {
     ) {
         let app = Application::new(
             Some("amjad50.plastic.nes_gtk"),
-            gio::ApplicationFlags::FLAGS_NONE,
+            gio::ApplicationFlags::NON_UNIQUE,
         )
         .expect("Application could not be initialized");
 
