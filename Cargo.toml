@@ -14,6 +14,3 @@ members = [
     "nes_ui_base",
     "ppu2c02",
 ]
-
-[profile.release]
-lto = "thin" 
