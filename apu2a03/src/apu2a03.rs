@@ -18,6 +18,7 @@ pub struct APU2A03 {
 
     buffered_channel: Arc<Mutex<BufferedChannel>>,
 
+    is_4_step_squence_mode_hold_value: bool,
     is_4_step_squence_mode: bool,
     interrupt_inhibit_flag: bool,
 
@@ -52,6 +53,7 @@ impl APU2A03 {
 
             buffered_channel: buffered_channel.clone(),
 
+            is_4_step_squence_mode_hold_value: false,
             is_4_step_squence_mode: false,
             interrupt_inhibit_flag: false,
 
@@ -359,7 +361,7 @@ impl APU2A03 {
                 self.dmc.clear_interrupt_flag();
             }
             Register::FrameCounter => {
-                self.is_4_step_squence_mode = data & 0x80 == 0;
+                self.is_4_step_squence_mode_hold_value = data & 0x80 == 0;
                 self.interrupt_inhibit_flag = data & 0x40 != 0;
 
                 if self.interrupt_inhibit_flag {
@@ -367,14 +369,7 @@ impl APU2A03 {
                     self.request_interrupt_flag_change.set(true);
                 }
 
-                // clock immediately
-                if data & 0x80 != 0 {
-                    self.generate_half_frame_clock();
-                    self.generate_quarter_frame_clock();
-                } else {
-                    // reset(side effect)
-                    self.wait_reset = 2; // after 4 CPU clocks
-                }
+                self.wait_reset = if self.cycle % 2 == 0 { 4 } else { 3 };
             }
         }
     }
@@ -407,6 +402,13 @@ impl APU2A03 {
         self.noise.length_counter_mut().decrement();
     }
 
+    fn update_irq_pin(&mut self) {
+        if !self.interrupt_inhibit_flag {
+            self.interrupt_flag.set(true);
+            self.request_interrupt_flag_change.set(true);
+        }
+    }
+
     pub fn update_apu_freq(&mut self, apu_freq: f64) {
         self.apu_freq = apu_freq;
     }
@@ -433,6 +435,8 @@ impl APU2A03 {
         pulse_out + tnd_out
     }
 
+    /// clock the APU **at** CPU clock rate, the clocks are handled correctly
+    /// as it should be
     pub fn clock(&mut self) {
         if self.wait_reset > 0 {
             self.wait_reset -= 1;
@@ -440,7 +444,8 @@ impl APU2A03 {
             self.cycle = 0;
             self.wait_reset = -1;
 
-            // mode bit is set
+            self.is_4_step_squence_mode = self.is_4_step_squence_mode_hold_value;
+
             if !self.is_4_step_squence_mode {
                 self.generate_quarter_frame_clock();
                 self.generate_half_frame_clock();
@@ -465,7 +470,9 @@ impl APU2A03 {
             }
         }
 
-        self.sample_counter += 1.0;
+        // since, this is running in CPU clock, add half of the time to match
+        // the APU clock
+        self.sample_counter += 0.5;
         if self.sample_counter >= samples_every_n_apu_clock {
             let output = self.get_mixer_output();
 
@@ -474,39 +481,49 @@ impl APU2A03 {
             self.sample_counter -= samples_every_n_apu_clock;
         }
 
-        self.square_pulse_1.timer_clock();
-        self.square_pulse_2.timer_clock();
+        // clocked on every CPU cycle
         self.triangle.timer_clock();
-        self.triangle.timer_clock();
-        self.noise.timer_clock();
-        self.dmc.timer_clock();
+
+        if self.cycle % 2 == 0 {
+            self.square_pulse_1.timer_clock();
+            self.square_pulse_2.timer_clock();
+            self.noise.timer_clock();
+            self.dmc.timer_clock();
+        }
 
         self.cycle += 1;
 
+        // this is clocked in every CPU cycle, so the numbers are multiplied by 2
         match self.cycle {
-            3729 => {
+            7455 => {
                 self.generate_quarter_frame_clock();
             }
-            7457 => {
+            14913 => {
                 self.generate_quarter_frame_clock();
                 self.generate_half_frame_clock();
             }
-            11186 => {
+            22371 => {
                 self.generate_quarter_frame_clock();
             }
-            14915 if self.is_4_step_squence_mode => {
+            29828 if self.is_4_step_squence_mode => {
+                self.update_irq_pin();
+            }
+            29829 if self.is_4_step_squence_mode => {
                 self.generate_quarter_frame_clock();
                 self.generate_half_frame_clock();
 
-                if !self.interrupt_inhibit_flag {
-                    self.interrupt_flag.set(true);
-                    self.request_interrupt_flag_change.set(true);
-                }
+                self.update_irq_pin();
+            }
+            29830 if self.is_4_step_squence_mode => {
+                self.update_irq_pin();
+
                 self.cycle = 0;
             }
-            18641 if !self.is_4_step_squence_mode => {
+            37281 if !self.is_4_step_squence_mode => {
                 self.generate_quarter_frame_clock();
                 self.generate_half_frame_clock();
+            }
+            37282 if !self.is_4_step_squence_mode => {
                 self.cycle = 0;
             }
             _ => {

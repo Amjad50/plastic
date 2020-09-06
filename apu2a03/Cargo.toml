@@ -17,3 +17,7 @@ default-features = false
 features = []
 
 
+# for testing only
+[dev-dependencies]
+nes_tester = { path = "../nes_tester" }
+

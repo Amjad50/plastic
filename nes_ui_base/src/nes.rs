@@ -281,33 +281,25 @@ impl<P: UiProvider + Send + 'static> NES<P> {
             }
 
             for _ in 0..N {
-                self.cpu.run_next();
-                {
-                    let mut ppu = self.ppu.borrow_mut();
-                    ppu.clock();
-                    ppu.clock();
-                    ppu.clock();
-                }
-
-                self.cpu.run_next();
-                {
-                    let mut ppu = self.ppu.borrow_mut();
-                    ppu.clock();
-                    ppu.clock();
-                    ppu.clock();
-                }
-
                 self.apu.borrow_mut().clock();
+
+                self.cpu.run_next();
+                {
+                    let mut ppu = self.ppu.borrow_mut();
+                    ppu.clock();
+                    ppu.clock();
+                    ppu.clock();
+                }
             }
 
             if let Some(d) =
-                std::time::Duration::from_nanos((CPU_PER_CYCLE_NANOS * 2. * N as f64) as u64)
+                std::time::Duration::from_nanos((CPU_PER_CYCLE_NANOS * N as f64) as u64)
                     .checked_sub(last.elapsed())
             {
                 std::thread::sleep(d);
             }
 
-            let apu_freq = N as f64 / last.elapsed().as_secs_f64();
+            let apu_freq = N as f64 / 2. / last.elapsed().as_secs_f64();
 
             average_counter += 1.;
             average_apu_freq = average_apu_freq + ((apu_freq - average_apu_freq) / average_counter);

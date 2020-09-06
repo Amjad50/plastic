@@ -160,8 +160,6 @@ pub struct NES {
     cpubus: Rc<RefCell<CPUBus>>,
     tv_image: Arc<Mutex<Vec<u8>>>,
     apu: Rc<RefCell<APU2A03>>,
-
-    is_apu_clock: bool,
 }
 
 impl NES {
@@ -195,8 +193,6 @@ impl NES {
             cpubus: cpubus.clone(),
             tv_image,
             apu,
-
-            is_apu_clock: false,
         })
     }
 
@@ -213,6 +209,8 @@ impl NES {
     }
 
     pub fn clock(&mut self) -> CPURunState {
+        self.apu.borrow_mut().clock();
+
         let return_value = self.cpu.run_next();
 
         {
@@ -222,11 +220,6 @@ impl NES {
             ppu.clock();
             ppu.clock();
         }
-
-        if self.is_apu_clock {
-            self.apu.borrow_mut().clock();
-        }
-        self.is_apu_clock = !self.is_apu_clock;
 
         return_value
     }
