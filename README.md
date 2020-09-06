@@ -8,6 +8,47 @@
 
 This is a personal project for fun and to experience emulating hardware and connecting them together.
 
+- [plastic](#plastic)
+    - [Building and installation](#building-and-installation)
+      - [Pre-built](#pre-built)
+      - [Building](#building)
+    - [Components](#components)
+    - [Components graph](#components-graph)
+    - [Interfaces](#interfaces)
+      - [SFML](#sfml)
+      - [GTK](#gtk)
+      - [Native Windows GUI](#native-windows-gui)
+      - [TUI](#tui)
+    - [Controls](#controls)
+      - [Keyboard](#keyboard)
+      - [Gamepad](#gamepad)
+    - [License](#license)
+    - [References](#references)
+
+### Building and installation
+
+#### Pre-built
+There are pre-built binaries in the [releases](https://github.com/Amjad50/plastic/releases/latest) tab,
+Plastic comes in different *UI*s, some work in Windows and Linux and some are for one of them,
+check [Interfaces](#interfaces) for more details.
+
+#### Building
+If you want to experience the latest development version, you can build `Plastic` yourself.
+You would need [Rust][Rust] itself and any UI dependency for the UI you want to use if needed.
+For example:
+
+Recommended UI for linux is [GTK](#gtk):
+```
+cargo run --release -p nes_ui_gtk
+```
+
+Recommended UI for windows is [Native_Windows](#native-windows-gui):
+```
+cargo run --release -p nes_ui_native_windows
+```
+
+> Note: `--release` should be used as running the emulator in `debug` mode would slow it down very much that it would make games unplayable.
+
 ### Components
 - [x] 6502 CPU, all official and unofficial instructions with accurate timing (without BCD mode).
 - [x] Picture Processing Unit, almost accurate with some small timing issues that would not effect most games.
@@ -72,6 +113,7 @@ different purposes:
 [SFML][SFML] is a game development UI library, it has a good and
 easy to use API and is the most performing UI in the list.
 
+<!-- omit in toc -->
 ##### Advantages
 1. Designed for Canvas and raw drawing, which makes it faster.
 2. Has support for gamepad (only tested with PS4).
@@ -89,6 +131,7 @@ I haven't added anything specific to GTK yet. But it has almost the
 same performance as SFML, so hopefully there will not be much
 different in performance even after adding the debugger.
 
+<!-- omit in toc -->
 ##### Advantages
 1. Ability to add buttons and menus which enable easier integration
    for debuggers and anything similar.
@@ -96,6 +139,7 @@ different in performance even after adding the debugger.
    file into the app.
 3. Can run without specifying a ROM from the command line.
 4. Ability to pause and resume emulation through `<ESC>` key and from the menues.
+<!-- omit in toc -->
 ##### Disadvantages
 1. Does not offer gamepad support, but it can be added through
    other external libraries.
@@ -105,9 +149,11 @@ different in performance even after adding the debugger.
 Has the same UI and usages as the [GTK](#gtk) version, but is targetted for windows
 as GTK require additional libraries to work for windows.
 
+<!-- omit in toc -->
 ##### Advantages (in addition to GTK)
 1. Run on the native windows APIs, which is fast and does not need any additional
    libraries.
+<!-- omit in toc -->
 ##### Disadvantages
 1. Does not offer gamepad support, but it can be added through
    other external libraries.
