@@ -229,7 +229,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
         let mut last = std::time::Instant::now();
         const CPU_FREQ: f64 = 1.789773 * 1E6;
-        const N: usize = 2000; // number of CPU cycles per loop, lower is smoother
+        const N: usize = 29780; // number of CPU cycles per loop, one full frame
         const CPU_PER_CYCLE_NANOS: f64 = 1E9 / CPU_FREQ;
 
         let mut average_apu_freq = CPU_FREQ / 2.;
