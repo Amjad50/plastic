@@ -4,6 +4,7 @@ use nes_ui_base::{
     nes_display::Color as NESColor,
     UiEvent, UiProvider,
 };
+use std::cell::Cell;
 use std::sync::{atomic::AtomicBool, atomic::Ordering, mpsc::Sender, Arc, Mutex};
 
 use native_windows_derive as nwd;
@@ -84,6 +85,10 @@ pub struct ProviderApp {
     ctrl_state: Arc<Mutex<StandardNESControllerState>>,
 
     paused: Arc<AtomicBool>,
+
+    /// flag to indicate that the windows has been resized and we should clear
+    /// the canvas, Fixes flickering
+    need_clear_rect: Cell<bool>,
 }
 
 impl ProviderApp {
@@ -108,6 +113,8 @@ impl ProviderApp {
             image,
             ctrl_state,
             paused: Arc::new(AtomicBool::new(false)),
+
+            need_clear_rect: Cell::new(true),
         }
     }
 }
@@ -115,6 +122,9 @@ impl ProviderApp {
 impl ProviderApp {
     fn window_resize(&self, ctrl: &Window) {
         self.canvas.set_size(ctrl.size().0, ctrl.size().1);
+
+        // mark as dirty, and need to clear the canvas
+        self.need_clear_rect.set(true);
     }
 
     fn key_pressed(&self, data: &EventData) {
@@ -221,8 +231,12 @@ impl ProviderApp {
 
         // All/Most functions from the winapi are unsafe, so ya
         unsafe {
-            let brush: *mut _ = &mut CreateSolidBrush(RGB(0, 0, 0));
-            FillRect(hdc, rc, brush as _);
+            // clear only if needed, clearing every time produce flickering effect
+            if self.need_clear_rect.get() {
+                let brush: *mut _ = &mut CreateSolidBrush(RGB(0, 0, 0));
+                FillRect(hdc, rc, brush as _);
+                self.need_clear_rect.set(false);
+            }
 
             let bitmap = CreateBitmap(TV_WIDTH as i32, TV_HEIGHT as i32, 1, 32, data as _);
 
