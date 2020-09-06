@@ -220,20 +220,31 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         });
 
         self.cpu.reset();
-        self.apu.borrow_mut().update_apu_freq(1.7 * 1E6 / 2.);
-
-        if !self.paused {
-            // Run the sound thread
-            self.apu.borrow().play();
-        }
 
         let mut last = std::time::Instant::now();
         const CPU_FREQ: f64 = 1.789773 * 1E6;
         const N: usize = 29780; // number of CPU cycles per loop, one full frame
         const CPU_PER_CYCLE_NANOS: f64 = 1E9 / CPU_FREQ;
 
-        let mut average_apu_freq = CPU_FREQ / 2.;
-        let mut average_counter = 1.;
+        let mut average_apu_freq;
+        let mut average_counter;
+
+        // just a way to duplicate code, its not meant to be efficient way to do it
+        // I used this, since `self` cannot be referenced here and anywhere else at
+        // the same time.
+        macro_rules! handle_apu_after_reset {
+            () => {
+                self.apu.borrow_mut().update_apu_freq(1.7 * 1E6 / 2.);
+                if !self.paused {
+                    self.apu.borrow().play();
+                }
+                average_apu_freq = CPU_FREQ / 2.;
+                average_counter = 1.;
+            };
+        }
+
+        // first time
+        handle_apu_after_reset!();
 
         // run the emulator loop
         loop {
@@ -243,11 +254,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                     UiEvent::Exit => break,
                     UiEvent::Reset => {
                         self.reset();
-                        if !self.paused {
-                            self.apu.borrow().play();
-                        }
-                        average_apu_freq = CPU_FREQ / 2.;
-                        average_counter = 1.;
+                        handle_apu_after_reset!();
                     }
 
                     UiEvent::LoadRom(file_location) => {
@@ -255,11 +262,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                         if let Ok(cartridge) = cartridge {
                             self.cartridge.replace(cartridge);
                             self.reset();
-                            if !self.paused {
-                                self.apu.borrow().play();
-                            }
-                            average_apu_freq = CPU_FREQ / 2.;
-                            average_counter = 1.;
+                            handle_apu_after_reset!();
                         } else {
                             break;
                         }
