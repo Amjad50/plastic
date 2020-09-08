@@ -9,14 +9,15 @@ use cpu6502::CPU6502;
 use directories::ProjectDirs;
 use display::TV;
 use ppu2c02::{Palette, VRam, PPU2C02};
+use regex::{self, Regex};
 use std::cell::RefCell;
-use std::fs::{create_dir_all, File};
+use std::fs::{self, File};
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{mpsc::channel, Arc, Mutex};
 
-use crate::{UiEvent, UiProvider};
+use crate::{BackendEvent, UiEvent, UiProvider};
 
 // NES TV size
 // TODO: should be included in "tv" crate
@@ -242,17 +243,29 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         self.paused = self.cartridge.borrow().is_empty();
     }
 
-    fn get_save_state_file_path(&self, slot: u8) -> Option<Box<Path>> {
-        let cartridge_path = self.cartridge.borrow().cartridge_path().to_path_buf();
-
+    fn get_base_save_state_folder(&self) -> Option<PathBuf> {
         if let Some(proj_dirs) = ProjectDirs::from("Amjad50", "Plastic", "Plastic") {
             let base_saved_states_dir = proj_dirs.data_local_dir().join("saved_states");
             // Linux:   /home/../.local/share/plastic/saved_states
             // Windows: C:\Users\..\AppData\Local\Plastic\Plastic\data\saved_states
             // macOS:   /Users/../Library/Application Support/Amjad50.Plastic.Plastic/saved_states
 
-            create_dir_all(&base_saved_states_dir).ok()?;
+            fs::create_dir_all(&base_saved_states_dir).ok()?;
 
+            Some(base_saved_states_dir)
+        } else {
+            None
+        }
+    }
+
+    fn get_save_state_file_path(&self, slot: u8) -> Option<Box<Path>> {
+        if self.cartridge.borrow().is_empty() {
+            return None;
+        }
+
+        let cartridge_path = self.cartridge.borrow().cartridge_path().to_path_buf();
+
+        if let Some(base_saved_states_dir) = self.get_base_save_state_folder() {
             Some(
                 base_saved_states_dir
                     .join(format!(
@@ -261,6 +274,47 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                         slot
                     ))
                     .into_boxed_path(),
+            )
+        } else {
+            None
+        }
+    }
+
+    fn get_present_save_states(&self) -> Option<Vec<u8>> {
+        if self.cartridge.borrow().is_empty() {
+            return None;
+        }
+
+        let cartridge_path = self.cartridge.borrow().cartridge_path().to_path_buf();
+
+        if let Some(base_saved_states_dir) = self.get_base_save_state_folder() {
+            let saved_states_files_regex = Regex::new(&format!(
+                r"{}_(\d*).pst",
+                regex::escape(&cartridge_path.file_stem().unwrap().to_string_lossy()),
+            ))
+            .ok()?;
+
+            Some(
+                fs::read_dir(base_saved_states_dir)
+                    .ok()?
+                    .filter_map(|path| {
+                        if path.as_ref().ok()?.file_type().ok()?.is_file() {
+                            Some(path.ok()?.path())
+                        } else {
+                            None
+                        }
+                    })
+                    .filter_map(|path| {
+                        Some(
+                            saved_states_files_regex
+                                .captures(path.file_name()?.to_str()?)?
+                                .get(1)?
+                                .as_str()
+                                .parse::<u8>()
+                                .ok()?,
+                        )
+                    })
+                    .collect::<Vec<u8>>(),
             )
         } else {
             None
@@ -320,11 +374,17 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         let ctrl_state = self.ctrl_state.clone();
 
         let (ui_to_nes_sender, ui_to_nes_receiver) = channel::<UiEvent>();
+        let (nes_to_ui_sender, nes_to_ui_receiver) = channel::<BackendEvent>();
 
         let mut ui = self.ui.take().unwrap();
 
         let ui_thread_handler = std::thread::spawn(move || {
-            ui.run_ui_loop(ui_to_nes_sender.clone(), image, ctrl_state);
+            ui.run_ui_loop(
+                ui_to_nes_sender.clone(),
+                nes_to_ui_receiver,
+                image,
+                ctrl_state,
+            );
             ui_to_nes_sender.send(UiEvent::Exit).unwrap();
         });
 
@@ -352,8 +412,20 @@ impl<P: UiProvider + Send + 'static> NES<P> {
             };
         }
 
+        macro_rules! send_present_save_states_to_ui {
+            () => {
+                if let Some(states) = self.get_present_save_states() {
+                    nes_to_ui_sender
+                        .send(BackendEvent::PresentStates(states))
+                        .unwrap();
+                }
+            };
+        }
+
         // first time
         handle_apu_after_reset!();
+
+        send_present_save_states_to_ui!();
 
         // run the emulator loop
         loop {
@@ -364,6 +436,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                     UiEvent::Reset => {
                         self.reset();
                         handle_apu_after_reset!();
+                        send_present_save_states_to_ui!();
                     }
 
                     UiEvent::LoadRom(file_location) => {
@@ -375,6 +448,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                         } else {
                             break;
                         }
+                        send_present_save_states_to_ui!();
                     }
                     UiEvent::Pause => {
                         self.paused = true;
@@ -385,12 +459,16 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                         self.apu.borrow_mut().play();
                     }
                     UiEvent::SaveState(slot) => {
-                        self.save_state(slot).expect("Could not save the state")
+                        if let Err(err) = self.save_state(slot) {
+                            eprintln!("Error in saving the state: {}", err);
+                        }
+                        send_present_save_states_to_ui!();
                     }
                     UiEvent::LoadState(slot) => {
                         if let Err(err) = self.load_state(slot) {
                             eprintln!("Error in loading the state: {}", err);
                         }
+                        send_present_save_states_to_ui!();
                     }
                 }
             }

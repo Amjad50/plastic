@@ -33,19 +33,37 @@
                       </object>
                     </child>
                     <child>
-                      <object class="GtkMenuItem" id="menu_action_save_state">
+                      <object class="GtkSeparatorMenuItem">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkMenuItem" id="save_state_menu_item">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes">_Save state</property>
                         <property name="use_underline">True</property>
+                        <child type="submenu">
+                          <object class="GtkMenu" id="save_state_menu">
+                            <property name="visible">True</property>
+                            <property name="can_focus">False</property>
+                          </object>
+                        </child>
                       </object>
                     </child>
                     <child>
-                      <object class="GtkMenuItem" id="menu_action_load_state">
+                      <object class="GtkMenuItem" id="load_state_menu_item">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes">_Load state</property>
                         <property name="use_underline">True</property>
+                        <child type="submenu">
+                          <object class="GtkMenu" id="load_state_menu">
+                            <property name="visible">True</property>
+                            <property name="can_focus">False</property>
+                          </object>
+                        </child>
                       </object>
                     </child>
                     <child>

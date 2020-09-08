@@ -2,9 +2,14 @@ use nes_ui_base::{
     nes::{TV_HEIGHT, TV_WIDTH},
     nes_controller::{StandardNESControllerState, StandardNESKey},
     nes_display::Color as NESColor,
-    UiEvent, UiProvider,
+    BackendEvent, UiEvent, UiProvider,
 };
-use std::sync::{atomic::AtomicBool, atomic::Ordering, mpsc::Sender, Arc, Mutex};
+use std::sync::{
+    atomic::AtomicBool,
+    atomic::Ordering,
+    mpsc::{Receiver, Sender},
+    Arc, Mutex,
+};
 
 use gdk::enums::key;
 use gdk::{keyval_to_upper, DragAction, ModifierType};
@@ -12,8 +17,10 @@ use gio::prelude::*;
 use gtk::prelude::*;
 use gtk::{
     Application, Builder, DestDefaults, DrawingArea, FileChooserAction, FileChooserDialog,
-    FileFilter, Inhibit, MenuItem, ResponseType, TargetEntry, TargetFlags, Window,
+    FileFilter, Inhibit, Menu, MenuItem, ResponseType, TargetEntry, TargetFlags, Window,
 };
+
+const NUMBER_OF_STATES: u8 = 10;
 
 pub struct GtkProvider {
     paused: Arc<AtomicBool>,
@@ -35,6 +42,7 @@ impl UiProvider for GtkProvider {
     fn run_ui_loop(
         &mut self,
         ui_to_nes_sender: Sender<UiEvent>,
+        nes_to_ui_receiver: Receiver<BackendEvent>,
         image: Arc<Mutex<Vec<u8>>>,
         ctrl_state: Arc<Mutex<StandardNESControllerState>>,
     ) {
@@ -50,18 +58,37 @@ impl UiProvider for GtkProvider {
         let window = builder.get_object::<Window>("top_level_window").unwrap();
         let drawing_area = builder.get_object::<DrawingArea>("canvas").unwrap();
         let menu_action_open = builder.get_object::<MenuItem>("menu_action_open").unwrap();
-        let menu_action_save_state = builder
-            .get_object::<MenuItem>("menu_action_save_state")
-            .unwrap();
-        let menu_action_load_state = builder
-            .get_object::<MenuItem>("menu_action_load_state")
-            .unwrap();
+        let save_state_menu_list = builder.get_object::<Menu>("save_state_menu").unwrap();
+        let load_state_menu_list = builder.get_object::<Menu>("load_state_menu").unwrap();
         let menu_action_quit = builder.get_object::<MenuItem>("menu_action_quit").unwrap();
         let menu_action_reset = builder.get_object::<MenuItem>("menu_action_reset").unwrap();
         let menu_action_pause = builder.get_object::<MenuItem>("menu_action_pause").unwrap();
         let menu_action_resume = builder
             .get_object::<MenuItem>("menu_action_resume")
             .unwrap();
+
+        for i in 1..=NUMBER_OF_STATES {
+            let save_action = MenuItem::new_with_label(&format!("_{} <empty>", i));
+            let load_action = MenuItem::new_with_label(&format!("_{} <empty>", i));
+
+            // setup handlers
+            {
+                let ui_to_nes_sender = ui_to_nes_sender.clone();
+                save_action.connect_activate(move |_| {
+                    ui_to_nes_sender.send(UiEvent::SaveState(i)).unwrap();
+                });
+            }
+            {
+                let ui_to_nes_sender = ui_to_nes_sender.clone();
+                load_action.connect_activate(move |_| {
+                    ui_to_nes_sender.send(UiEvent::LoadState(i)).unwrap();
+                });
+            }
+
+            // add the actions to the menus
+            save_state_menu_list.append(&save_action);
+            load_state_menu_list.append(&load_action);
+        }
 
         window.show_all();
 
@@ -195,20 +222,6 @@ impl UiProvider for GtkProvider {
 
         {
             let ui_to_nes_sender = ui_to_nes_sender.clone();
-            menu_action_save_state.connect_activate(move |_| {
-                ui_to_nes_sender.send(UiEvent::SaveState(1)).unwrap();
-            });
-        }
-
-        {
-            let ui_to_nes_sender = ui_to_nes_sender.clone();
-            menu_action_load_state.connect_activate(move |_| {
-                ui_to_nes_sender.send(UiEvent::LoadState(1)).unwrap();
-            });
-        }
-
-        {
-            let ui_to_nes_sender = ui_to_nes_sender.clone();
             menu_action_reset.connect_activate(move |_| {
                 ui_to_nes_sender.send(UiEvent::Reset).unwrap();
             });
@@ -271,6 +284,31 @@ impl UiProvider for GtkProvider {
         });
 
         timeout_add(1000 / 120, move || {
+            if let Ok(event) = nes_to_ui_receiver.try_recv() {
+                match event {
+                    BackendEvent::PresentStates(states) => {
+                        for i in states {
+                            if let Some(item) = save_state_menu_list
+                                .get_children()
+                                .get(i.saturating_sub(1) as usize)
+                            {
+                                if let Some(item) = item.downcast_ref::<MenuItem>() {
+                                    item.set_label(&format!("_{} saved", i));
+                                }
+                            }
+                            if let Some(item) = load_state_menu_list
+                                .get_children()
+                                .get(i.saturating_sub(1) as usize)
+                            {
+                                if let Some(item) = item.downcast_ref::<MenuItem>() {
+                                    item.set_label(&format!("_{} saved", i));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             drawing_area.queue_draw_area(
                 0,
                 0,

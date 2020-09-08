@@ -2,10 +2,15 @@ use nes_ui_base::{
     nes::{TV_HEIGHT, TV_WIDTH},
     nes_controller::{StandardNESControllerState, StandardNESKey},
     nes_display::Color as NESColor,
-    UiEvent, UiProvider,
+    BackendEvent, UiEvent, UiProvider,
 };
 use std::cell::Cell;
-use std::sync::{atomic::AtomicBool, atomic::Ordering, mpsc::Sender, Arc, Mutex};
+use std::sync::{
+    atomic::AtomicBool,
+    atomic::Ordering,
+    mpsc::{Receiver, Sender},
+    Arc, Mutex,
+};
 
 use native_windows_derive as nwd;
 use native_windows_gui as nwg;
@@ -81,6 +86,7 @@ pub struct ProviderApp {
     game_menu_resume_action: MenuItem,
 
     ui_to_nes_sender: Sender<UiEvent>,
+    nes_to_ui_receiver: Receiver<BackendEvent>,
     image: Arc<Mutex<Vec<u8>>>,
     ctrl_state: Arc<Mutex<StandardNESControllerState>>,
 
@@ -94,6 +100,7 @@ pub struct ProviderApp {
 impl ProviderApp {
     fn initial_state(
         ui_to_nes_sender: Sender<UiEvent>,
+        nes_to_ui_receiver: Receiver<BackendEvent>,
         image: Arc<Mutex<Vec<u8>>>,
         ctrl_state: Arc<Mutex<StandardNESControllerState>>,
     ) -> Self {
@@ -110,6 +117,7 @@ impl ProviderApp {
             game_menu_resume_action: Default::default(),
 
             ui_to_nes_sender,
+            nes_to_ui_receiver,
             image,
             ctrl_state,
             paused: Arc::new(AtomicBool::new(false)),
@@ -325,6 +333,7 @@ impl UiProvider for NwgProvider {
     fn run_ui_loop(
         &mut self,
         ui_to_nes_sender: Sender<UiEvent>,
+        nes_to_ui_receiver: Receiver<BackendEvent>,
         image: Arc<Mutex<Vec<u8>>>,
         ctrl_state: Arc<Mutex<StandardNESControllerState>>,
     ) {
@@ -333,6 +342,7 @@ impl UiProvider for NwgProvider {
 
         let _app = ProviderApp::build_ui(ProviderApp::initial_state(
             ui_to_nes_sender,
+            nes_to_ui_receiver,
             image,
             ctrl_state,
         ))

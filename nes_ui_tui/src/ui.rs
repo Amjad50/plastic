@@ -2,11 +2,14 @@ use nes_ui_base::{
     nes::{TV_HEIGHT, TV_WIDTH},
     nes_controller::{StandardNESControllerState, StandardNESKey},
     nes_display::Color as NESColor,
-    UiEvent, UiProvider,
+    BackendEvent, UiEvent, UiProvider,
 };
 use std::collections::HashSet;
 use std::io;
-use std::sync::{mpsc::Sender, Arc, Mutex};
+use std::sync::{
+    mpsc::{Receiver, Sender},
+    Arc, Mutex,
+};
 use std::thread;
 use std::time::Duration;
 
@@ -56,6 +59,7 @@ impl UiProvider for TuiProvider {
     fn run_ui_loop(
         &mut self,
         ui_to_nes_sender: Sender<UiEvent>,
+        _nes_to_ui_receiver: Receiver<BackendEvent>,
         image: Arc<Mutex<Vec<u8>>>,
         ctrl_state: Arc<Mutex<StandardNESControllerState>>,
     ) {

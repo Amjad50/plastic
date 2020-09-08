@@ -16,3 +16,4 @@ controller = { path = "../controller" }
 apu2a03 = { path = "../apu2a03" }
 
 directories = "3.0.1"
+regex = "1.3.9"
