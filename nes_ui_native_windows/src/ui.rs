@@ -18,7 +18,7 @@ use native_windows_gui as nwg;
 use nwd::NwgUi;
 use nwg::{
     full_bind_event_handler, keys, ControlHandle, Event, EventData, ExternCanvas, FileDialog,
-    FileDialogAction, Menu, MenuItem, NativeUi, Timer, Window,
+    FileDialogAction, Menu, MenuItem, MenuSeparator, NativeUi, Timer, Window,
 };
 use winapi::um::{
     wingdi::{
@@ -68,11 +68,17 @@ pub struct ProviderApp {
     #[nwg_events(OnMenuItemSelected: [ProviderApp::menu_action_open(SELF)])]
     file_menu_open_action: MenuItem,
 
+    #[nwg_control(parent: file_menu)]
+    _menu_separator_1: MenuSeparator,
+
     #[nwg_control(parent: file_menu, text: "&Save state", disabled: false, popup: false)]
     file_menu_save_state_menu: Menu,
 
     #[nwg_control(parent: file_menu, text: "&Load state", disabled: false, popup: false)]
     file_menu_load_state_menu: Menu,
+
+    #[nwg_control(parent: file_menu)]
+    _menu_separator_2: MenuSeparator,
 
     #[nwg_control(parent: file_menu, text: "&Quit", disabled: false, check: false)]
     #[nwg_events(OnMenuItemSelected: [ProviderApp::menu_action_quit(SELF)])]
@@ -118,8 +124,10 @@ impl ProviderApp {
             timer: Default::default(),
             file_menu: Default::default(),
             file_menu_open_action: Default::default(),
+            _menu_separator_1: Default::default(),
             file_menu_save_state_menu: Default::default(),
             file_menu_load_state_menu: Default::default(),
+            _menu_separator_2: Default::default(),
             file_menu_quit_action: Default::default(),
             game_menu: Default::default(),
             game_menu_reset_action: Default::default(),
