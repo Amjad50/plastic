@@ -17,8 +17,8 @@ use native_windows_gui as nwg;
 
 use nwd::NwgUi;
 use nwg::{
-    keys, EventData, ExternCanvas, FileDialog, FileDialogAction, Menu, MenuItem, NativeUi, Timer,
-    Window,
+    full_bind_event_handler, keys, ControlHandle, Event, EventData, ExternCanvas, FileDialog,
+    FileDialogAction, Menu, MenuItem, NativeUi, Timer, Window,
 };
 use winapi::um::{
     wingdi::{
@@ -27,6 +27,8 @@ use winapi::um::{
     },
     winuser::FillRect,
 };
+
+const NUMBER_OF_STATES: u8 = 10;
 
 #[derive(NwgUi)]
 pub struct ProviderApp {
@@ -39,7 +41,7 @@ pub struct ProviderApp {
     #[nwg_events(
         OnWindowClose: [nwg::stop_thread_dispatch()],
         // handle all cases for resizing [not good] :(
-        OnInit:           [ProviderApp::window_resize(SELF, CTRL)],
+        OnInit:           [ProviderApp::init(SELF, CTRL)],
         OnResize:         [ProviderApp::window_resize(SELF, CTRL)],
         OnWindowMaximize: [ProviderApp::window_resize(SELF, CTRL)],
         OnWindowMinimize: [ProviderApp::window_resize(SELF, CTRL)],
@@ -65,6 +67,12 @@ pub struct ProviderApp {
     #[nwg_control(parent: file_menu, text: "&Open", disabled: false, check: false)]
     #[nwg_events(OnMenuItemSelected: [ProviderApp::menu_action_open(SELF)])]
     file_menu_open_action: MenuItem,
+
+    #[nwg_control(parent: file_menu, text: "&Save state", disabled: false, popup: false)]
+    file_menu_save_state_menu: Menu,
+
+    #[nwg_control(parent: file_menu, text: "&Load state", disabled: false, popup: false)]
+    file_menu_load_state_menu: Menu,
 
     #[nwg_control(parent: file_menu, text: "&Quit", disabled: false, check: false)]
     #[nwg_events(OnMenuItemSelected: [ProviderApp::menu_action_quit(SELF)])]
@@ -110,6 +118,8 @@ impl ProviderApp {
             timer: Default::default(),
             file_menu: Default::default(),
             file_menu_open_action: Default::default(),
+            file_menu_save_state_menu: Default::default(),
+            file_menu_load_state_menu: Default::default(),
             file_menu_quit_action: Default::default(),
             game_menu: Default::default(),
             game_menu_reset_action: Default::default(),
@@ -128,6 +138,43 @@ impl ProviderApp {
 }
 
 impl ProviderApp {
+    fn init(&self, ctrl: &Window) {
+        for i in 1..=NUMBER_OF_STATES {
+            let mut save_item = MenuItem::default();
+            let mut load_item = MenuItem::default();
+
+            let label = format!("&{} <empty>", i);
+            MenuItem::builder()
+                .text(&label)
+                .parent(&self.file_menu_save_state_menu)
+                .build(&mut save_item)
+                .unwrap();
+
+            MenuItem::builder()
+                .text(&label)
+                .parent(&self.file_menu_load_state_menu)
+                .build(&mut load_item)
+                .unwrap();
+
+            // setup handlers
+            {
+                let ui_to_nes_sender = self.ui_to_nes_sender.clone();
+                // TODO: for performance maybe its better to handle all items in one handler?
+                full_bind_event_handler(&(&self.window).into(), move |event, _event_data, ctrl| {
+                    if let Event::OnMenuItemSelected = event {
+                        if &ctrl == &save_item {
+                            ui_to_nes_sender.send(UiEvent::SaveState(i)).unwrap();
+                        } else if &ctrl == &load_item {
+                            ui_to_nes_sender.send(UiEvent::LoadState(i)).unwrap();
+                        }
+                    }
+                });
+            }
+        }
+
+        self.window_resize(ctrl);
+    }
+
     fn window_resize(&self, ctrl: &Window) {
         self.canvas.set_size(ctrl.size().0, ctrl.size().1);
 
@@ -313,6 +360,51 @@ impl ProviderApp {
     }
 
     fn timer_tick(&self) {
+        if let Ok(event) = self.nes_to_ui_receiver.try_recv() {
+            match event {
+                BackendEvent::PresentStates(states) => {
+                    let save_menu_ctrl: ControlHandle = (&self.file_menu_save_state_menu).into();
+                    let load_menu_ctrl: ControlHandle = (&self.file_menu_load_state_menu).into();
+
+                    if let Some((_s_hmenu_parent, save_hmenu)) = save_menu_ctrl.hmenu() {
+                        if let Some((_l_hmenu_parent, load_hmenu)) = load_menu_ctrl.hmenu() {
+                            use winapi::um::winuser::{GetMenuItemID, ModifyMenuA};
+                            use winapi::um::winuser::{MF_BYPOSITION, MF_STRING};
+
+                            for i in states {
+                                let i = i - 1;
+
+                                let label = format!("&{} saved\0", i + 1);
+
+                                // FIXME: add SAFETY argument (windows API)
+                                unsafe {
+                                    let id = GetMenuItemID(save_hmenu, i as i32);
+
+                                    ModifyMenuA(
+                                        save_hmenu,
+                                        i as u32,
+                                        MF_STRING | MF_BYPOSITION,
+                                        id as usize,
+                                        label.as_ptr() as _,
+                                    );
+
+                                    let id = GetMenuItemID(load_hmenu, i as i32);
+
+                                    ModifyMenuA(
+                                        load_hmenu,
+                                        i as u32,
+                                        MF_STRING | MF_BYPOSITION,
+                                        id as usize,
+                                        label.as_ptr() as _,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         self.canvas.invalidate();
     }
 }
