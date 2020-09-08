@@ -1,11 +1,18 @@
 use apu2a03::APU2A03;
 use cartridge::{Cartridge, CartridgeError};
-use common::{Bus, Device, MirroringProvider};
+use common::{
+    save_state::{Savable, SaveError},
+    Bus, Device, MirroringProvider,
+};
 use controller::{Controller, StandardNESControllerState};
 use cpu6502::CPU6502;
+use directories::ProjectDirs;
 use display::TV;
 use ppu2c02::{Palette, VRam, PPU2C02};
 use std::cell::RefCell;
+use std::fs::{create_dir_all, File};
+use std::io::Read;
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::{mpsc::channel, Arc, Mutex};
 
@@ -85,6 +92,22 @@ impl Bus for PPUBus {
     }
 }
 
+impl Savable for PPUBus {
+    fn save<W: std::io::Write>(&self, writer: &mut W) -> Result<(), SaveError> {
+        self.vram.save(writer)?;
+        self.palettes.save(writer)?;
+
+        Ok(())
+    }
+
+    fn load<R: std::io::Read>(&mut self, reader: &mut R) -> Result<(), SaveError> {
+        self.vram.load(reader)?;
+        self.palettes.load(reader)?;
+
+        Ok(())
+    }
+}
+
 impl Bus for CPUBus {
     fn read(&self, address: u16, device: Device) -> u8 {
         match address {
@@ -122,6 +145,20 @@ impl Bus for CPUBus {
                 .borrow_mut()
                 .write(address, data, Device::CPU),
         };
+    }
+}
+
+impl Savable for CPUBus {
+    fn save<W: std::io::Write>(&self, writer: &mut W) -> Result<(), SaveError> {
+        writer.write(&self.ram)?;
+
+        Ok(())
+    }
+
+    fn load<R: Read>(&mut self, reader: &mut R) -> Result<(), SaveError> {
+        reader.read(&mut self.ram)?;
+
+        Ok(())
     }
 }
 
@@ -205,6 +242,78 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         self.paused = self.cartridge.borrow().is_empty();
     }
 
+    fn get_save_state_file_path(&self, slot: u8) -> Option<Box<Path>> {
+        let cartridge_path = self.cartridge.borrow().cartridge_path().to_path_buf();
+
+        if let Some(proj_dirs) = ProjectDirs::from("Amjad50", "Plastic", "Plastic") {
+            let base_saved_states_dir = proj_dirs.data_local_dir().join("saved_states");
+            // Linux:   /home/../.local/share/plastic/saved_states
+            // Windows: C:\Users\..\AppData\Local\Plastic\Plastic\data\saved_states
+            // macOS:   /Users/../Library/Application Support/Amjad50.Plastic.Plastic/saved_states
+
+            create_dir_all(&base_saved_states_dir).ok()?;
+
+            Some(
+                base_saved_states_dir
+                    .join(format!(
+                        "{}_{}.pst",
+                        cartridge_path.file_stem().unwrap().to_string_lossy(),
+                        slot
+                    ))
+                    .into_boxed_path(),
+            )
+        } else {
+            None
+        }
+    }
+
+    pub fn save_state(&self, slot: u8) -> Result<(), SaveError> {
+        if let Some(path) = self.get_save_state_file_path(slot) {
+            let mut file = File::create(path)?;
+
+            self.cartridge.borrow().save(&mut file)?;
+            self.cpu.save(&mut file)?;
+            self.cpubus.borrow().save(&mut file)?;
+            self.ppu.borrow().save(&mut file)?;
+            self.apu.borrow().save(&mut file)?;
+
+            Ok(())
+        } else {
+            Err(SaveError::Others)
+        }
+    }
+
+    pub fn load_state(&mut self, slot: u8) -> Result<(), SaveError> {
+        if let Some(path) = self.get_save_state_file_path(slot) {
+            if path.exists() {
+                let mut file = File::open(path)?;
+
+                self.cartridge.borrow_mut().load(&mut file)?;
+                self.cpu.load(&mut file)?;
+                self.cpubus.borrow_mut().load(&mut file)?;
+                self.ppu.borrow_mut().load(&mut file)?;
+                self.apu.borrow_mut().load(&mut file)?;
+
+                let mut rest = Vec::new();
+                file.read_to_end(&mut rest)?;
+
+                if rest.len() > 0 {
+                    return Err(SaveError::Others);
+                }
+
+                if !self.paused {
+                    self.apu.borrow().play();
+                }
+
+                Ok(())
+            } else {
+                Err(SaveError::Others)
+            }
+        } else {
+            Err(SaveError::Others)
+        }
+    }
+
     /// calculate a new view based on the window size
     pub fn run(&mut self) {
         let image = self.image.clone();
@@ -274,6 +383,14 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                     UiEvent::Resume => {
                         self.paused = false;
                         self.apu.borrow_mut().play();
+                    }
+                    UiEvent::SaveState(slot) => {
+                        self.save_state(slot).expect("Could not save the state")
+                    }
+                    UiEvent::LoadState(slot) => {
+                        if let Err(err) = self.load_state(slot) {
+                            eprintln!("Error in loading the state: {}", err);
+                        }
                     }
                 }
             }

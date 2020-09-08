@@ -1,4 +1,5 @@
 use rodio::Source;
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
@@ -10,6 +11,7 @@ pub trait TimedAPUChannel: APUChannel {
     fn timer_clock(&mut self);
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct BufferedChannel {
     buffer: VecDeque<f32>,
     overusing: bool,

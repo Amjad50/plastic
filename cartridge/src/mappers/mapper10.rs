@@ -1,7 +1,9 @@
 use crate::mapper::{Mapper, MappingResult};
 use common::{Device, MirroringMode};
+use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 
+#[derive(Serialize, Deserialize)]
 pub struct Mapper10 {
     /// ($A000-$AFFF)
     /// 7  bit  0
@@ -215,5 +217,19 @@ impl Mapper for Mapper10 {
         } else {
             MirroringMode::Horizontal
         }
+    }
+
+    fn save_state_size(&self) -> usize {
+        bincode::serialized_size(self).unwrap() as usize
+    }
+
+    fn save_state(&self) -> Vec<u8> {
+        bincode::serialize(self).unwrap()
+    }
+
+    fn load_state(&mut self, data: Vec<u8>) {
+        let state = bincode::deserialize(&data).unwrap();
+
+        let _ = std::mem::replace(self, state);
     }
 }

@@ -1,6 +1,9 @@
 use apu2a03::APU2A03;
 use cartridge::{Cartridge, CartridgeError};
-use common::{Bus, Device};
+use common::{
+    save_state::{Savable, SaveError},
+    Bus, Device,
+};
 use cpu6502::{CPURunState, CPU6502};
 use display::{COLORS, TV};
 use ppu2c02::{Palette, VRam, PPU2C02};
@@ -106,6 +109,16 @@ impl Bus for PPUBus {
             // mirror
             0x4000..=0xFFFF => self.write(address & 0x3FFF, data, device),
         }
+    }
+}
+
+impl Savable for PPUBus {
+    fn save<W: std::io::Write>(&self, _writer: &mut W) -> Result<(), SaveError> {
+        unreachable!()
+    }
+
+    fn load<R: std::io::Read>(&mut self, _reader: &mut R) -> Result<(), SaveError> {
+        unreachable!()
     }
 }
 

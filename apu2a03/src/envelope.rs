@@ -1,5 +1,7 @@
 use crate::tone_source::APUChannel;
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct EnvelopeGenerator {
     start_flag: bool,
     loop_flag: bool,

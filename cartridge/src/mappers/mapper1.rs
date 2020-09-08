@@ -355,4 +355,36 @@ impl Mapper for Mapper1 {
             MirroringMode::Horizontal,
         ][self.get_mirroring() as usize]
     }
+
+    fn save_state_size(&self) -> usize {
+        10
+    }
+
+    fn save_state(&self) -> Vec<u8> {
+        vec![
+            self.writing_shift_register,
+            self.control_register,
+            self.chr_0_bank,
+            self.chr_1_bank,
+            self.prg_bank,
+            self.chr_count,
+            self.prg_count,
+            self.prg_ram_count,
+            self.prg_ram_enable as u8,
+            self.is_chr_ram as u8,
+        ]
+    }
+
+    fn load_state(&mut self, data: Vec<u8>) {
+        self.writing_shift_register = data[0];
+        self.control_register = data[1];
+        self.chr_0_bank = data[2];
+        self.chr_1_bank = data[3];
+        self.prg_bank = data[4];
+        self.chr_count = data[5];
+        self.prg_count = data[6];
+        self.prg_ram_count = data[7];
+        self.prg_ram_enable = data[8] != 0;
+        self.is_chr_ram = data[9] != 0;
+    }
 }

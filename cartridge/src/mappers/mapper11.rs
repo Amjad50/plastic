@@ -95,4 +95,26 @@ impl Mapper for Mapper11 {
             }
         }
     }
+
+    fn save_state_size(&self) -> usize {
+        5
+    }
+
+    fn save_state(&self) -> Vec<u8> {
+        vec![
+            self.prg_bank,
+            self.prg_count,
+            self.chr_bank,
+            self.chr_count,
+            self.is_chr_ram as u8,
+        ]
+    }
+
+    fn load_state(&mut self, data: Vec<u8>) {
+        self.prg_bank = data[0];
+        self.prg_count = data[1];
+        self.chr_bank = data[2];
+        self.chr_count = data[3];
+        self.is_chr_ram = data[4] != 0;
+    }
 }

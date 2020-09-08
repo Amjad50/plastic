@@ -84,4 +84,18 @@ impl Mapper for Mapper2 {
             }
         }
     }
+
+    fn save_state_size(&self) -> usize {
+        3
+    }
+
+    fn save_state(&self) -> Vec<u8> {
+        vec![self.prg_top_bank, self.prg_count, self.is_chr_ram as u8]
+    }
+
+    fn load_state(&mut self, data: Vec<u8>) {
+        self.prg_top_bank = data[0];
+        self.prg_count = data[1];
+        self.is_chr_ram = data[2] != 0;
+    }
 }

@@ -1,7 +1,9 @@
 use crate::envelope::{EnvelopeGenerator, EnvelopedChannel};
 use crate::sequencer::Sequencer;
 use crate::tone_source::{APUChannel, TimedAPUChannel};
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 struct Sweeper {
     enabled: bool,
     divider_period_reload_value: u8,
@@ -53,6 +55,7 @@ const DUTY_CYCLE_SEQUENCES: [[u8; 8]; 4] = [
     [1, 0, 0, 1, 1, 1, 1, 1],
 ];
 
+#[derive(Serialize, Deserialize)]
 pub struct SquarePulse {
     period: u16,
     current_timer: u16,

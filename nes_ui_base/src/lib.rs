@@ -14,6 +14,8 @@ pub enum UiEvent {
     Reset,
     Pause,
     Resume,
+    SaveState(u8),
+    LoadState(u8),
     LoadRom(String),
 }
 

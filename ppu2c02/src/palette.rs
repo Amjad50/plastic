@@ -1,4 +1,7 @@
-use common::{Bus, Device};
+use common::{
+    save_state::{Savable, SaveError},
+    Bus, Device,
+};
 
 pub struct Palette {
     palette_data: [u8; 0x20],
@@ -35,5 +38,19 @@ impl Bus for Palette {
         assert!(device == Device::PPU && address >= 0x3F00 && address <= 0x3FFF);
 
         self.palette_data[Self::map_address(address) as usize] = data;
+    }
+}
+
+impl Savable for Palette {
+    fn save<W: std::io::Write>(&self, writer: &mut W) -> Result<(), SaveError> {
+        writer.write(&self.palette_data)?;
+
+        Ok(())
+    }
+
+    fn load<R: std::io::Read>(&mut self, reader: &mut R) -> Result<(), SaveError> {
+        reader.read(&mut self.palette_data)?;
+
+        Ok(())
     }
 }

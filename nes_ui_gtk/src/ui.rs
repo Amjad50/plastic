@@ -50,6 +50,12 @@ impl UiProvider for GtkProvider {
         let window = builder.get_object::<Window>("top_level_window").unwrap();
         let drawing_area = builder.get_object::<DrawingArea>("canvas").unwrap();
         let menu_action_open = builder.get_object::<MenuItem>("menu_action_open").unwrap();
+        let menu_action_save_state = builder
+            .get_object::<MenuItem>("menu_action_save_state")
+            .unwrap();
+        let menu_action_load_state = builder
+            .get_object::<MenuItem>("menu_action_load_state")
+            .unwrap();
         let menu_action_quit = builder.get_object::<MenuItem>("menu_action_quit").unwrap();
         let menu_action_reset = builder.get_object::<MenuItem>("menu_action_reset").unwrap();
         let menu_action_pause = builder.get_object::<MenuItem>("menu_action_pause").unwrap();
@@ -184,6 +190,20 @@ impl UiProvider for GtkProvider {
                         }
                     }
                 }
+            });
+        }
+
+        {
+            let ui_to_nes_sender = ui_to_nes_sender.clone();
+            menu_action_save_state.connect_activate(move |_| {
+                ui_to_nes_sender.send(UiEvent::SaveState(1)).unwrap();
+            });
+        }
+
+        {
+            let ui_to_nes_sender = ui_to_nes_sender.clone();
+            menu_action_load_state.connect_activate(move |_| {
+                ui_to_nes_sender.send(UiEvent::LoadState(1)).unwrap();
             });
         }
 

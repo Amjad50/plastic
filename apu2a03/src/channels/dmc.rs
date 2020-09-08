@@ -1,9 +1,11 @@
 use crate::tone_source::{APUChannel, TimedAPUChannel};
+use serde::{Deserialize, Serialize};
 
 const DMC_PERIOD_RATES_NTSC: [u16; 0x10] = [
     428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54,
 ];
 
+#[derive(Serialize, Deserialize)]
 pub struct Dmc {
     period: u16,
     current_timer: u16,

@@ -14,3 +14,5 @@ ppu2c02 = { path = "../ppu2c02" }
 display = { path = "../display" }
 controller = { path = "../controller" }
 apu2a03 = { path = "../apu2a03" }
+
+directories = "3.0.1"

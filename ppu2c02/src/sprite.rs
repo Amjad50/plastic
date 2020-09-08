@@ -1,4 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 bitflags! {
+   #[derive(Serialize, Deserialize)]
    pub struct SpriteAttribute: u8 {
        const PALETTE = 0b00000011;
        const PRIORITY = 0b00100000;
@@ -25,7 +28,7 @@ impl SpriteAttribute {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub struct Sprite {
     x: u8,
     y: u8,

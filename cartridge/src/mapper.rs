@@ -37,4 +37,10 @@ pub trait Mapper {
     }
 
     fn clear_irq_request_pin(&mut self) {}
+
+    fn save_state_size(&self) -> usize;
+
+    fn save_state(&self) -> Vec<u8>;
+
+    fn load_state(&mut self, data: Vec<u8>);
 }

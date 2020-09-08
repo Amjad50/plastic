@@ -1,11 +1,13 @@
 use crate::envelope::{EnvelopeGenerator, EnvelopedChannel};
 use crate::tone_source::{APUChannel, TimedAPUChannel};
+use serde::{Deserialize, Serialize};
 
 /// Table for NTSC only
 const NOISE_PERIODS_TABLE: [u16; 0x10] = [
     4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
 ];
 
+#[derive(Serialize, Deserialize)]
 pub struct NoiseWave {
     period: u16,
     current_timer: u16,

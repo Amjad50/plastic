@@ -1,5 +1,5 @@
 use crate::ppu2c02::PPU2C02;
-use common::{Bus, Device};
+use common::{save_state::Savable, Bus, Device};
 use std::convert::TryInto;
 
 memory_mapped_registers! {
@@ -18,7 +18,7 @@ memory_mapped_registers! {
 
 impl<T> Bus for PPU2C02<T>
 where
-    T: Bus,
+    T: Bus + Savable,
 {
     fn read(&self, address: u16, device: Device) -> u8 {
         // only the CPU is allowed to read from PPU registers

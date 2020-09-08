@@ -4,7 +4,7 @@
   <requires lib="gtk+" version="3.22"/>
   <object class="GtkApplicationWindow" id="top_level_window">
     <property name="can_focus">False</property>
-    <property name="title" translatable="yes">Plastic</property>
+    <property name="title" translatable="yes">Plstic</property>
     <child>
       <object class="GtkBox" id="box_container">
         <property name="visible">True</property>
@@ -29,22 +29,6 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes">_Open</property>
-                        <property name="use_underline">True</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkMenuItem" id="menu_action_save_state">
-                        <property name="visible">True</property>
-                        <property name="can_focus">False</property>
-                        <property name="label" translatable="yes">_Save state</property>
-                        <property name="use_underline">True</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkMenuItem" id="menu_action_load_state">
-                        <property name="visible">True</property>
-                        <property name="can_focus">False</property>
-                        <property name="label" translatable="yes">_Load state</property>
                         <property name="use_underline">True</property>
                       </object>
                     </child>
@@ -81,22 +65,6 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes">_Reset</property>
-                        <property name="use_underline">True</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkMenuItem" id="menu_action_pause">
-                        <property name="visible">True</property>
-                        <property name="can_focus">False</property>
-                        <property name="label" translatable="yes">_Pause</property>
-                        <property name="use_underline">True</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkMenuItem" id="menu_action_resume">
-                        <property name="visible">True</property>
-                        <property name="can_focus">False</property>
-                        <property name="label" translatable="yes">_Resume</property>
                         <property name="use_underline">True</property>
                       </object>
                     </child>

@@ -1,8 +1,10 @@
 use super::instruction::{AddressingMode, Instruction, Opcode};
 use common::{
     interconnection::{APUCPUConnection, CpuIrqProvider, PPUCPUConnection},
+    save_state::{Savable, SaveError},
     Bus, Device,
 };
+use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
 
 const NMI_VECTOR_ADDRESS: u16 = 0xFFFA;
@@ -1386,5 +1388,86 @@ where
         self.cycles_to_wait += cycle_time - 1;
 
         state
+    }
+
+    fn load_serialized_state(&mut self, state: SavableCPUState) {
+        self.reg_pc = state.reg_pc;
+        self.reg_sp = state.reg_sp;
+        self.reg_a = state.reg_a;
+        self.reg_x = state.reg_x;
+        self.reg_y = state.reg_y;
+        self.reg_status = state.reg_status;
+        self.nmi_pin_status = state.nmi_pin_status;
+        self.irq_pin_status = state.irq_pin_status;
+        self.cycles_to_wait = state.cycles_to_wait;
+        self.dma_remaining = state.dma_remaining;
+        self.dma_address = state.dma_address;
+        self.next_instruction = state.next_instruction;
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct SavableCPUState {
+    reg_pc: u16,
+    reg_sp: u8,
+    reg_a: u8,
+    reg_x: u8,
+    reg_y: u8,
+    reg_status: u8,
+
+    nmi_pin_status: bool,
+    irq_pin_status: bool,
+
+    cycles_to_wait: u8,
+
+    dma_remaining: u16,
+    dma_address: u8,
+
+    next_instruction: Option<(Instruction, u8)>,
+}
+
+impl SavableCPUState {
+    fn from_cpu<T: Bus>(cpu: &CPU6502<T>) -> Self {
+        Self {
+            reg_pc: cpu.reg_pc,
+            reg_sp: cpu.reg_sp,
+            reg_a: cpu.reg_a,
+            reg_x: cpu.reg_x,
+            reg_y: cpu.reg_y,
+            reg_status: cpu.reg_status,
+            nmi_pin_status: cpu.nmi_pin_status,
+            irq_pin_status: cpu.irq_pin_status,
+            cycles_to_wait: cpu.cycles_to_wait,
+            dma_remaining: cpu.dma_remaining,
+            dma_address: cpu.dma_address,
+            next_instruction: cpu.next_instruction,
+        }
+    }
+}
+
+impl<T> Savable for CPU6502<T>
+where
+    T: Bus,
+{
+    fn save<W: std::io::Write>(&self, writer: &mut W) -> Result<(), SaveError> {
+        let state = SavableCPUState::from_cpu(self);
+        bincode::serialize_into(writer, &state).map_err(|err| match *err {
+            bincode::ErrorKind::Io(err) => SaveError::IoError(err),
+            _ => SaveError::Others,
+        })?;
+
+        Ok(())
+    }
+
+    fn load<R: std::io::Read>(&mut self, reader: &mut R) -> Result<(), SaveError> {
+        let state: SavableCPUState =
+            bincode::deserialize_from(reader).map_err(|err| match *err {
+                bincode::ErrorKind::Io(err) => SaveError::IoError(err),
+                _ => SaveError::Others,
+            })?;
+
+        self.load_serialized_state(state);
+
+        Ok(())
     }
 }

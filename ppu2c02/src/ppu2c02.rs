@@ -1,7 +1,12 @@
 use crate::ppu2c02_registers::Register;
 use crate::sprite::{Sprite, SpriteAttribute};
-use common::{interconnection::PPUCPUConnection, Bus, Device};
+use common::{
+    interconnection::PPUCPUConnection,
+    save_state::{Savable, SaveError},
+    Bus, Device,
+};
 use display::{Color, COLORS, TV};
+use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::cmp::min;
 
@@ -100,7 +105,7 @@ bitflags! {
     }
 }
 
-pub struct PPU2C02<T: Bus> {
+pub struct PPU2C02<T: Bus + Savable> {
     // memory mapped registers
     reg_control: ControlReg,
     reg_mask: MaskReg,
@@ -152,7 +157,7 @@ pub struct PPU2C02<T: Bus> {
 
 impl<T> PPU2C02<T>
 where
-    T: Bus,
+    T: Bus + Savable,
 {
     pub fn new(bus: T, tv: TV) -> Self {
         Self {
@@ -1218,11 +1223,45 @@ where
 
         self.tv.reset();
     }
+
+    fn load_serialized_state(&mut self, state: SavablePPUState) {
+        let mut primary_oam = [Sprite::empty(); 64];
+        for i in 0..64 {
+            primary_oam[i] = state.primary_oam[i];
+        }
+
+        self.reg_control = ControlReg::from_bits(state.reg_control).unwrap();
+        self.reg_mask = MaskReg::from_bits(state.reg_mask).unwrap();
+        *self.reg_status.get_mut() = StatusReg::from_bits(state.reg_status).unwrap();
+        *self.reg_oam_addr.get_mut() = state.reg_oam_addr;
+        self.scanline = state.scanline;
+        self.cycle = state.cycle;
+        *self.vram_address_cur.get_mut() = state.vram_address_cur;
+        self.vram_address_top_left = state.vram_address_top_left;
+        *self.ppu_data_read_buffer.get_mut() = state.ppu_data_read_buffer;
+        self.fine_x_scroll = state.fine_x_scroll;
+        *self.w_toggle.get_mut() = state.w_toggle;
+        self.bg_pattern_shift_registers = state.bg_pattern_shift_registers;
+        self.bg_palette_shift_registers = state.bg_palette_shift_registers;
+        *self.nmi_pin_status.get_mut() = state.nmi_pin_status;
+        *self.nmi_occured_in_this_frame.get_mut() = state.nmi_occured_in_this_frame;
+        self.primary_oam = primary_oam;
+        self.secondary_oam = state.secondary_oam;
+        self.secondary_oam_counter = state.secondary_oam_counter;
+        self.sprite_pattern_shift_registers = state.sprite_pattern_shift_registers;
+        self.sprite_attribute_registers = state.sprite_attribute_registers;
+        self.sprite_counters = state.sprite_counters;
+        self.sprite_0_present = state.sprite_0_present;
+        self.next_scanline_sprite_0_present = state.next_scanline_sprite_0_present;
+        self.is_dma_request = state.is_dma_request;
+        self.dma_request_address = state.dma_request_address;
+        self.is_odd_frame = state.is_odd_frame;
+    }
 }
 
 impl<T> PPUCPUConnection for PPU2C02<T>
 where
-    T: Bus,
+    T: Bus + Savable,
 {
     fn is_nmi_pin_set(&self) -> bool {
         self.nmi_pin_status.get()
@@ -1246,5 +1285,112 @@ where
 
     fn send_oam_data(&mut self, address: u8, data: u8) {
         self.write_sprite_byte(self.reg_oam_addr.get().wrapping_add(address), data);
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct SavablePPUState {
+    reg_control: u8,
+    reg_mask: u8,
+    reg_status: u8,
+    reg_oam_addr: u8,
+
+    scanline: u16,
+    cycle: u16,
+
+    vram_address_cur: u16,
+    vram_address_top_left: u16,
+
+    ppu_data_read_buffer: u8,
+
+    fine_x_scroll: u8,
+
+    w_toggle: bool,
+
+    bg_pattern_shift_registers: [u16; 2],
+    bg_palette_shift_registers: [u16; 2],
+
+    nmi_pin_status: bool,
+    nmi_occured_in_this_frame: bool,
+
+    primary_oam: Vec<Sprite>,
+    secondary_oam: [Sprite; 8],
+
+    secondary_oam_counter: u8,
+
+    sprite_pattern_shift_registers: [[u8; 2]; 8],
+    sprite_attribute_registers: [SpriteAttribute; 8],
+    sprite_counters: [u8; 8],
+    sprite_0_present: bool,
+    next_scanline_sprite_0_present: bool,
+
+    is_dma_request: bool,
+    dma_request_address: u8,
+
+    is_odd_frame: bool,
+}
+
+impl SavablePPUState {
+    fn from_ppu<T: Bus + Savable>(ppu: &PPU2C02<T>) -> Self {
+        let mut primary_oam = Vec::with_capacity(ppu.primary_oam.len());
+        primary_oam.extend_from_slice(&ppu.primary_oam);
+
+        Self {
+            reg_control: ppu.reg_control.bits(),
+            reg_mask: ppu.reg_mask.bits(),
+            reg_status: ppu.reg_status.get().bits(),
+            reg_oam_addr: ppu.reg_oam_addr.get(),
+            scanline: ppu.scanline,
+            cycle: ppu.cycle,
+            vram_address_cur: ppu.vram_address_cur.get(),
+            vram_address_top_left: ppu.vram_address_top_left,
+            ppu_data_read_buffer: ppu.ppu_data_read_buffer.get(),
+            fine_x_scroll: ppu.fine_x_scroll,
+            w_toggle: ppu.w_toggle.get(),
+            bg_pattern_shift_registers: ppu.bg_pattern_shift_registers,
+            bg_palette_shift_registers: ppu.bg_palette_shift_registers,
+            nmi_pin_status: ppu.nmi_pin_status.get(),
+            nmi_occured_in_this_frame: ppu.nmi_occured_in_this_frame.get(),
+            primary_oam,
+            secondary_oam: ppu.secondary_oam,
+            secondary_oam_counter: ppu.secondary_oam_counter,
+            sprite_pattern_shift_registers: ppu.sprite_pattern_shift_registers,
+            sprite_attribute_registers: ppu.sprite_attribute_registers,
+            sprite_counters: ppu.sprite_counters,
+            sprite_0_present: ppu.sprite_0_present,
+            next_scanline_sprite_0_present: ppu.next_scanline_sprite_0_present,
+            is_dma_request: ppu.is_dma_request,
+            dma_request_address: ppu.dma_request_address,
+            is_odd_frame: ppu.is_odd_frame,
+        }
+    }
+}
+
+impl<T: Bus + Savable> Savable for PPU2C02<T> {
+    fn save<W: std::io::Write>(&self, writer: &mut W) -> Result<(), SaveError> {
+        self.bus.save(writer)?;
+
+        let state = SavablePPUState::from_ppu(self);
+
+        bincode::serialize_into(writer, &state).map_err(|err| match *err {
+            bincode::ErrorKind::Io(err) => SaveError::IoError(err),
+            _ => SaveError::Others,
+        })?;
+
+        Ok(())
+    }
+
+    fn load<R: std::io::Read>(&mut self, reader: &mut R) -> Result<(), SaveError> {
+        self.bus.load(reader)?;
+
+        let state: SavablePPUState =
+            bincode::deserialize_from(reader).map_err(|err| match *err {
+                bincode::ErrorKind::Io(err) => SaveError::IoError(err),
+                _ => SaveError::Others,
+            })?;
+
+        self.load_serialized_state(state);
+
+        Ok(())
     }
 }

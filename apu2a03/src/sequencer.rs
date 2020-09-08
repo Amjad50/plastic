@@ -1,3 +1,6 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
 pub struct Sequencer {
     sequence: Vec<u8>,
     position: usize,

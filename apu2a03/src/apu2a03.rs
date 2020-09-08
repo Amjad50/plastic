@@ -3,12 +3,44 @@ use crate::channels::{Dmc, NoiseWave, SquarePulse, TriangleWave};
 use crate::envelope::EnvelopedChannel;
 use crate::length_counter::LengthCountedChannel;
 use crate::tone_source::{APUChannel, APUChannelPlayer, BufferedChannel, TimedAPUChannel};
-use common::interconnection::{APUCPUConnection, CpuIrqProvider};
+use common::{
+    interconnection::{APUCPUConnection, CpuIrqProvider},
+    save_state::{Savable, SaveError},
+};
+use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 
 use rodio::DeviceTrait;
 
+mod buffered_channel_serde {
+    use crate::tone_source::BufferedChannel;
+    use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
+    use std::sync::{Arc, Mutex};
+
+    pub fn serialize<S>(
+        value: &Arc<Mutex<BufferedChannel>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if let Ok(value) = value.lock() {
+            value.serialize(serializer)
+        } else {
+            Err(S::Error::custom(""))
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Arc<Mutex<BufferedChannel>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        BufferedChannel::deserialize(deserializer).map(|channel| Arc::new(Mutex::new(channel)))
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct APU2A03 {
     square_pulse_1: LengthCountedChannel<SquarePulse>,
     square_pulse_2: LengthCountedChannel<SquarePulse>,
@@ -16,6 +48,7 @@ pub struct APU2A03 {
     noise: LengthCountedChannel<NoiseWave>,
     dmc: Dmc,
 
+    #[serde(with = "buffered_channel_serde")]
     buffered_channel: Arc<Mutex<BufferedChannel>>,
 
     is_4_step_squence_mode_hold_value: bool,
@@ -34,6 +67,7 @@ pub struct APU2A03 {
     interrupt_flag: Cell<bool>,
     request_interrupt_flag_change: Cell<bool>,
 
+    #[serde(skip)]
     player: Option<rodio::Sink>,
 }
 
@@ -560,5 +594,29 @@ impl APUCPUConnection for APU2A03 {
 
     fn submit_buffer_byte(&mut self, byte: u8) {
         self.dmc.submit_buffer_byte(byte);
+    }
+}
+
+impl Savable for APU2A03 {
+    fn save<W: std::io::Write>(&self, writer: &mut W) -> Result<(), SaveError> {
+        bincode::serialize_into(writer, self).map_err(|err| match *err {
+            bincode::ErrorKind::Io(err) => SaveError::IoError(err),
+            _ => SaveError::Others,
+        })?;
+
+        Ok(())
+    }
+
+    fn load<R: std::io::Read>(&mut self, reader: &mut R) -> Result<(), SaveError> {
+        let state: APU2A03 = bincode::deserialize_from(reader).map_err(|err| match *err {
+            bincode::ErrorKind::Io(err) => SaveError::IoError(err),
+            _ => SaveError::Others,
+        })?;
+
+        let _ = std::mem::replace(self, state);
+
+        self.player = Self::get_player(self.buffered_channel.clone());
+
+        Ok(())
     }
 }

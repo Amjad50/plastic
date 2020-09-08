@@ -3,7 +3,11 @@ use super::{
     mapper::{Mapper, MappingResult},
     mappers::*,
 };
-use common::{interconnection::CpuIrqProvider, Bus, Device, MirroringMode, MirroringProvider};
+use common::{
+    interconnection::CpuIrqProvider,
+    save_state::{Savable, SaveError},
+    Bus, Device, MirroringMode, MirroringProvider,
+};
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
@@ -336,6 +340,10 @@ impl Cartridge {
     pub fn is_empty(&self) -> bool {
         self.is_empty
     }
+
+    pub fn cartridge_path(&self) -> &Path {
+        &self.file_path
+    }
 }
 
 impl Bus for Cartridge {
@@ -461,5 +469,37 @@ impl CpuIrqProvider for Cartridge {
 
     fn clear_irq_request_pin(&mut self) {
         self.mapper.clear_irq_request_pin();
+    }
+}
+
+impl Savable for Cartridge {
+    fn save<W: Write>(&self, writer: &mut W) -> Result<(), SaveError> {
+        let mapper_saved_state = self.mapper.save_state();
+        writer.write(&mapper_saved_state)?;
+
+        writer.write(&self.prg_ram_data)?;
+
+        writer.write(&[self.header.is_chr_ram as u8])?;
+        if self.header.is_chr_ram {
+            writer.write(&self.chr_data)?;
+        }
+
+        Ok(())
+    }
+
+    fn load<R: Read>(&mut self, reader: &mut R) -> Result<(), SaveError> {
+        let mut mapper_load_data = vec![0; self.mapper.save_state_size()];
+        reader.read(&mut mapper_load_data)?;
+        self.mapper.load_state(mapper_load_data);
+
+        reader.read(&mut self.prg_ram_data)?;
+
+        let mut is_chr_ram = [0u8; 1];
+        reader.read(&mut is_chr_ram)?;
+        if is_chr_ram[0] != 0 {
+            reader.read(&mut self.chr_data)?;
+        }
+
+        Ok(())
     }
 }

@@ -101,4 +101,24 @@ impl Mapper for Mapper7 {
             MirroringMode::SingleScreenLowBank
         }
     }
+
+    fn save_state_size(&self) -> usize {
+        4
+    }
+
+    fn save_state(&self) -> Vec<u8> {
+        vec![
+            self.prg_bank,
+            self.prg_count,
+            self.is_mirroring_screen_high_bank as u8,
+            self.is_chr_ram as u8,
+        ]
+    }
+
+    fn load_state(&mut self, data: Vec<u8>) {
+        self.prg_bank = data[0];
+        self.prg_count = data[1];
+        self.is_mirroring_screen_high_bank = data[2] != 0;
+        self.is_chr_ram = data[3] != 0;
+    }
 }

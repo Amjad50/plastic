@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
+#[derive(Serialize, Deserialize, Copy, Clone)]
 pub struct Instruction {
     pub opcode_byte: u8,
     pub operand: u16,
@@ -7,7 +9,7 @@ pub struct Instruction {
     pub addressing_mode: AddressingMode,
 }
 
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Copy, Clone)]
 pub enum Opcode {
     Adc, // Add with carry
     And, // And
@@ -101,7 +103,7 @@ pub enum Opcode {
     Kil, // Halt the CPU (CRASH)
 }
 
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Copy, Clone)]
 pub enum AddressingMode {
     Immediate = 0,  // #$aa
     ZeroPage,       // $aa

@@ -1,6 +1,8 @@
 use crate::sequencer::Sequencer;
 use crate::tone_source::{APUChannel, TimedAPUChannel};
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct TriangleWave {
     period: u16,
     current_timer: u16,

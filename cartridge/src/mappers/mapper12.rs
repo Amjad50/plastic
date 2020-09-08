@@ -1,7 +1,9 @@
 use crate::mapper::{Mapper, MappingResult};
 use common::{Device, MirroringMode};
+use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 
+#[derive(Serialize, Deserialize)]
 pub struct Mapper12 {
     /// ($8000-$9FFE, even)
     /// 7  bit  0
@@ -416,5 +418,19 @@ impl Mapper for Mapper12 {
     fn clear_irq_request_pin(&mut self) {
         self.irq_pin.set(false);
         self.is_irq_pin_changed.set(false);
+    }
+
+    fn save_state_size(&self) -> usize {
+        bincode::serialized_size(self).unwrap() as usize
+    }
+
+    fn save_state(&self) -> Vec<u8> {
+        bincode::serialize(self).unwrap()
+    }
+
+    fn load_state(&mut self, data: Vec<u8>) {
+        let state = bincode::deserialize(&data).unwrap();
+
+        let _ = std::mem::replace(self, state);
     }
 }
