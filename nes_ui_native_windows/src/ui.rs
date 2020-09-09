@@ -17,8 +17,8 @@ use native_windows_gui as nwg;
 
 use nwd::NwgUi;
 use nwg::{
-    full_bind_event_handler, keys, ControlHandle, Event, EventData, ExternCanvas, FileDialog,
-    FileDialogAction, Menu, MenuItem, MenuSeparator, NativeUi, Timer, Window,
+    keys, ControlHandle, EventData, ExternCanvas, FileDialog, FileDialogAction, Menu, MenuItem,
+    MenuSeparator, NativeUi, Timer, Window,
 };
 use winapi::um::{
     wingdi::{
@@ -74,11 +74,73 @@ pub struct ProviderApp {
     #[nwg_control(parent: file_menu, text: "&Save state", disabled: false, popup: false)]
     file_menu_save_state_menu: Menu,
 
+    #[nwg_control(parent: file_menu_save_state_menu, text: "&1 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::save_state(SELF, HANDLE)])]
+    save_item_1: MenuItem,
+    #[nwg_control(parent: file_menu_save_state_menu, text: "&2 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::save_state(SELF, HANDLE)])]
+    save_item_2: MenuItem,
+    #[nwg_control(parent: file_menu_save_state_menu, text: "&3 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::save_state(SELF, HANDLE)])]
+    save_item_3: MenuItem,
+    #[nwg_control(parent: file_menu_save_state_menu, text: "&4 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::save_state(SELF, HANDLE)])]
+    save_item_4: MenuItem,
+    #[nwg_control(parent: file_menu_save_state_menu, text: "&5 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::save_state(SELF, HANDLE)])]
+    save_item_5: MenuItem,
+    #[nwg_control(parent: file_menu_save_state_menu, text: "&6 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::save_state(SELF, HANDLE)])]
+    save_item_6: MenuItem,
+    #[nwg_control(parent: file_menu_save_state_menu, text: "&7 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::save_state(SELF, HANDLE)])]
+    save_item_7: MenuItem,
+    #[nwg_control(parent: file_menu_save_state_menu, text: "&8 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::save_state(SELF, HANDLE)])]
+    save_item_8: MenuItem,
+    #[nwg_control(parent: file_menu_save_state_menu, text: "&9 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::save_state(SELF, HANDLE)])]
+    save_item_9: MenuItem,
+    #[nwg_control(parent: file_menu_save_state_menu, text: "&10 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::save_state(SELF, HANDLE)])]
+    save_item_10: MenuItem,
+
     #[nwg_control(parent: file_menu, text: "&Load state", disabled: false, popup: false)]
     file_menu_load_state_menu: Menu,
 
     #[nwg_control(parent: file_menu)]
     _menu_separator_2: MenuSeparator,
+
+    #[nwg_control(parent: file_menu_load_state_menu, text: "&1 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::load_state(SELF, HANDLE)])]
+    load_item_1: MenuItem,
+    #[nwg_control(parent: file_menu_load_state_menu, text: "&2 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::load_state(SELF, HANDLE)])]
+    load_item_2: MenuItem,
+    #[nwg_control(parent: file_menu_load_state_menu, text: "&3 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::load_state(SELF, HANDLE)])]
+    load_item_3: MenuItem,
+    #[nwg_control(parent: file_menu_load_state_menu, text: "&4 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::load_state(SELF, HANDLE)])]
+    load_item_4: MenuItem,
+    #[nwg_control(parent: file_menu_load_state_menu, text: "&5 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::load_state(SELF, HANDLE)])]
+    load_item_5: MenuItem,
+    #[nwg_control(parent: file_menu_load_state_menu, text: "&6 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::load_state(SELF, HANDLE)])]
+    load_item_6: MenuItem,
+    #[nwg_control(parent: file_menu_load_state_menu, text: "&7 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::load_state(SELF, HANDLE)])]
+    load_item_7: MenuItem,
+    #[nwg_control(parent: file_menu_load_state_menu, text: "&8 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::load_state(SELF, HANDLE)])]
+    load_item_8: MenuItem,
+    #[nwg_control(parent: file_menu_load_state_menu, text: "&9 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::load_state(SELF, HANDLE)])]
+    load_item_9: MenuItem,
+    #[nwg_control(parent: file_menu_load_state_menu, text: "&10 <empty>")]
+    #[nwg_events(OnMenuItemSelected: [ProviderApp::load_state(SELF, HANDLE)])]
+    load_item_10: MenuItem,
 
     #[nwg_control(parent: file_menu, text: "&Quit", disabled: false, check: false)]
     #[nwg_events(OnMenuItemSelected: [ProviderApp::menu_action_quit(SELF)])]
@@ -126,8 +188,28 @@ impl ProviderApp {
             file_menu_open_action: Default::default(),
             _menu_separator_1: Default::default(),
             file_menu_save_state_menu: Default::default(),
+            save_item_1: Default::default(),
+            save_item_2: Default::default(),
+            save_item_3: Default::default(),
+            save_item_4: Default::default(),
+            save_item_5: Default::default(),
+            save_item_6: Default::default(),
+            save_item_7: Default::default(),
+            save_item_8: Default::default(),
+            save_item_9: Default::default(),
+            save_item_10: Default::default(),
             file_menu_load_state_menu: Default::default(),
             _menu_separator_2: Default::default(),
+            load_item_1: Default::default(),
+            load_item_2: Default::default(),
+            load_item_3: Default::default(),
+            load_item_4: Default::default(),
+            load_item_5: Default::default(),
+            load_item_6: Default::default(),
+            load_item_7: Default::default(),
+            load_item_8: Default::default(),
+            load_item_9: Default::default(),
+            load_item_10: Default::default(),
             file_menu_quit_action: Default::default(),
             game_menu: Default::default(),
             game_menu_reset_action: Default::default(),
@@ -147,40 +229,35 @@ impl ProviderApp {
 
 impl ProviderApp {
     fn init(&self, ctrl: &Window) {
-        for i in 1..=NUMBER_OF_STATES {
-            let mut save_item = MenuItem::default();
-            let mut load_item = MenuItem::default();
-
-            let label = format!("&{} <empty>", i);
-            MenuItem::builder()
-                .text(&label)
-                .parent(&self.file_menu_save_state_menu)
-                .build(&mut save_item)
-                .unwrap();
-
-            MenuItem::builder()
-                .text(&label)
-                .parent(&self.file_menu_load_state_menu)
-                .build(&mut load_item)
-                .unwrap();
-
-            // setup handlers
-            {
-                let ui_to_nes_sender = self.ui_to_nes_sender.clone();
-                // TODO: for performance maybe its better to handle all items in one handler?
-                full_bind_event_handler(&(&self.window).into(), move |event, _event_data, ctrl| {
-                    if let Event::OnMenuItemSelected = event {
-                        if &ctrl == &save_item {
-                            ui_to_nes_sender.send(UiEvent::SaveState(i)).unwrap();
-                        } else if &ctrl == &load_item {
-                            ui_to_nes_sender.send(UiEvent::LoadState(i)).unwrap();
-                        }
-                    }
-                });
-            }
-        }
-
         self.window_resize(ctrl);
+    }
+
+    fn get_menu_position(handle: &ControlHandle) -> u32 {
+        use winapi::um::winuser::GetMenuItemID;
+
+        if let Some((hmenu, id)) = handle.hmenu_item() {
+            let position_0_id = unsafe { GetMenuItemID(hmenu, 0) };
+
+            id - position_0_id
+        } else {
+            0
+        }
+    }
+
+    fn save_state(&self, handle: &ControlHandle) {
+        self.ui_to_nes_sender
+            .send(UiEvent::SaveState(
+                Self::get_menu_position(handle) as u8 + 1,
+            ))
+            .unwrap();
+    }
+
+    fn load_state(&self, handle: &ControlHandle) {
+        self.ui_to_nes_sender
+            .send(UiEvent::LoadState(
+                Self::get_menu_position(handle) as u8 + 1,
+            ))
+            .unwrap();
     }
 
     fn window_resize(&self, ctrl: &Window) {
