@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2020-09-09
+### Fixed
+- Windows GUI crash bug. ([0626860])
+- Labels in Save/Load state menus not updating when running a new game. ([853705a])
+- Backend exit (UI still present), in the case of loading a new game that has an unsupported mapper. ([3972696])
+- `CHANGELOG` compare releases links.
+
 ## [0.2.0] - 2020-09-09
 ### Added
 - Cartridge with [INES2.0] header format support.
@@ -71,8 +78,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - This is the first release and has **SO** many rewrites and bug fixes.
 
-[Unreleased]: https://github.com/Amjad50/plastic/compare/v0.1.0...HEAD
-[0.2.0]: https://github.com/Amjad50/plastic/compare/v0.2.0...v0.1.0
+[Unreleased]: https://github.com/Amjad50/plastic/compare/v0.2.0...HEAD
+[0.2.1]: https://github.com/Amjad50/plastic/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/Amjad50/plastic/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Amjad50/plastic/releases/tag/v0.1.0
 
 [69c70be]: https://github.com/Amjad50/plastic/commit/69c70be
@@ -80,6 +88,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [8b2ba0e]: https://github.com/Amjad50/plastic/commit/8b2ba0e
 [d29c27d]: https://github.com/Amjad50/plastic/commit/d29c27d
 [1ac20ac]: https://github.com/Amjad50/plastic/commit/1ac20ac
+[0626860]: https://github.com/Amjad50/plastic/commit/0626860
+[853705a]: https://github.com/Amjad50/plastic/commit/853705a
+[3972696]: https://github.com/Amjad50/plastic/commit/3972696
 
 [Emulator tests]: http://wiki.nesdev.com/w/index.php/Emulator_tests
 
