@@ -446,7 +446,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                             self.reset();
                             handle_apu_after_reset!();
                         } else {
-                            break;
+                            println!("This game is not supported yet");
                         }
                         send_present_save_states_to_ui!();
                     }
