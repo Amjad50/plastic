@@ -448,6 +448,14 @@ impl ProviderApp {
         if let Ok(event) = self.nes_to_ui_receiver.try_recv() {
             match event {
                 BackendEvent::PresentStates(states) => {
+                    let mut states_labels = [false; NUMBER_OF_STATES as usize];
+
+                    for i in states.iter() {
+                        if let Some(ptr) = states_labels.get_mut(*i as usize - 1) {
+                            *ptr = true;
+                        }
+                    }
+
                     let save_menu_ctrl: ControlHandle = (&self.file_menu_save_state_menu).into();
                     let load_menu_ctrl: ControlHandle = (&self.file_menu_load_state_menu).into();
 
@@ -456,10 +464,12 @@ impl ProviderApp {
                             use winapi::um::winuser::{GetMenuItemID, ModifyMenuA};
                             use winapi::um::winuser::{MF_BYPOSITION, MF_STRING};
 
-                            for i in states {
-                                let i = i - 1;
-
-                                let label = format!("&{} saved\0", i + 1);
+                            for (i, &label) in states_labels.iter().enumerate() {
+                                let label = format!(
+                                    "&{} {}\0",
+                                    i + 1,
+                                    if label { "saved" } else { "<empty>" }
+                                );
 
                                 // FIXME: add SAFETY argument (windows API)
                                 unsafe {

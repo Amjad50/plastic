@@ -287,21 +287,28 @@ impl UiProvider for GtkProvider {
             if let Ok(event) = nes_to_ui_receiver.try_recv() {
                 match event {
                     BackendEvent::PresentStates(states) => {
-                        for i in states {
-                            if let Some(item) = save_state_menu_list
-                                .get_children()
-                                .get(i.saturating_sub(1) as usize)
+                        let mut states_labels = [false; NUMBER_OF_STATES as usize];
+
+                        for i in states.iter() {
+                            if let Some(ptr) = states_labels.get_mut(*i as usize - 1) {
+                                *ptr = true;
+                            }
+                        }
+
+                        for (i, &label) in states_labels.iter().enumerate() {
+                            let label =
+                                format!("_{} {}", i + 1, if label { "saved" } else { "<empty>" });
+
+                            if let Some(item) = save_state_menu_list.get_children().get(i as usize)
                             {
                                 if let Some(item) = item.downcast_ref::<MenuItem>() {
-                                    item.set_label(&format!("_{} saved", i));
+                                    item.set_label(&label);
                                 }
                             }
-                            if let Some(item) = load_state_menu_list
-                                .get_children()
-                                .get(i.saturating_sub(1) as usize)
+                            if let Some(item) = load_state_menu_list.get_children().get(i as usize)
                             {
                                 if let Some(item) = item.downcast_ref::<MenuItem>() {
-                                    item.set_label(&format!("_{} saved", i));
+                                    item.set_label(&label);
                                 }
                             }
                         }
