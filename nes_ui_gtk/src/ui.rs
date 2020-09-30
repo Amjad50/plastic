@@ -11,9 +11,9 @@ use std::sync::{
     Arc, Mutex,
 };
 
-use gdk::enums::key;
-use gdk::{keyval_to_upper, DragAction, ModifierType};
+use gdk::{keys::constants as key_vals, keyval_to_upper, DragAction, ModifierType};
 use gio::prelude::*;
+use glib::source::timeout_add_local;
 use gtk::prelude::*;
 use gtk::{
     Application, Builder, DestDefaults, DrawingArea, FileChooserAction, FileChooserDialog,
@@ -46,6 +46,8 @@ impl UiProvider for GtkProvider {
         image: Arc<Mutex<Vec<u8>>>,
         ctrl_state: Arc<Mutex<StandardNESControllerState>>,
     ) {
+        gtk::init().unwrap();
+
         let app = Application::new(
             Some("amjad50.plastic.nes_gtk"),
             gio::ApplicationFlags::NON_UNIQUE,
@@ -53,7 +55,7 @@ impl UiProvider for GtkProvider {
         .expect("Application could not be initialized");
 
         let ui_glade_string = include_str!("../ui.glade");
-        let builder = Builder::new_from_string(ui_glade_string);
+        let builder = Builder::from_string(ui_glade_string);
 
         let window = builder.get_object::<Window>("top_level_window").unwrap();
         let drawing_area = builder.get_object::<DrawingArea>("canvas").unwrap();
@@ -68,8 +70,8 @@ impl UiProvider for GtkProvider {
             .unwrap();
 
         for i in 1..=NUMBER_OF_STATES {
-            let save_action = MenuItem::new_with_label(&format!("_{} <empty>", i));
-            let load_action = MenuItem::new_with_label(&format!("_{} <empty>", i));
+            let save_action = MenuItem::with_label(&format!("_{} <empty>", i));
+            let load_action = MenuItem::with_label(&format!("_{} <empty>", i));
 
             // setup handlers
             {
@@ -142,19 +144,22 @@ impl UiProvider for GtkProvider {
             window.connect_key_press_event(move |_, event| {
                 let mut ctrl = ctrl_state.lock().unwrap();
 
-                match keyval_to_upper(event.get_keyval()) {
-                    key::J => ctrl.press(StandardNESKey::B),
-                    key::K => ctrl.press(StandardNESKey::A),
-                    key::U => ctrl.press(StandardNESKey::Select),
-                    key::I => ctrl.press(StandardNESKey::Start),
-                    key::W => ctrl.press(StandardNESKey::Up),
-                    key::S => ctrl.press(StandardNESKey::Down),
-                    key::A => ctrl.press(StandardNESKey::Left),
-                    key::D => ctrl.press(StandardNESKey::Right),
-                    key::R if event.get_state().intersects(ModifierType::CONTROL_MASK) => {
+                // should be fixed with https://github.com/gtk-rs/gdk/pull/358
+                let mut val = event.get_keyval();
+                *val = keyval_to_upper(*val);
+                match val {
+                    key_vals::J => ctrl.press(StandardNESKey::B),
+                    key_vals::K => ctrl.press(StandardNESKey::A),
+                    key_vals::U => ctrl.press(StandardNESKey::Select),
+                    key_vals::I => ctrl.press(StandardNESKey::Start),
+                    key_vals::W => ctrl.press(StandardNESKey::Up),
+                    key_vals::S => ctrl.press(StandardNESKey::Down),
+                    key_vals::A => ctrl.press(StandardNESKey::Left),
+                    key_vals::D => ctrl.press(StandardNESKey::Right),
+                    key_vals::R if event.get_state().intersects(ModifierType::CONTROL_MASK) => {
                         ui_to_nes_sender.send(UiEvent::Reset).unwrap()
                     }
-                    key::Escape => {
+                    key_vals::Escape => {
                         if paused.load(Ordering::Relaxed) {
                             ui_to_nes_sender.send(UiEvent::Resume).unwrap();
                             paused.store(false, Ordering::Relaxed);
@@ -174,15 +179,19 @@ impl UiProvider for GtkProvider {
             let ctrl_state = ctrl_state.clone();
             window.connect_key_release_event(move |_, event| {
                 let mut ctrl = ctrl_state.lock().unwrap();
-                match gdk::keyval_to_upper(event.get_keyval()) {
-                    key::J => ctrl.release(StandardNESKey::B),
-                    key::K => ctrl.release(StandardNESKey::A),
-                    key::U => ctrl.release(StandardNESKey::Select),
-                    key::I => ctrl.release(StandardNESKey::Start),
-                    key::W => ctrl.release(StandardNESKey::Up),
-                    key::S => ctrl.release(StandardNESKey::Down),
-                    key::A => ctrl.release(StandardNESKey::Left),
-                    key::D => ctrl.release(StandardNESKey::Right),
+
+                // should be fixed with https://github.com/gtk-rs/gdk/pull/358
+                let mut val = event.get_keyval();
+                *val = keyval_to_upper(*val);
+                match val {
+                    key_vals::J => ctrl.release(StandardNESKey::B),
+                    key_vals::K => ctrl.release(StandardNESKey::A),
+                    key_vals::U => ctrl.release(StandardNESKey::Select),
+                    key_vals::I => ctrl.release(StandardNESKey::Start),
+                    key_vals::W => ctrl.release(StandardNESKey::Up),
+                    key_vals::S => ctrl.release(StandardNESKey::Down),
+                    key_vals::A => ctrl.release(StandardNESKey::Left),
+                    key_vals::D => ctrl.release(StandardNESKey::Right),
                     _ => {}
                 }
 
@@ -283,7 +292,7 @@ impl UiProvider for GtkProvider {
             app.add_window(&window);
         });
 
-        timeout_add(1000 / 120, move || {
+        timeout_add_local(1000 / 120, move || {
             if let Ok(event) = nes_to_ui_receiver.try_recv() {
                 match event {
                     BackendEvent::PresentStates(states) => {
