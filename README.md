@@ -1,4 +1,8 @@
-# plastic
+<p align="center">
+  <a href="https://github.com/Amjad50/plastic"><img alt="plastic" src="images/logo.svg" width="60%"></a>
+  <p align="center">NES emulator in <em>Rust</em></p>
+</p>
+
 
 [![Build status](https://github.com/Amjad50/plastic/workflows/Rust/badge.svg)](https://actions-badge.atrox.dev/Amjad50/plastic/goto)
 [![codecov](https://codecov.io/gh/Amjad50/plastic/branch/master/graph/badge.svg)](https://codecov.io/gh/Amjad50/plastic)
@@ -8,22 +12,21 @@
 
 This is a personal project for fun and to experience emulating hardware and connecting them together.
 
-- [plastic](#plastic)
-    - [Building and installation](#building-and-installation)
-      - [Pre-built](#pre-built)
-      - [Building](#building)
-    - [Components](#components)
-    - [Components graph](#components-graph)
-    - [Interfaces](#interfaces)
-      - [SFML](#sfml)
-      - [GTK](#gtk)
-      - [Native Windows GUI](#native-windows-gui)
-      - [TUI](#tui)
-    - [Controls](#controls)
-      - [Keyboard](#keyboard)
-      - [Gamepad](#gamepad)
-    - [License](#license)
-    - [References](#references)
+- [Building and installation](#building-and-installation)
+  - [Pre-built](#pre-built)
+  - [Building](#building)
+- [Components](#components)
+- [Components graph](#components-graph)
+- [Interfaces](#interfaces)
+  - [SFML](#sfml)
+  - [GTK](#gtk)
+  - [Native Windows GUI](#native-windows-gui)
+  - [TUI](#tui)
+- [Controls](#controls)
+  - [Keyboard](#keyboard)
+  - [Gamepad](#gamepad)
+- [License](#license)
+- [References](#references)
 
 ### Building and installation
 
