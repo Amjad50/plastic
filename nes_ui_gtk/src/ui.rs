@@ -82,8 +82,8 @@ impl UiProvider for GtkProvider {
         }
 
         for i in 1..=NUMBER_OF_STATES {
-            let save_action = MenuItem::with_label(&format!("_{} <empty>", i));
-            let load_action = MenuItem::with_label(&format!("_{} <empty>", i));
+            let save_action = MenuItem::with_mnemonic(&format!("_{} <empty>", i));
+            let load_action = MenuItem::with_mnemonic(&format!("_{} <empty>", i));
 
             // setup handlers
             {
