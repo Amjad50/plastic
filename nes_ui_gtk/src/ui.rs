@@ -12,6 +12,8 @@ use std::sync::{
 };
 
 use gdk::{keys::constants as key_vals, keyval_to_upper, DragAction, ModifierType};
+use gdk_pixbuf::prelude::*;
+use gdk_pixbuf::PixbufLoader;
 use gio::prelude::*;
 use glib::source::timeout_add_local;
 use gtk::prelude::*;
@@ -68,6 +70,16 @@ impl UiProvider for GtkProvider {
         let menu_action_resume = builder
             .get_object::<MenuItem>("menu_action_resume")
             .unwrap();
+
+        // setup window icon
+        let icon_png_raw_data = include_bytes!("../../images/icon.png");
+        let icon_loader = PixbufLoader::with_type("png").unwrap();
+        icon_loader.write(icon_png_raw_data).unwrap();
+        icon_loader.close().unwrap();
+
+        if let Some(icon) = icon_loader.get_pixbuf() {
+            window.set_icon(Some(&icon));
+        }
 
         for i in 1..=NUMBER_OF_STATES {
             let save_action = MenuItem::with_label(&format!("_{} <empty>", i));
