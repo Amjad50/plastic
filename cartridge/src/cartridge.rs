@@ -4,7 +4,7 @@ use super::{
     mappers::*,
 };
 use common::{
-    interconnection::CpuIrqProvider,
+    interconnection::CPUIrqProvider,
     save_state::{Savable, SaveError},
     Bus, Device, MirroringMode, MirroringProvider,
 };
@@ -454,7 +454,7 @@ impl Drop for Cartridge {
     }
 }
 
-impl CpuIrqProvider for Cartridge {
+impl CPUIrqProvider for Cartridge {
     fn is_irq_change_requested(&self) -> bool {
         if self.is_empty {
             return false;

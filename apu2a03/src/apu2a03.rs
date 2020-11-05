@@ -4,7 +4,7 @@ use crate::envelope::EnvelopedChannel;
 use crate::length_counter::LengthCountedChannel;
 use crate::tone_source::{APUChannel, APUChannelPlayer, BufferedChannel, TimedAPUChannel};
 use common::{
-    interconnection::{APUCPUConnection, CpuIrqProvider},
+    interconnection::{APUCPUConnection, CPUIrqProvider},
     save_state::{Savable, SaveError},
 };
 use serde::{Deserialize, Serialize};
@@ -567,7 +567,7 @@ impl APU2A03 {
     }
 }
 
-impl CpuIrqProvider for APU2A03 {
+impl CPUIrqProvider for APU2A03 {
     fn is_irq_change_requested(&self) -> bool {
         let dmc_irq_request = self.dmc.is_irq_change_requested();
 
@@ -592,7 +592,7 @@ impl APUCPUConnection for APU2A03 {
         self.dmc.request_dmc_reader_read()
     }
 
-    fn submit_buffer_byte(&mut self, byte: u8) {
+    fn submit_dmc_buffer_byte(&mut self, byte: u8) {
         self.dmc.submit_buffer_byte(byte);
     }
 }

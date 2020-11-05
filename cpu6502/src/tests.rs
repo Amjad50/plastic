@@ -4,7 +4,6 @@ mod cpu_tests {
 
     use crate::{CPUBusTrait, CPURunState, CPU6502};
     use common::{interconnection::*, save_state::Savable};
-    use std::{cell::RefCell, rc::Rc};
 
     struct DummyBus {
         data: [u8; 0x10000],
@@ -42,9 +41,7 @@ mod cpu_tests {
         }
     }
 
-    struct DummyHandler {}
-
-    impl PPUCPUConnection for DummyHandler {
+    impl PPUCPUConnection for DummyBus {
         fn is_nmi_pin_set(&self) -> bool {
             false
         }
@@ -61,11 +58,25 @@ mod cpu_tests {
         }
     }
 
-    impl APUCPUConnection for DummyHandler {
+    impl APUCPUConnection for DummyBus {
         fn request_dmc_reader_read(&self) -> Option<u16> {
             None
         }
-        fn submit_buffer_byte(&mut self, _: u8) {
+        fn submit_dmc_buffer_byte(&mut self, _: u8) {
+            unreachable!();
+        }
+    }
+
+    impl CPUIrqProvider for DummyBus {
+        fn is_irq_change_requested(&self) -> bool {
+            false
+        }
+
+        fn irq_pin_state(&self) -> bool {
+            unreachable!();
+        }
+
+        fn clear_irq_request_pin(&mut self) {
             unreachable!();
         }
     }
@@ -102,8 +113,7 @@ mod cpu_tests {
         const SUCCUSS_ADDRESS: u16 = 0x336D;
 
         let bus = DummyBus::new(data);
-        let handler = Rc::new(RefCell::new(DummyHandler {}));
-        let mut cpu = CPU6502::new(bus, handler.clone(), handler.clone());
+        let mut cpu = CPU6502::new(bus);
 
         cpu.reset();
 

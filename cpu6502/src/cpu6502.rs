@@ -1,15 +1,8 @@
 use super::instruction::{AddressingMode, Instruction, Opcode};
 use super::CPUBusTrait;
-use common::{
-    interconnection::{APUCPUConnection, CpuIrqProvider, PPUCPUConnection},
-    save_state::{Savable, SaveError},
-};
+use common::save_state::{Savable, SaveError};
 use serde::{Deserialize, Serialize};
-use std::{
-    cell::RefCell,
-    io::{Read, Write},
-    rc::Rc,
-};
+use std::io::{Read, Write};
 
 const NMI_VECTOR_ADDRESS: u16 = 0xFFFA;
 const RESET_VECTOR_ADDRESS: u16 = 0xFFFC;
@@ -62,10 +55,6 @@ pub struct CPU6502<T: CPUBusTrait> {
     next_instruction: Option<(Instruction, u8)>,
 
     bus: T,
-    ppu: Rc<RefCell<dyn PPUCPUConnection>>,
-    apu: Rc<RefCell<dyn APUCPUConnection>>,
-
-    irq_providers: Vec<Rc<RefCell<dyn CpuIrqProvider>>>,
 }
 
 // public
@@ -73,11 +62,7 @@ impl<T> CPU6502<T>
 where
     T: CPUBusTrait,
 {
-    pub fn new(
-        bus: T,
-        ppu: Rc<RefCell<dyn PPUCPUConnection>>,
-        apu: Rc<RefCell<dyn APUCPUConnection>>,
-    ) -> Self {
+    pub fn new(bus: T) -> Self {
         CPU6502 {
             reg_pc: 0,
             reg_sp: 0,
@@ -97,15 +82,7 @@ where
             next_instruction: None,
 
             bus,
-            ppu,
-            apu,
-
-            irq_providers: Vec::new(),
         }
-    }
-
-    pub fn add_irq_provider(&mut self, provider: Rc<RefCell<dyn CpuIrqProvider>>) {
-        self.irq_providers.push(provider);
     }
 
     pub fn reset(&mut self) {
@@ -159,7 +136,7 @@ where
 
                     let data = self.read_bus(cpu_address);
 
-                    self.ppu.borrow_mut().send_oam_data(oma_address as u8, data);
+                    self.bus.send_oam_data(oma_address as u8, data);
                 }
 
                 // since it should read in one cycle and write in the other cycle
@@ -178,7 +155,10 @@ where
                 // instruction
                 self.check_for_nmi_dma();
                 // check if there is pending IRQs from cartridge
-                self.check_for_irq();
+                if self.bus.is_irq_change_requested() {
+                    self.irq_pin_status = self.bus.irq_pin_state();
+                    self.bus.clear_irq_request_pin()
+                }
 
                 // reload the next instruction in `the next_instruction` buffer
                 let instruction = self.fetch_next_instruction();
@@ -492,47 +472,26 @@ where
     }
 
     fn check_for_nmi_dma(&mut self) {
-        let mut ppu = self.ppu.borrow_mut();
         // check if the PPU is setting the NMI pin
-        if ppu.is_nmi_pin_set() {
+        if self.bus.is_nmi_pin_set() {
             self.nmi_pin_status = true;
-            ppu.clear_nmi_pin();
+            self.bus.clear_nmi_pin();
         }
         // check if PPU is requesting DMA
-        if ppu.is_dma_request() {
-            self.dma_address = ppu.dma_address();
+        if self.bus.is_dma_request() {
+            self.dma_address = self.bus.dma_address();
             self.dma_remaining = 256;
-            ppu.clear_dma_request();
-        }
-    }
-
-    fn check_for_irq(&mut self) {
-        let mut is_irq_set = false;
-
-        for provider in self.irq_providers.iter() {
-            let mut provider = provider.borrow_mut();
-
-            if provider.is_irq_change_requested() {
-                if provider.irq_pin_state() {
-                    is_irq_set = true;
-                }
-                self.irq_pin_status = provider.irq_pin_state();
-                provider.clear_irq_request_pin();
-            }
-        }
-
-        if is_irq_set {
-            self.irq_pin_status = true;
+            self.bus.clear_dma_request();
         }
     }
 
     fn check_and_run_dmc_transfer(&mut self) {
-        let request = self.apu.borrow().request_dmc_reader_read();
+        let request = self.bus.request_dmc_reader_read();
 
         if let Some(addr) = request {
             let data = self.read_bus(addr);
 
-            self.apu.borrow_mut().submit_buffer_byte(data);
+            self.bus.submit_dmc_buffer_byte(data);
 
             // FIXME: respect different clock delay for respective positions to
             //  steal the clock

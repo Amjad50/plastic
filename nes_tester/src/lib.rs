@@ -1,6 +1,7 @@
 use apu2a03::APU2A03;
 use cartridge::{Cartridge, CartridgeError};
 use common::{
+    interconnection::*,
     save_state::{Savable, SaveError},
     Bus, Device,
 };
@@ -8,7 +9,7 @@ use cpu6502::{CPUBusTrait, CPURunState, CPU6502};
 use display::{COLORS, TV};
 use ppu2c02::{Palette, VRam, PPU2C02};
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     convert::From,
     error::Error,
     fmt::{Debug, Display, Formatter, Result as fmtResult},
@@ -59,28 +60,6 @@ struct PPUBus {
     palettes: Palette,
 }
 
-struct CPUBus {
-    cartridge: Rc<RefCell<Cartridge>>,
-    ram: [u8; 0x800],
-    ppu: Rc<RefCell<dyn Bus>>,
-    apu: Rc<RefCell<APU2A03>>,
-}
-
-impl CPUBus {
-    pub fn new(
-        cartridge: Rc<RefCell<Cartridge>>,
-        ppu: Rc<RefCell<dyn Bus>>,
-        apu: Rc<RefCell<APU2A03>>,
-    ) -> Self {
-        CPUBus {
-            cartridge,
-            ram: [0; 0x800],
-            ppu,
-            apu,
-        }
-    }
-}
-
 impl PPUBus {
     pub fn new(cartridge: Rc<RefCell<Cartridge>>) -> Self {
         PPUBus {
@@ -119,6 +98,30 @@ impl Savable for PPUBus {
 
     fn load<R: std::io::Read>(&mut self, _reader: &mut R) -> Result<(), SaveError> {
         unreachable!()
+    }
+}
+
+struct CPUBus {
+    cartridge: Rc<RefCell<Cartridge>>,
+    ram: [u8; 0x800],
+    ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
+    apu: Rc<RefCell<APU2A03>>,
+    irq_pin_change_requested: Cell<bool>,
+}
+
+impl CPUBus {
+    pub fn new(
+        cartridge: Rc<RefCell<Cartridge>>,
+        ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
+        apu: Rc<RefCell<APU2A03>>,
+    ) -> Self {
+        CPUBus {
+            cartridge,
+            ram: [0; 0x800],
+            ppu,
+            apu,
+            irq_pin_change_requested: Cell::new(false),
+        }
     }
 }
 
@@ -185,6 +188,70 @@ impl Savable for CPUBus {
     }
 }
 
+impl PPUCPUConnection for CPUBus {
+    fn is_nmi_pin_set(&self) -> bool {
+        self.ppu.borrow().is_nmi_pin_set()
+    }
+
+    fn clear_nmi_pin(&mut self) {
+        self.ppu.borrow_mut().clear_nmi_pin()
+    }
+
+    fn is_dma_request(&self) -> bool {
+        self.ppu.borrow_mut().is_dma_request()
+    }
+
+    fn clear_dma_request(&mut self) {
+        self.ppu.borrow_mut().clear_dma_request()
+    }
+
+    fn dma_address(&mut self) -> u8 {
+        self.ppu.borrow_mut().dma_address()
+    }
+
+    fn send_oam_data(&mut self, address: u8, data: u8) {
+        self.ppu.borrow_mut().send_oam_data(address, data)
+    }
+}
+
+impl APUCPUConnection for CPUBus {
+    fn request_dmc_reader_read(&self) -> Option<u16> {
+        self.apu.borrow().request_dmc_reader_read()
+    }
+
+    fn submit_dmc_buffer_byte(&mut self, byte: u8) {
+        self.apu.borrow_mut().submit_dmc_buffer_byte(byte)
+    }
+}
+
+impl CPUIrqProvider for CPUBus {
+    fn is_irq_change_requested(&self) -> bool {
+        let result = self.apu.borrow().is_irq_change_requested()
+            || self.cartridge.borrow().is_irq_change_requested();
+
+        self.irq_pin_change_requested.set(result);
+        result
+    }
+
+    fn irq_pin_state(&self) -> bool {
+        if self.irq_pin_change_requested.get() {
+            let mut result = self.apu.borrow().irq_pin_state();
+            if self.cartridge.borrow().is_irq_change_requested() {
+                result = result || self.cartridge.borrow().irq_pin_state();
+            }
+            result
+        } else {
+            false
+        }
+    }
+
+    fn clear_irq_request_pin(&mut self) {
+        *self.irq_pin_change_requested.get_mut() = false;
+        self.cartridge.borrow_mut().clear_irq_request_pin();
+        self.apu.borrow_mut().clear_irq_request_pin();
+    }
+}
+
 pub struct NES {
     cpu: CPU6502<CPUBus>,
     ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
@@ -209,9 +276,7 @@ impl NES {
 
         let cpubus = CPUBus::new(cartridge.clone(), ppu.clone(), apu.clone());
 
-        let mut cpu = CPU6502::new(cpubus, ppu.clone(), apu.clone());
-        cpu.add_irq_provider(cartridge.clone());
-        cpu.add_irq_provider(apu.clone());
+        let cpu = CPU6502::new(cpubus);
 
         Ok(Self {
             cpu,
