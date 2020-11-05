@@ -34,6 +34,7 @@ pub struct Sprite {
     y: u8,
     tile_index: u8,
     attributes: SpriteAttribute,
+    pattern: [u8; 2],
 }
 impl Sprite {
     pub fn empty() -> Self {
@@ -42,6 +43,7 @@ impl Sprite {
             y: 0,
             tile_index: 0,
             attributes: SpriteAttribute::empty(),
+            pattern: [0; 2],
         }
     }
 
@@ -52,6 +54,7 @@ impl Sprite {
             y: 0xFF,
             tile_index: 0xFF,
             attributes: SpriteAttribute::all(),
+            pattern: [0xFF; 2],
         }
     }
 
@@ -59,28 +62,39 @@ impl Sprite {
         self.y
     }
 
-    pub fn get_x(&self) -> u8 {
-        self.x
-    }
+    /// for 8x8:
+    /// use the byte normally as index into the pattern table
 
-    /*
-    for 8x8:
-    use the byte normally as index into the pattern table
+    /// for 8x16:
 
-    for 8x16:
-
-    76543210
-    ||||||||
-    |||||||+- Bank ($0000 or $1000) of tiles
-    +++++++-- Tile number of top of sprite (0 to 254; bottom half gets the next tile)
-     */
-
+    /// 76543210
+    /// ||||||||
+    /// |||||||+- Bank ($0000 or $1000) of tiles
+    /// +++++++-- Tile number of top of sprite (0 to 254; bottom half gets the next tile)
     pub fn get_tile(&self) -> u8 {
         self.tile_index
     }
 
     pub fn get_attribute(&self) -> SpriteAttribute {
         self.attributes
+    }
+
+    pub fn set_pattern(&mut self, pattern: [u8; 2]) {
+        self.pattern = pattern;
+    }
+
+    pub fn get_color_bits(&self, x: u16) -> u8 {
+        let mut x = x.wrapping_sub(self.x as u16);
+
+        if x < 8 {
+            if !self.attributes.is_flip_horizontal() {
+                x = 7 - x;
+            }
+
+            (((self.pattern[1] >> x) & 1) << 1) | ((self.pattern[0] >> x) & 1)
+        } else {
+            0
+        }
     }
 
     pub fn read_offset(&self, offset: u8) -> u8 {

@@ -140,12 +140,10 @@ pub struct PPU2C02<T: Bus + Savable> {
 
     primary_oam: [Sprite; 64],
     secondary_oam: [Sprite; 8],
+    rendering_oam: [Sprite; 8],
 
     secondary_oam_counter: u8,
 
-    sprite_pattern_shift_registers: [[u8; 2]; 8],
-    sprite_attribute_registers: [SpriteAttribute; 8],
-    sprite_counters: [u8; 8],
     sprite_0_present: bool,
     next_scanline_sprite_0_present: bool,
 
@@ -190,12 +188,10 @@ where
 
             primary_oam: [Sprite::empty(); 64],
             secondary_oam: [Sprite::empty(); 8],
+            rendering_oam: [Sprite::empty(); 8],
 
             secondary_oam_counter: 0,
 
-            sprite_pattern_shift_registers: [[0; 2]; 8],
-            sprite_attribute_registers: [SpriteAttribute::empty(); 8],
-            sprite_counters: [0; 8],
             sprite_0_present: false,
             next_scanline_sprite_0_present: false,
 
@@ -693,54 +689,23 @@ where
 
         let next_y = self.get_next_scroll_y_render();
 
+        let sprite_height = self.reg_control.sprite_height();
+
         // loop through all secondary_oam, even the empty ones (0xFF)
         // a write to the cartridge MUST be done here even if no sprites
         // are drawn
         for i in 0..8 as usize {
-            let sprite = self.secondary_oam[i];
+            let mut sprite = self.secondary_oam[i];
             let mut fine_y = next_y.wrapping_sub(sprite.get_y());
-
-            let sprite_height = self.reg_control.sprite_height();
 
             // handle flipping vertically
             if sprite.get_attribute().is_flip_vertical() {
                 fine_y = (sprite_height - 1).wrapping_sub(fine_y);
             }
 
-            self.sprite_counters[i] = sprite.get_x();
-            self.sprite_pattern_shift_registers[i] =
-                self.fetch_pattern_sprite(sprite.get_tile(), fine_y);
+            sprite.set_pattern(self.fetch_pattern_sprite(sprite.get_tile(), fine_y));
 
-            // handle flipping horizontally
-            if sprite.get_attribute().is_flip_horizontal() {
-                let mut tmp_low = 0;
-                let mut tmp_high = 0;
-
-                // this whole loop and the bit after it is just to rotate the bits
-                // of the `sprite_pattern_shift_registers`, such that bits
-                // `0,1,2,...,n` would become bits `n,...,2,1,0`
-                //
-                // it does not look very efficient to me, but not sure if there
-                // is a faster method
-                for _ in 0..7 {
-                    tmp_low |= self.sprite_pattern_shift_registers[i][0] & 0b1;
-                    tmp_high |= self.sprite_pattern_shift_registers[i][1] & 0b1;
-
-                    tmp_low <<= 1;
-                    tmp_high <<= 1;
-                    self.sprite_pattern_shift_registers[i][0] >>= 1;
-                    self.sprite_pattern_shift_registers[i][1] >>= 1;
-                }
-
-                // put the reminaing bit without shifting
-                tmp_low |= self.sprite_pattern_shift_registers[i][0];
-                tmp_high |= self.sprite_pattern_shift_registers[i][1];
-
-                self.sprite_pattern_shift_registers[i][0] = tmp_low;
-                self.sprite_pattern_shift_registers[i][1] = tmp_high;
-            }
-
-            self.sprite_attribute_registers[i] = sprite.get_attribute();
+            self.rendering_oam[i] = sprite;
         }
     }
 
@@ -794,55 +759,27 @@ where
     }
 
     fn get_sprites_first_non_transparent_pixel(&mut self) -> (u8, u8, bool, bool) {
-        let mut color_bits = 0;
-        let mut palette = 0;
-        let mut background_priority = false;
-        let mut first_non_transparent_found = false;
-        let mut is_sprite_0 = false;
-
-        for i in 0..8 {
-            // active sprite
-            if self.sprite_counters[i] == 0 {
-                // the color bit
-                let low_bit = self.sprite_pattern_shift_registers[i][0] >> 7;
-                let high_bit = self.sprite_pattern_shift_registers[i][1] >> 7;
-
-                // shift the registers
-                self.sprite_pattern_shift_registers[i][0] =
-                    self.sprite_pattern_shift_registers[i][0].wrapping_shl(1);
-                self.sprite_pattern_shift_registers[i][1] =
-                    self.sprite_pattern_shift_registers[i][1].wrapping_shl(1);
-
-                let current_color_bits = (high_bit << 1) | low_bit;
-
-                // if its a zero, ignore it and try to find the next non-transparent
-                // color-bit, if all are zeros, then ok
-                if !first_non_transparent_found && current_color_bits != 0 {
-                    color_bits = current_color_bits;
-
-                    let attribute = self.sprite_attribute_registers[i];
-                    palette = attribute.palette();
-                    background_priority = attribute.is_behind_background();
-
-                    // set if its sprite 0
-                    is_sprite_0 = i == 0 && self.sprite_0_present;
-
-                    // stop searching
-                    first_non_transparent_found = true;
-                }
-            } else {
-                self.sprite_counters[i] -= 1;
-            }
-        }
-
         if !self.reg_mask.sprites_enabled()
             || (self.cycle < 8 && self.reg_mask.sprites_left_clipping_enabled())
             || self.cycle == 255
         {
-            (0, 0, false, false)
-        } else {
-            (color_bits, palette, background_priority, is_sprite_0)
+            return (0, 0, false, false);
         }
+
+        for (i, sprite) in self.rendering_oam.iter().enumerate() {
+            let current_color_bits = sprite.get_color_bits(self.cycle);
+
+            if current_color_bits != 0 {
+                return (
+                    current_color_bits,
+                    sprite.get_attribute().palette(),
+                    sprite.get_attribute().is_behind_background(),
+                    i == 0 && self.sprite_0_present,
+                );
+            }
+        }
+
+        (0, 0, false, false)
     }
 
     /// this method fetches background and sprite pixels, check overflow for
@@ -1114,19 +1051,15 @@ where
                     }
                 }
             }
-            257..=320 => {
-                // unused
-                if self.cycle == 257 {
-                    self.restore_rendering_scroll_x();
-                    // to fix nametable wrapping around
-                    self.restore_nametable_horizontal();
-                }
+            257 => {
+                self.restore_rendering_scroll_x();
+                // to fix nametable wrapping around
+                self.restore_nametable_horizontal();
 
                 // reload them all in one go
-                if self.cycle == 257 {
-                    self.reload_sprite_shift_registers();
-                }
+                self.reload_sprite_shift_registers();
             }
+            258..=320 => {}
             321..=340 => {
                 // lets just do it in the beginning
                 if self.cycle == 321 {
@@ -1189,9 +1122,6 @@ where
 
         self.secondary_oam_counter = 0;
 
-        self.sprite_pattern_shift_registers = [[0; 2]; 8];
-        self.sprite_attribute_registers = [SpriteAttribute::empty(); 8];
-        self.sprite_counters = [0; 8];
         self.sprite_0_present = false;
         self.next_scanline_sprite_0_present = false;
 
@@ -1225,9 +1155,6 @@ where
         self.primary_oam = primary_oam;
         self.secondary_oam = state.secondary_oam;
         self.secondary_oam_counter = state.secondary_oam_counter;
-        self.sprite_pattern_shift_registers = state.sprite_pattern_shift_registers;
-        self.sprite_attribute_registers = state.sprite_attribute_registers;
-        self.sprite_counters = state.sprite_counters;
         self.sprite_0_present = state.sprite_0_present;
         self.next_scanline_sprite_0_present = state.next_scanline_sprite_0_present;
         self.is_dma_request = state.is_dma_request;
@@ -1291,6 +1218,7 @@ struct SavablePPUState {
     nmi_occured_in_this_frame: bool,
 
     primary_oam: Vec<Sprite>,
+    // FIXME: add `rendering_oam`
     secondary_oam: [Sprite; 8],
 
     secondary_oam_counter: u8,
@@ -1331,9 +1259,13 @@ impl SavablePPUState {
             primary_oam,
             secondary_oam: ppu.secondary_oam,
             secondary_oam_counter: ppu.secondary_oam_counter,
-            sprite_pattern_shift_registers: ppu.sprite_pattern_shift_registers,
-            sprite_attribute_registers: ppu.sprite_attribute_registers,
-            sprite_counters: ppu.sprite_counters,
+
+            // Since these are removed, we keep them in the save just to not corrupt
+            // the files
+            // backward compat :(
+            sprite_pattern_shift_registers: [[0; 2]; 8],
+            sprite_attribute_registers: [SpriteAttribute::empty(); 8],
+            sprite_counters: [0; 8],
             sprite_0_present: ppu.sprite_0_present,
             next_scanline_sprite_0_present: ppu.next_scanline_sprite_0_present,
             is_dma_request: ppu.is_dma_request,
