@@ -144,7 +144,7 @@ where
                 CPURunState::DmaTransfere
             } else if self.nmi_pin_status
                 || (self.irq_pin_status
-                    && !(self.reg_status & (StatusFlag::InterruptDisable as u8) != 0))
+                    && self.reg_status & StatusFlag::InterruptDisable as u8 == 0)
             {
                 // execute interrupt
                 // hardware side interrupt
@@ -557,7 +557,7 @@ where
                 self.set_flag_status(
                     StatusFlag::Overflow,
                     (((result as u8 ^ self.reg_a) & 0x80) != 0)
-                        && !(((operand ^ self.reg_a) & 0x80) != 0),
+                        && (((operand ^ self.reg_a) & 0x80) == 0),
                 );
                 self.update_zero_negative_flags(result as u8);
                 self.set_flag_status(StatusFlag::Carry, result & 0xff00 != 0);
@@ -704,7 +704,7 @@ where
                     decoded_operand as u8
                 };
                 // inverse the carry
-                let carry = if !(self.reg_status & (StatusFlag::Carry as u8) == 0) {
+                let carry = if self.reg_status & (StatusFlag::Carry as u8) != 0 {
                     0
                 } else {
                     1
@@ -719,7 +719,7 @@ where
                     ((result as u8 ^ self.reg_a) & 0x80 != 0)
                         && ((operand ^ self.reg_a) & 0x80 != 0),
                 );
-                self.set_flag_status(StatusFlag::Carry, !(result & 0xff00 != 0));
+                self.set_flag_status(StatusFlag::Carry, result & 0xff00 == 0);
                 self.update_zero_negative_flags(result as u8);
 
                 self.reg_a = result as u8;

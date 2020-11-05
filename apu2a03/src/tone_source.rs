@@ -68,7 +68,7 @@ impl APUChannel for BufferedChannel {
     fn get_output(&mut self) -> f32 {
         self.recent_output = true;
 
-        if self.buffer.len() == 0 {
+        if self.buffer.is_empty() {
             self.overusing = true;
             self.underusing = false;
 

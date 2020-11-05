@@ -103,7 +103,7 @@ impl APU2A03 {
             interrupt_flag: Cell::new(false),
             request_interrupt_flag_change: Cell::new(false),
 
-            player: Self::get_player(buffered_channel.clone()),
+            player: Self::get_player(buffered_channel),
         }
     }
 
@@ -116,10 +116,8 @@ impl APU2A03 {
         if formats.count() > 0 {
             let sink = rodio::Sink::new(&device);
 
-            let low_pass_player = rodio::source::Source::low_pass(
-                APUChannelPlayer::from_clone(channel.clone()),
-                10000,
-            );
+            let low_pass_player =
+                rodio::source::Source::low_pass(APUChannelPlayer::from_clone(channel), 10000);
 
             sink.append(low_pass_player);
             sink.set_volume(0.15);
@@ -167,6 +165,7 @@ impl APU2A03 {
         }
     }
 
+    #[allow(clippy::identity_op)]
     pub(crate) fn write_register(&mut self, register: Register, data: u8) {
         match register {
             Register::Pulse1_1 => {
@@ -386,10 +385,8 @@ impl APU2A03 {
 
                 if data >> 4 & 1 == 0 {
                     self.dmc.clear_sample_remaining_bytes_and_silence();
-                } else {
-                    if !self.dmc.sample_remaining_bytes_more_than_0() {
-                        self.dmc.restart_sample();
-                    }
+                } else if !self.dmc.sample_remaining_bytes_more_than_0() {
+                    self.dmc.restart_sample();
                 }
 
                 self.dmc.clear_interrupt_flag();
@@ -472,18 +469,20 @@ impl APU2A03 {
     /// clock the APU **at** CPU clock rate, the clocks are handled correctly
     /// as it should be
     pub fn clock(&mut self) {
-        if self.wait_reset > 0 {
-            self.wait_reset -= 1;
-        } else if self.wait_reset == 0 {
-            self.cycle = 0;
-            self.wait_reset = -1;
+        match self.wait_reset.cmp(&0) {
+            std::cmp::Ordering::Less => {}
+            std::cmp::Ordering::Equal => {
+                self.cycle = 0;
+                self.wait_reset = -1;
 
-            self.is_4_step_squence_mode = self.is_4_step_squence_mode_hold_value;
+                self.is_4_step_squence_mode = self.is_4_step_squence_mode_hold_value;
 
-            if !self.is_4_step_squence_mode {
-                self.generate_quarter_frame_clock();
-                self.generate_half_frame_clock();
+                if !self.is_4_step_squence_mode {
+                    self.generate_quarter_frame_clock();
+                    self.generate_half_frame_clock();
+                }
             }
+            std::cmp::Ordering::Greater => self.wait_reset -= 1,
         }
 
         // after how many apu clocks a sample should be recorded
@@ -584,6 +583,12 @@ impl CPUIrqProvider for APU2A03 {
         self.request_interrupt_flag_change.set(false);
 
         self.dmc.clear_irq_request_pin();
+    }
+}
+
+impl Default for APU2A03 {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

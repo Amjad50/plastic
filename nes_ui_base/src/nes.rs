@@ -39,7 +39,7 @@ impl PPUBus {
     {
         PPUBus {
             cartridge: cartridge.clone(),
-            vram: VRam::new(cartridge.clone()),
+            vram: VRam::new(cartridge),
             palettes: Palette::new(),
         }
     }
@@ -160,13 +160,13 @@ impl CPUBusTrait for CPUBus {
 
 impl Savable for CPUBus {
     fn save<W: std::io::Write>(&self, writer: &mut W) -> Result<(), SaveError> {
-        writer.write(&self.ram)?;
+        writer.write_all(&self.ram)?;
 
         Ok(())
     }
 
     fn load<R: Read>(&mut self, reader: &mut R) -> Result<(), SaveError> {
-        reader.read(&mut self.ram)?;
+        reader.read_exact(&mut self.ram)?;
 
         Ok(())
     }
@@ -415,7 +415,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                 let mut rest = Vec::new();
                 file.read_to_end(&mut rest)?;
 
-                if rest.len() > 0 {
+                if !rest.is_empty() {
                     return Err(SaveError::Others);
                 }
 

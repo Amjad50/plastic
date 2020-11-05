@@ -64,7 +64,7 @@ impl PPUBus {
     pub fn new(cartridge: Rc<RefCell<Cartridge>>) -> Self {
         PPUBus {
             cartridge: cartridge.clone(),
-            vram: VRam::new(cartridge.clone()),
+            vram: VRam::new(cartridge),
             palettes: Palette::new(),
         }
     }
@@ -274,13 +274,13 @@ impl NES {
 
         let apu = Rc::new(RefCell::new(APU2A03::new()));
 
-        let cpubus = CPUBus::new(cartridge.clone(), ppu.clone(), apu.clone());
+        let cpubus = CPUBus::new(cartridge, ppu.clone(), apu.clone());
 
         let cpu = CPU6502::new(cpubus);
 
         Ok(Self {
             cpu,
-            ppu: ppu.clone(),
+            ppu,
             tv_image,
             apu,
         })
@@ -346,6 +346,7 @@ impl NES {
     ///
     /// this check is done manually now, not sure if it should be added
     /// to `display::TV` or not
+    #[allow(clippy::identity_op)]
     pub fn clock_until_pixel_appears(&mut self, x: u32, y: u32, color_code: u8) {
         loop {
             self.clock();

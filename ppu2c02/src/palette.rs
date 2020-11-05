@@ -28,6 +28,12 @@ impl Palette {
     }
 }
 
+impl Default for Palette {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Bus for Palette {
     fn read(&self, address: u16, device: Device) -> u8 {
         assert!(device == Device::PPU && address >= 0x3F00 && address <= 0x3FFF);
@@ -43,13 +49,13 @@ impl Bus for Palette {
 
 impl Savable for Palette {
     fn save<W: std::io::Write>(&self, writer: &mut W) -> Result<(), SaveError> {
-        writer.write(&self.palette_data)?;
+        writer.write_all(&self.palette_data)?;
 
         Ok(())
     }
 
     fn load<R: std::io::Read>(&mut self, reader: &mut R) -> Result<(), SaveError> {
-        reader.read(&mut self.palette_data)?;
+        reader.read_exact(&mut self.palette_data)?;
 
         Ok(())
     }

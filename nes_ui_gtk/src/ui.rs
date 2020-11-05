@@ -188,7 +188,6 @@ impl UiProvider for GtkProvider {
         }
 
         {
-            let ctrl_state = ctrl_state.clone();
             window.connect_key_release_event(move |_, event| {
                 let mut ctrl = ctrl_state.lock().unwrap();
 

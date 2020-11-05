@@ -58,13 +58,13 @@ impl Bus for VRam {
 
 impl Savable for VRam {
     fn save<W: std::io::Write>(&self, writer: &mut W) -> Result<(), SaveError> {
-        writer.write(&self.vram_data)?;
+        writer.write_all(&self.vram_data)?;
 
         Ok(())
     }
 
     fn load<R: std::io::Read>(&mut self, reader: &mut R) -> Result<(), SaveError> {
-        reader.read(&mut self.vram_data)?;
+        reader.read_exact(&mut self.vram_data)?;
 
         Ok(())
     }

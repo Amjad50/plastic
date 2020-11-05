@@ -379,9 +379,9 @@ impl Display for Instruction {
             Absolute => format!("${:04X}", self.operand),
             AbsoluteX => format!("${:04X}, X", self.operand),
             AbsoluteY => format!("${:04X}, Y", self.operand),
-            Accumulator => format!("A"),
+            Accumulator => "A".to_string(),
             Relative => format!("${:02X}", self.operand),
-            Implied => format!(""),
+            Implied => "".to_string(),
         };
 
         write!(f, "{} {}", self.opcode, addressing_string)

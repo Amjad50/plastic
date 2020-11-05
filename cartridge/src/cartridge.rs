@@ -59,8 +59,8 @@ impl INesHeader {
 
         if ines_2_ident == 0 {
             let mut is_archaic_ines = false;
-            for i in 12..=15 {
-                if header[i] != 0 {
+            for item in header.iter().skip(12) {
+                if *item != 0 {
                     is_archaic_ines = true;
                 }
             }
@@ -432,16 +432,14 @@ impl MirroringProvider for Cartridge {
 
         if self.header.use_hardwaired_4_screen_mirroring {
             MirroringMode::FourScreen
-        } else {
-            if self.mapper.is_hardwired_mirrored() {
-                if self.header.hardwired_mirroring_vertical {
-                    MirroringMode::Vertical
-                } else {
-                    MirroringMode::Horizontal
-                }
+        } else if self.mapper.is_hardwired_mirrored() {
+            if self.header.hardwired_mirroring_vertical {
+                MirroringMode::Vertical
             } else {
-                self.mapper.nametable_mirroring()
+                MirroringMode::Horizontal
             }
+        } else {
+            self.mapper.nametable_mirroring()
         }
     }
 }
@@ -475,13 +473,13 @@ impl CPUIrqProvider for Cartridge {
 impl Savable for Cartridge {
     fn save<W: Write>(&self, writer: &mut W) -> Result<(), SaveError> {
         let mapper_saved_state = self.mapper.save_state();
-        writer.write(&mapper_saved_state)?;
+        writer.write_all(&mapper_saved_state)?;
 
-        writer.write(&self.prg_ram_data)?;
+        writer.write_all(&self.prg_ram_data)?;
 
-        writer.write(&[self.header.is_chr_ram as u8])?;
+        writer.write_all(&[self.header.is_chr_ram as u8])?;
         if self.header.is_chr_ram {
-            writer.write(&self.chr_data)?;
+            writer.write_all(&self.chr_data)?;
         }
 
         Ok(())
@@ -489,15 +487,15 @@ impl Savable for Cartridge {
 
     fn load<R: Read>(&mut self, reader: &mut R) -> Result<(), SaveError> {
         let mut mapper_load_data = vec![0; self.mapper.save_state_size()];
-        reader.read(&mut mapper_load_data)?;
+        reader.read_exact(&mut mapper_load_data)?;
         self.mapper.load_state(mapper_load_data);
 
-        reader.read(&mut self.prg_ram_data)?;
+        reader.read_exact(&mut self.prg_ram_data)?;
 
         let mut is_chr_ram = [0u8; 1];
-        reader.read(&mut is_chr_ram)?;
+        reader.read_exact(&mut is_chr_ram)?;
         if is_chr_ram[0] != 0 {
-            reader.read(&mut self.chr_data)?;
+            reader.read_exact(&mut self.chr_data)?;
         }
 
         Ok(())

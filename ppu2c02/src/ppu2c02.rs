@@ -585,6 +585,7 @@ where
         }
     }
 
+    #[allow(clippy::needless_range_loop)]
     fn reload_background_shift_registers(&mut self) {
         // tile address = 0x2000 | (v & 0x0FFF)
         let nametable_tile = self.read_bus(0x2000 | self.vram_address_cur.get() & 0xFFF);
@@ -644,6 +645,7 @@ where
     /// ||++++---------- R: Tile row
     /// |+-------------- H: Half of sprite table (0: "left"; 1: "right")
     /// +--------------- 0: Pattern table is at $0000-$1FFF
+    #[allow(clippy::identity_op)]
     fn fetch_pattern(&self, pattern_table: u16, location: u8, fine_y: u8) -> [u8; 2] {
         let fine_y = fine_y as u16;
 
@@ -1107,7 +1109,7 @@ where
                     let mut index = (self.cycle - 65) as usize;
                     // each takes 3 cycles
                     if index % 3 == 0 {
-                        index = index / 3;
+                        index /= 3;
 
                         let sprite = self.primary_oam[index];
                         let sprite_y = sprite.get_y() as i16;
@@ -1226,9 +1228,7 @@ where
 
     fn load_serialized_state(&mut self, state: SavablePPUState) {
         let mut primary_oam = [Sprite::empty(); 64];
-        for i in 0..64 {
-            primary_oam[i] = state.primary_oam[i];
-        }
+        primary_oam.copy_from_slice(state.primary_oam.as_slice());
 
         self.reg_control = ControlReg::from_bits(state.reg_control).unwrap();
         self.reg_mask = MaskReg::from_bits(state.reg_mask).unwrap();

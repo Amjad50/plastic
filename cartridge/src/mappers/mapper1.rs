@@ -166,14 +166,12 @@ impl Mapper1 {
     fn map_ppu(&self, address: u16) -> MappingResult {
         let mut bank = if self.is_chr_8kb_mode() {
             self.chr_0_bank & 0b11110
+        } else if address <= 0x0FFF {
+            self.chr_0_bank
+        } else if address >= 0x1000 && address <= 0x1FFF {
+            self.chr_1_bank
         } else {
-            if address <= 0x0FFF {
-                self.chr_0_bank
-            } else if address >= 0x1000 && address <= 0x1FFF {
-                self.chr_1_bank
-            } else {
-                unreachable!()
-            }
+            unreachable!()
         } as usize;
 
         bank %= self.chr_count as usize;
@@ -231,23 +229,21 @@ impl Mapper for Mapper1 {
                         let mut bank = if self.is_prg_32kb_mode() {
                             // ignore last bit
                             self.get_prg_bank() & 0b11110
-                        } else {
-                            if address >= 0x8000 && address <= 0xBFFF {
-                                if self.is_first_prg_chunk_fixed() {
-                                    0
-                                } else {
-                                    self.get_prg_bank()
-                                }
-                            } else if address >= 0xC000 {
-                                if self.is_first_prg_chunk_fixed() {
-                                    self.get_prg_bank()
-                                } else {
-                                    // last bank
-                                    self.prg_count - 1
-                                }
+                        } else if address >= 0x8000 && address <= 0xBFFF {
+                            if self.is_first_prg_chunk_fixed() {
+                                0
                             } else {
-                                unreachable!();
+                                self.get_prg_bank()
                             }
+                        } else if address >= 0xC000 {
+                            if self.is_first_prg_chunk_fixed() {
+                                self.get_prg_bank()
+                            } else {
+                                // last bank
+                                self.prg_count - 1
+                            }
+                        } else {
+                            unreachable!();
                         } as usize;
 
                         if self.prg_count > 16 && self.chr_count == 2 {

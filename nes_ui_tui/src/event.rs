@@ -31,9 +31,9 @@ impl Events {
         {
             let tx = tx.clone();
             thread::spawn(move || loop {
-                if let Ok(_) = poll(Duration::from_millis(10)) {
+                if poll(Duration::from_millis(10)).is_ok() {
                     if let Ok(crosstermEvent::Key(key)) = read() {
-                        if let Err(_) = tx.send(Event::Input(key)) {
+                        if tx.send(Event::Input(key)).is_err() {
                             return;
                         }
                     }
@@ -44,10 +44,8 @@ impl Events {
         {
             let stopped = stopped.clone();
             thread::spawn(move || loop {
-                if !stopped.load(Ordering::Relaxed) {
-                    if tx.send(Event::Tick).is_err() {
-                        break;
-                    }
+                if !stopped.load(Ordering::Relaxed) && tx.send(Event::Tick).is_err() {
+                    break;
                 }
                 thread::sleep(tick_rate);
             })

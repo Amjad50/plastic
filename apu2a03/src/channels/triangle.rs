@@ -73,10 +73,8 @@ impl TriangleWave {
             if !self.linear_counter_control_flag {
                 self.linear_counter_reload_flag = false;
             }
-        } else {
-            if self.linear_counter != 0 {
-                self.linear_counter = self.linear_counter.saturating_sub(1);
-            }
+        } else if self.linear_counter != 0 {
+            self.linear_counter = self.linear_counter.saturating_sub(1);
         }
     }
 }
