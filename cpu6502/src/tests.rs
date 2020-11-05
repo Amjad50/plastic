@@ -2,8 +2,8 @@
 mod cpu_tests {
     use nes_tester::{TestError, NES};
 
-    use crate::{CPURunState, CPU6502};
-    use common::{interconnection::*, Bus, Device};
+    use crate::{CPUBusTrait, CPURunState, CPU6502};
+    use common::{interconnection::*, save_state::Savable};
     use std::{cell::RefCell, rc::Rc};
 
     struct DummyBus {
@@ -16,12 +16,29 @@ mod cpu_tests {
         }
     }
 
-    impl Bus for DummyBus {
-        fn read(&self, address: u16, _: Device) -> u8 {
+    impl Savable for DummyBus {
+        fn save<W: std::io::Write>(&self, _: &mut W) -> Result<(), common::save_state::SaveError> {
+            unreachable!()
+        }
+
+        fn load<R: std::io::Read>(
+            &mut self,
+            _: &mut R,
+        ) -> Result<(), common::save_state::SaveError> {
+            unreachable!()
+        }
+    }
+
+    impl CPUBusTrait for DummyBus {
+        fn read(&self, address: u16) -> u8 {
             self.data[address as usize]
         }
-        fn write(&mut self, address: u16, data: u8, _: Device) {
+        fn write(&mut self, address: u16, data: u8) {
             self.data[address as usize] = data;
+        }
+
+        fn reset(&mut self) {
+            unreachable!()
         }
     }
 
@@ -86,7 +103,7 @@ mod cpu_tests {
 
         let bus = DummyBus::new(data);
         let handler = Rc::new(RefCell::new(DummyHandler {}));
-        let mut cpu = CPU6502::new(Rc::new(RefCell::new(bus)), handler.clone(), handler.clone());
+        let mut cpu = CPU6502::new(bus, handler.clone(), handler.clone());
 
         cpu.reset();
 

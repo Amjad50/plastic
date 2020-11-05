@@ -4,7 +4,7 @@ use common::{
     save_state::{Savable, SaveError},
     Bus, Device,
 };
-use cpu6502::{CPURunState, CPU6502};
+use cpu6502::{CPUBusTrait, CPURunState, CPU6502};
 use display::{COLORS, TV};
 use ppu2c02::{Palette, VRam, PPU2C02};
 use std::{
@@ -122,40 +122,44 @@ impl Savable for PPUBus {
     }
 }
 
-impl Bus for CPUBus {
-    fn read(&self, address: u16, device: Device) -> u8 {
+impl CPUBusTrait for CPUBus {
+    fn read(&self, address: u16) -> u8 {
         match address {
             0x0000..=0x1FFF => self.ram[(address & 0x7FF) as usize],
-            0x2000..=0x3FFF => self.ppu.borrow().read(0x2000 | (address & 0x7), device),
-            0x4000..=0x4013 => self.apu.borrow().read(address, device),
-            0x4014 => self.ppu.borrow().read(address, device),
-            0x4015 => self.apu.borrow().read(address, device),
+            0x2000..=0x3FFF => self
+                .ppu
+                .borrow()
+                .read(0x2000 | (address & 0x7), Device::CPU),
+            0x4000..=0x4013 => self.apu.borrow().read(address, Device::CPU),
+            0x4014 => self.ppu.borrow().read(address, Device::CPU),
+            0x4015 => self.apu.borrow().read(address, Device::CPU),
             0x4016 => {
                 // controller
                 0
             }
-            0x4017 => self.apu.borrow().read(address, device),
+            0x4017 => self.apu.borrow().read(address, Device::CPU),
             0x4018..=0x401F => {
                 // unused CPU test mode registers
                 0
             }
-            0x4020..=0xFFFF => self.cartridge.borrow().read(address, device),
+            0x4020..=0xFFFF => self.cartridge.borrow().read(address, Device::CPU),
         }
     }
-    fn write(&mut self, address: u16, data: u8, device: Device) {
+    fn write(&mut self, address: u16, data: u8) {
         match address {
             0x0000..=0x1FFF => self.ram[(address & 0x7FF) as usize] = data,
-            0x2000..=0x3FFF => self
-                .ppu
-                .borrow_mut()
-                .write(0x2000 | (address & 0x7), data, device),
-            0x4000..=0x4013 => self.apu.borrow_mut().write(address, data, device),
-            0x4014 => self.ppu.borrow_mut().write(address, data, device),
-            0x4015 => self.apu.borrow_mut().write(address, data, device),
+            0x2000..=0x3FFF => {
+                self.ppu
+                    .borrow_mut()
+                    .write(0x2000 | (address & 0x7), data, Device::CPU)
+            }
+            0x4000..=0x4013 => self.apu.borrow_mut().write(address, data, Device::CPU),
+            0x4014 => self.ppu.borrow_mut().write(address, data, Device::CPU),
+            0x4015 => self.apu.borrow_mut().write(address, data, Device::CPU),
             0x4016 => {
                 // controller
             }
-            0x4017 => self.apu.borrow_mut().write(address, data, device),
+            0x4017 => self.apu.borrow_mut().write(address, data, Device::CPU),
             0x4018..=0x401F => {
                 // unused CPU test mode registers
             }
@@ -165,12 +169,25 @@ impl Bus for CPUBus {
                 .write(address, data, Device::CPU),
         };
     }
+
+    fn reset(&mut self) {
+        self.ram = [0; 0x800];
+    }
+}
+
+impl Savable for CPUBus {
+    fn save<W: std::io::Write>(&self, _: &mut W) -> Result<(), SaveError> {
+        unreachable!()
+    }
+
+    fn load<R: std::io::Read>(&mut self, _: &mut R) -> Result<(), SaveError> {
+        unreachable!()
+    }
 }
 
 pub struct NES {
     cpu: CPU6502<CPUBus>,
     ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
-    cpubus: Rc<RefCell<CPUBus>>,
     tv_image: Arc<Mutex<Vec<u8>>>,
     apu: Rc<RefCell<APU2A03>>,
 }
@@ -190,20 +207,15 @@ impl NES {
 
         let apu = Rc::new(RefCell::new(APU2A03::new()));
 
-        let cpubus = Rc::new(RefCell::new(CPUBus::new(
-            cartridge.clone(),
-            ppu.clone(),
-            apu.clone(),
-        )));
+        let cpubus = CPUBus::new(cartridge.clone(), ppu.clone(), apu.clone());
 
-        let mut cpu = CPU6502::new(cpubus.clone(), ppu.clone(), apu.clone());
+        let mut cpu = CPU6502::new(cpubus, ppu.clone(), apu.clone());
         cpu.add_irq_provider(cartridge.clone());
         cpu.add_irq_provider(apu.clone());
 
         Ok(Self {
             cpu,
             ppu: ppu.clone(),
-            cpubus: cpubus.clone(),
             tv_image,
             apu,
         })
@@ -214,7 +226,7 @@ impl NES {
     }
 
     pub fn cpu_read_address(&self, address: u16) -> u8 {
-        self.cpubus.borrow().read(address, Device::CPU)
+        self.cpu.bus().read(address)
     }
 
     pub fn ppu_read_address(&self, address: u16) -> u8 {
@@ -258,7 +270,7 @@ impl NES {
         loop {
             self.clock();
 
-            if self.cpubus.borrow().read(address, Device::CPU) != data {
+            if self.cpu.bus().read(address) != data {
                 break;
             }
         }

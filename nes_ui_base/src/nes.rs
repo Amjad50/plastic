@@ -5,7 +5,7 @@ use common::{
     Bus, Device, MirroringProvider,
 };
 use controller::{Controller, StandardNESControllerState};
-use cpu6502::CPU6502;
+use cpu6502::{CPUBusTrait, CPU6502};
 use directories::ProjectDirs;
 use display::TV;
 use ppu2c02::{Palette, VRam, PPU2C02};
@@ -52,10 +52,6 @@ impl CPUBus {
             apu,
             contoller,
         }
-    }
-
-    fn reset_ram(&mut self) {
-        self.ram = [0; 0x800];
     }
 }
 
@@ -109,35 +105,40 @@ impl Savable for PPUBus {
     }
 }
 
-impl Bus for CPUBus {
-    fn read(&self, address: u16, device: Device) -> u8 {
+impl CPUBusTrait for CPUBus {
+    fn read(&self, address: u16) -> u8 {
         match address {
             0x0000..=0x1FFF => self.ram[(address & 0x7FF) as usize],
-            0x2000..=0x3FFF => self.ppu.borrow().read(0x2000 | (address & 0x7), device),
-            0x4000..=0x4013 => self.apu.borrow().read(address, device),
-            0x4014 => self.ppu.borrow().read(address, device),
-            0x4015 => self.apu.borrow().read(address, device),
-            0x4016 => self.contoller.read(address, device),
-            0x4017 => self.apu.borrow().read(address, device),
+            0x2000..=0x3FFF => self
+                .ppu
+                .borrow()
+                .read(0x2000 | (address & 0x7), Device::CPU),
+            0x4000..=0x4013 => self.apu.borrow().read(address, Device::CPU),
+            0x4014 => self.ppu.borrow().read(address, Device::CPU),
+            0x4015 => self.apu.borrow().read(address, Device::CPU),
+            0x4016 => self.contoller.read(address, Device::CPU),
+            0x4017 => self.apu.borrow().read(address, Device::CPU),
             0x4018..=0x401F => {
                 // unused CPU test mode registers
                 0
             }
-            0x4020..=0xFFFF => self.cartridge.borrow().read(address, device),
+            0x4020..=0xFFFF => self.cartridge.borrow().read(address, Device::CPU),
         }
     }
-    fn write(&mut self, address: u16, data: u8, device: Device) {
+
+    fn write(&mut self, address: u16, data: u8) {
         match address {
             0x0000..=0x1FFF => self.ram[(address & 0x7FF) as usize] = data,
-            0x2000..=0x3FFF => self
-                .ppu
-                .borrow_mut()
-                .write(0x2000 | (address & 0x7), data, device),
-            0x4000..=0x4013 => self.apu.borrow_mut().write(address, data, device),
-            0x4014 => self.ppu.borrow_mut().write(address, data, device),
-            0x4015 => self.apu.borrow_mut().write(address, data, device),
-            0x4016 => self.contoller.write(address, data, device),
-            0x4017 => self.apu.borrow_mut().write(address, data, device),
+            0x2000..=0x3FFF => {
+                self.ppu
+                    .borrow_mut()
+                    .write(0x2000 | (address & 0x7), data, Device::CPU)
+            }
+            0x4000..=0x4013 => self.apu.borrow_mut().write(address, data, Device::CPU),
+            0x4014 => self.ppu.borrow_mut().write(address, data, Device::CPU),
+            0x4015 => self.apu.borrow_mut().write(address, data, Device::CPU),
+            0x4016 => self.contoller.write(address, data, Device::CPU),
+            0x4017 => self.apu.borrow_mut().write(address, data, Device::CPU),
             0x4018..=0x401F => {
                 // unused CPU test mode registers
             }
@@ -145,7 +146,11 @@ impl Bus for CPUBus {
                 .cartridge
                 .borrow_mut()
                 .write(address, data, Device::CPU),
-        };
+        }
+    }
+
+    fn reset(&mut self) {
+        self.ram = [0; 0x800];
     }
 }
 
@@ -166,7 +171,6 @@ impl Savable for CPUBus {
 pub struct NES<P: UiProvider + Send + 'static> {
     cartridge: Rc<RefCell<Cartridge>>,
     cpu: CPU6502<CPUBus>,
-    cpubus: Rc<RefCell<CPUBus>>,
     ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
     apu: Rc<RefCell<APU2A03>>,
     image: Arc<Mutex<Vec<u8>>>,
@@ -207,9 +211,8 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         let ctrl_state = ctrl.get_primary_controller_state();
 
         let cpubus = CPUBus::new(cartridge.clone(), ppu.clone(), apu.clone(), ctrl);
-        let cpubus = Rc::new(RefCell::new(cpubus));
 
-        let mut cpu = CPU6502::new(cpubus.clone(), ppu.clone(), apu.clone());
+        let mut cpu = CPU6502::new(cpubus, ppu.clone(), apu.clone());
         cpu.add_irq_provider(cartridge.clone());
         cpu.add_irq_provider(apu.clone());
 
@@ -218,7 +221,6 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         Self {
             cartridge,
             cpu,
-            cpubus,
             ppu,
             apu,
             image,
@@ -231,8 +233,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
     pub fn reset(&mut self) {
         self.cpu.reset();
-
-        self.cpubus.borrow_mut().reset_ram();
+        self.cpu.reset_bus();
 
         let ppubus = PPUBus::new(self.cartridge.clone());
 
@@ -327,7 +328,6 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
             self.cartridge.borrow().save(&mut file)?;
             self.cpu.save(&mut file)?;
-            self.cpubus.borrow().save(&mut file)?;
             self.ppu.borrow().save(&mut file)?;
             self.apu.borrow().save(&mut file)?;
 
@@ -344,7 +344,6 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
                 self.cartridge.borrow_mut().load(&mut file)?;
                 self.cpu.load(&mut file)?;
-                self.cpubus.borrow_mut().load(&mut file)?;
                 self.ppu.borrow_mut().load(&mut file)?;
                 self.apu.borrow_mut().load(&mut file)?;
 
@@ -361,7 +360,10 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
                 Ok(())
             } else {
-                Err(SaveError::Others)
+                Err(SaveError::IoError(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "save file not found",
+                )))
             }
         } else {
             Err(SaveError::Others)

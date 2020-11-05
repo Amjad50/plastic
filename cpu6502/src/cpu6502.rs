@@ -1,11 +1,15 @@
 use super::instruction::{AddressingMode, Instruction, Opcode};
+use super::CPUBusTrait;
 use common::{
     interconnection::{APUCPUConnection, CpuIrqProvider, PPUCPUConnection},
     save_state::{Savable, SaveError},
-    Bus, Device,
 };
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    io::{Read, Write},
+    rc::Rc,
+};
 
 const NMI_VECTOR_ADDRESS: u16 = 0xFFFA;
 const RESET_VECTOR_ADDRESS: u16 = 0xFFFC;
@@ -37,7 +41,7 @@ enum StatusFlag {
 }
 
 // TODO: this CPU does not support BCD mode yet
-pub struct CPU6502<T: Bus> {
+pub struct CPU6502<T: CPUBusTrait> {
     reg_pc: u16,
     reg_sp: u8,
     reg_a: u8,
@@ -57,7 +61,7 @@ pub struct CPU6502<T: Bus> {
     /// check `run_next` for more info
     next_instruction: Option<(Instruction, u8)>,
 
-    bus: Rc<RefCell<T>>,
+    bus: T,
     ppu: Rc<RefCell<dyn PPUCPUConnection>>,
     apu: Rc<RefCell<dyn APUCPUConnection>>,
 
@@ -67,10 +71,10 @@ pub struct CPU6502<T: Bus> {
 // public
 impl<T> CPU6502<T>
 where
-    T: Bus,
+    T: CPUBusTrait,
 {
     pub fn new(
-        bus: Rc<RefCell<T>>,
+        bus: T,
         ppu: Rc<RefCell<dyn PPUCPUConnection>>,
         apu: Rc<RefCell<dyn APUCPUConnection>>,
     ) -> Self {
@@ -131,6 +135,14 @@ where
         self.reg_pc = pc;
 
         self.cycles_to_wait += 7;
+    }
+
+    pub fn reset_bus(&mut self) {
+        self.bus.reset()
+    }
+
+    pub fn bus(&self) -> &T {
+        &self.bus
     }
 
     pub fn run_next(&mut self) -> CPURunState {
@@ -217,7 +229,7 @@ where
 // private
 impl<T> CPU6502<T>
 where
-    T: Bus,
+    T: CPUBusTrait,
 {
     fn set_flag(&mut self, flag: StatusFlag) {
         self.reg_status |= flag as u8;
@@ -236,11 +248,11 @@ where
     }
 
     fn read_bus(&self, address: u16) -> u8 {
-        self.bus.borrow().read(address, Device::CPU)
+        self.bus.read(address)
     }
 
     fn write_bus(&mut self, address: u16, data: u8) {
-        self.bus.borrow_mut().write(address, data, Device::CPU);
+        self.bus.write(address, data);
     }
 
     /// decods the operand of an instruction and returnrs
@@ -1427,7 +1439,7 @@ struct SavableCPUState {
 }
 
 impl SavableCPUState {
-    fn from_cpu<T: Bus>(cpu: &CPU6502<T>) -> Self {
+    fn from_cpu<T: CPUBusTrait>(cpu: &CPU6502<T>) -> Self {
         Self {
             reg_pc: cpu.reg_pc,
             reg_sp: cpu.reg_sp,
@@ -1445,28 +1457,46 @@ impl SavableCPUState {
     }
 }
 
+/// This is a solution to wrap a reference to reader
+struct WrapperReader<'a, R: Read> {
+    pub inner: &'a mut R,
+}
+
+impl<'a, R: Read> Read for WrapperReader<'a, R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.inner.read(buf)
+    }
+}
+
 impl<T> Savable for CPU6502<T>
 where
-    T: Bus,
+    T: CPUBusTrait,
 {
-    fn save<W: std::io::Write>(&self, writer: &mut W) -> Result<(), SaveError> {
+    fn save<W: Write>(&self, writer: &mut W) -> Result<(), SaveError> {
         let state = SavableCPUState::from_cpu(self);
-        bincode::serialize_into(writer, &state).map_err(|err| match *err {
-            bincode::ErrorKind::Io(err) => SaveError::IoError(err),
-            _ => SaveError::Others,
-        })?;
+
+        let data = bincode::serialize(&state).map_err(|_| SaveError::Others)?;
+        writer.write_all(data.as_slice())?;
+
+        self.bus.save(writer)?;
 
         Ok(())
     }
 
-    fn load<R: std::io::Read>(&mut self, reader: &mut R) -> Result<(), SaveError> {
-        let state: SavableCPUState =
-            bincode::deserialize_from(reader).map_err(|err| match *err {
-                bincode::ErrorKind::Io(err) => SaveError::IoError(err),
-                _ => SaveError::Others,
-            })?;
+    fn load<R: Read>(&mut self, reader: &mut R) -> Result<(), SaveError> {
+        let outer_reader = WrapperReader { inner: reader };
 
-        self.load_serialized_state(state);
+        {
+            let state: SavableCPUState =
+                bincode::deserialize_from(outer_reader).map_err(|err| match *err {
+                    bincode::ErrorKind::Io(err) => SaveError::IoError(err),
+                    _ => SaveError::Others,
+                })?;
+
+            self.load_serialized_state(state);
+        }
+
+        self.bus.load(reader)?;
 
         Ok(())
     }
