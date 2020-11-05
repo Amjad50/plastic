@@ -765,6 +765,12 @@ where
     }
 
     fn get_background_pixel(&self) -> (u8, u8) {
+        if !self.reg_mask.background_enabled()
+            || (self.cycle < 8 && self.reg_mask.background_left_clipping_enabled())
+        {
+            return (0, 0);
+        }
+
         let fine_x = self.current_fine_x_scroll();
 
         // select the bit using `fine_x` from the left
@@ -784,9 +790,7 @@ where
 
         let palette = high_palette_bit << 1 | low_palette_bit;
 
-        let background_enabled = self.reg_mask.background_enabled() as u8;
-        // if background is not enabled, it will be multiplied by zero which is zero
-        (color_bit * background_enabled, palette * background_enabled)
+        (color_bit, palette)
     }
 
     fn get_sprites_first_non_transparent_pixel(&mut self) -> (u8, u8, bool, bool) {
@@ -831,14 +835,14 @@ where
             }
         }
 
-        let sprites_enabled = self.reg_mask.sprites_enabled();
-        // if sprites is not enabled, this will be (0, 0, false, false)
-        (
-            color_bits * sprites_enabled as u8,
-            palette * sprites_enabled as u8,
-            background_priority && sprites_enabled,
-            is_sprite_0 && sprites_enabled,
-        )
+        if !self.reg_mask.sprites_enabled()
+            || (self.cycle < 8 && self.reg_mask.sprites_left_clipping_enabled())
+            || self.cycle == 255
+        {
+            (0, 0, false, false)
+        } else {
+            (color_bits, palette, background_priority, is_sprite_0)
+        }
     }
 
     /// this method fetches background and sprite pixels, check overflow for
@@ -852,30 +856,10 @@ where
     /// |++--- Palette number from attribute table or OAM
     /// +----- Background/Sprite select
     fn generate_pixel(&mut self) -> u8 {
-        // fetch the next background pixel (it must fetch to advance the
-        // shift registers), and then decide if we should clip or not
-        let background_pixel_data = self.get_background_pixel();
-        let (background_color_bits, background_palette) =
-            if self.cycle < 8 && self.reg_mask.background_left_clipping_enabled() {
-                (0, 0)
-            } else {
-                background_pixel_data
-            };
+        let (background_color_bits, background_palette) = self.get_background_pixel();
 
-        // fetch the next sprite pixel (it must fetch to advance the
-        // shift registers), and then decide if we should clip or not
-        let sprite_pixel_data = self.get_sprites_first_non_transparent_pixel();
-
-        // another special case is when x is 255, the sprite should always miss
         let (sprite_color_bits, sprite_palette, background_priority, is_sprite_0) =
-            if self.cycle < 8 && self.reg_mask.sprites_left_clipping_enabled() || self.cycle == 255
-            {
-                // since the pixel data is `0`, the other data (palette, priority, ..)
-                // are not important
-                (0, 0, false, false)
-            } else {
-                sprite_pixel_data
-            };
+            self.get_sprites_first_non_transparent_pixel();
 
         // 0 for background, 1 for sprite
         let palette_selector;
@@ -978,71 +962,63 @@ where
     // run one cycle, this should be fed from Master clock
     pub fn clock(&mut self) {
         // current scanline
-        match self.scanline {
-            261 => {
-                // pre-render
+        match (self.scanline, self.cycle) {
+            (261, 0) => {
+                // FIXME: for some reason the test only worked when doing it here
 
-                match self.cycle {
-                    0 => {
-                        // FIXME: for some reason the test only worked when doing it here
+                // clear sprite 0 hit
+                self.reg_status.get_mut().remove(StatusReg::SPRITE_0_HIT)
+            }
+            (261, 2) => {
+                // reset nmi_occured_in_this_frame
+                self.nmi_occured_in_this_frame.set(false);
+            }
+            (261, 1) => {
+                // clear sprite overflow
+                self.reg_status.get_mut().remove(StatusReg::SPRITE_OVERFLOW);
+                // clear v-blank
+                self.reg_status.get_mut().remove(StatusReg::VERTICAL_BLANK);
 
-                        // clear sprite 0 hit
-                        self.reg_status.get_mut().remove(StatusReg::SPRITE_0_HIT)
-                    }
-                    2 => {
-                        // reset nmi_occured_in_this_frame
-                        self.nmi_occured_in_this_frame.set(false);
-                    }
-                    1 => {
-                        // clear sprite overflow
-                        self.reg_status.get_mut().remove(StatusReg::SPRITE_OVERFLOW);
-                        // clear v-blank
-                        self.reg_status.get_mut().remove(StatusReg::VERTICAL_BLANK);
+                if self.reg_mask.rendering_enabled() {
+                    self.restore_rendering_scroll_x();
+                    self.restore_rendering_scroll_y();
 
-                        if self.reg_mask.rendering_enabled() {
-                            self.restore_rendering_scroll_x();
-                            self.restore_rendering_scroll_y();
+                    self.restore_nametable();
 
-                            self.restore_nametable();
-
-                            // load next 2 bytes
-                            for _ in 0..2 {
-                                for i in 0..=1 {
-                                    // as this is the first time, shift the registers
-                                    // as we are reloading 2 times
-                                    self.bg_pattern_shift_registers[i] =
-                                        self.bg_pattern_shift_registers[i].wrapping_shl(8);
-                                    self.bg_palette_shift_registers[i] =
-                                        self.bg_palette_shift_registers[i].wrapping_shl(8);
-                                }
-                                self.reload_background_shift_registers();
-                                self.increment_coarse_x_scroll();
-                            }
+                    // load next 2 bytes
+                    for _ in 0..2 {
+                        for i in 0..=1 {
+                            // as this is the first time, shift the registers
+                            // as we are reloading 2 times
+                            self.bg_pattern_shift_registers[i] =
+                                self.bg_pattern_shift_registers[i].wrapping_shl(8);
+                            self.bg_palette_shift_registers[i] =
+                                self.bg_palette_shift_registers[i].wrapping_shl(8);
                         }
+                        self.reload_background_shift_registers();
+                        self.increment_coarse_x_scroll();
                     }
-
-                    257 => {
-                        // reload all of them in one go
-                        self.reload_sprite_shift_registers();
-                    }
-                    _ => {}
                 }
             }
-            0..=239 => {
+
+            (261, 257) => {
+                // reload all of them in one go
+                self.reload_sprite_shift_registers();
+            }
+            (0..=239, _) => {
                 // render only if allowed
                 if self.reg_mask.rendering_enabled() {
                     self.run_render_cycle();
                 }
             }
-            240 => {
+            (240, 1) => {
                 // post-render
                 // idle
+                self.tv.signal_end_of_frame();
             }
-            241..=260 => {
+            (241..=260, _) => {
                 // vertical blanking
                 if self.cycle == 1 && self.scanline == 241 {
-                    self.tv.signal_end_of_frame();
-
                     // set v-blank
                     self.reg_status.get_mut().insert(StatusReg::VERTICAL_BLANK);
 
@@ -1053,10 +1029,9 @@ where
                     }
                 }
             }
-            _ => {
-                unreachable!();
-            }
+            _ => {}
         }
+
         self.cycle += 1;
         if self.cycle > 340
             || (self.scanline == 261
