@@ -21,11 +21,6 @@ use std::sync::{mpsc::channel, Arc, Mutex};
 
 use crate::{BackendEvent, UiEvent, UiProvider};
 
-// NES TV size
-// TODO: should be included in "tv" crate
-pub const TV_WIDTH: u32 = 256;
-pub const TV_HEIGHT: u32 = 240;
-
 struct PPUBus {
     cartridge: Rc<RefCell<dyn Bus>>,
     vram: VRam,
@@ -265,7 +260,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         let cartridge = Rc::new(RefCell::new(cartridge));
         let ppubus = PPUBus::new(cartridge.clone());
 
-        let tv = TV::new(TV_WIDTH, TV_HEIGHT, P::get_tv_color_converter());
+        let tv = TV::new(P::get_tv_color_converter());
         let image = tv.get_image_clone();
 
         let ppu = PPU2C02::new(ppubus, tv);

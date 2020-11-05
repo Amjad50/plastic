@@ -1,7 +1,6 @@
 use nes_ui_base::{
-    nes::{TV_HEIGHT, TV_WIDTH},
     nes_controller::{StandardNESControllerState, StandardNESKey},
-    nes_display::Color as NESColor,
+    nes_display::{Color as NESColor, TV_HEIGHT, TV_WIDTH},
     BackendEvent, UiEvent, UiProvider,
 };
 use std::collections::HashSet;

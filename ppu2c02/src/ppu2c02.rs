@@ -1041,6 +1041,8 @@ where
             241..=260 => {
                 // vertical blanking
                 if self.cycle == 1 && self.scanline == 241 {
+                    self.tv.signal_end_of_frame();
+
                     // set v-blank
                     self.reg_status.get_mut().insert(StatusReg::VERTICAL_BLANK);
 

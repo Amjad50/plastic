@@ -1,7 +1,6 @@
 use nes_ui_base::{
-    nes::{TV_HEIGHT, TV_WIDTH},
     nes_controller::{StandardNESControllerState, StandardNESKey},
-    nes_display::Color as NESColor,
+    nes_display::{Color as NESColor, TV_HEIGHT, TV_WIDTH},
     BackendEvent, UiEvent, UiProvider,
 };
 use std::sync::{
@@ -113,7 +112,9 @@ impl UiProvider for GtkProvider {
                 cairo::Format::Rgb24,
                 TV_WIDTH as i32,
                 TV_HEIGHT as i32,
-                cairo::Format::Rgb24.stride_for_width(TV_WIDTH).unwrap(),
+                cairo::Format::Rgb24
+                    .stride_for_width(TV_WIDTH as u32)
+                    .unwrap(),
             )
             .unwrap();
             let pattern = cairo::SurfacePattern::create(&src);

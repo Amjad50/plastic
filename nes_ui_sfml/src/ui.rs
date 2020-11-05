@@ -1,7 +1,6 @@
 use nes_ui_base::{
-    nes::{TV_HEIGHT, TV_WIDTH},
     nes_controller::{StandardNESControllerState, StandardNESKey},
-    nes_display::Color as NESColor,
+    nes_display::{Color as NESColor, TV_HEIGHT, TV_WIDTH},
     BackendEvent, UiEvent, UiProvider,
 };
 
@@ -58,7 +57,7 @@ impl UiProvider for SfmlProvider {
         ctrl_state: Arc<Mutex<StandardNESControllerState>>,
     ) {
         let mut window = RenderWindow::new(
-            (TV_WIDTH * 3, TV_HEIGHT * 3),
+            (TV_WIDTH as u32 * 3, TV_HEIGHT as u32 * 3),
             "Plastic",
             Style::CLOSE | Style::RESIZE,
             &Default::default(),
@@ -73,11 +72,11 @@ impl UiProvider for SfmlProvider {
         window.set_view(&Self::get_view(
             window.size().x,
             window.size().y,
-            TV_WIDTH,
-            TV_HEIGHT,
+            TV_WIDTH as u32,
+            TV_HEIGHT as u32,
         ));
 
-        let mut texture = Texture::new(TV_WIDTH, TV_HEIGHT).expect("texture");
+        let mut texture = Texture::new(TV_WIDTH as u32, TV_HEIGHT as u32).expect("texture");
 
         'main: loop {
             if let Ok(mut ctrl) = ctrl_state.lock() {
@@ -85,7 +84,12 @@ impl UiProvider for SfmlProvider {
                     match event {
                         Event::Closed => break 'main,
                         Event::Resized { width, height } => {
-                            window.set_view(&Self::get_view(width, height, TV_WIDTH, TV_HEIGHT));
+                            window.set_view(&Self::get_view(
+                                width,
+                                height,
+                                TV_WIDTH as u32,
+                                TV_HEIGHT as u32,
+                            ));
                         }
                         Event::KeyPressed {
                             code: key,
@@ -171,7 +175,8 @@ impl UiProvider for SfmlProvider {
             {
                 let pixels = &image.lock().unwrap();
 
-                let image = Image::create_from_pixels(TV_WIDTH, TV_HEIGHT, pixels).expect("image");
+                let image = Image::create_from_pixels(TV_WIDTH as u32, TV_HEIGHT as u32, pixels)
+                    .expect("image");
 
                 texture.update_from_image(&image, 0, 0);
             }

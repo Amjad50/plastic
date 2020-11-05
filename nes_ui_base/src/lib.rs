@@ -4,7 +4,7 @@ pub mod nes_controller {
     pub use controller::{StandardNESControllerState, StandardNESKey};
 }
 pub mod nes_display {
-    pub use display::Color;
+    pub use display::{Color, TV_BUFFER_SIZE, TV_HEIGHT, TV_WIDTH};
 }
 
 use std::sync::{
