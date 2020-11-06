@@ -3,7 +3,7 @@ use cartridge::{Cartridge, CartridgeError};
 use common::{
     interconnection::*,
     save_state::{Savable, SaveError},
-    Bus, Device, MirroringProvider,
+    Bus, Device, MirroringProvider, CPU_FREQ,
 };
 use controller::{Controller, StandardNESControllerState};
 use cpu6502::{CPUBusTrait, CPU6502};
@@ -453,24 +453,17 @@ impl<P: UiProvider + Send + 'static> NES<P> {
         self.cpu.reset();
 
         let mut last = std::time::Instant::now();
-        const CPU_FREQ: f64 = 1.789773 * 1E6;
         const N: usize = 29780; // number of CPU cycles per loop, one full frame
         const CPU_PER_CYCLE_NANOS: f64 = 1E9 / CPU_FREQ;
-
-        let mut average_apu_freq;
-        let mut average_counter;
 
         // just a way to duplicate code, its not meant to be efficient way to do it
         // I used this, since `self` cannot be referenced here and anywhere else at
         // the same time.
         macro_rules! handle_apu_after_reset {
             () => {
-                self.apu.borrow_mut().update_apu_freq(1.7 * 1E6 / 2.);
                 if !self.paused {
                     self.apu.borrow().play();
                 }
-                average_apu_freq = CPU_FREQ / 2.;
-                average_counter = 1.;
             };
         }
 
@@ -486,7 +479,6 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
         // first time
         handle_apu_after_reset!();
-
         send_present_save_states_to_ui!();
 
         // run the emulator loop
@@ -558,13 +550,6 @@ impl<P: UiProvider + Send + 'static> NES<P> {
             {
                 std::thread::sleep(d);
             }
-
-            let apu_freq = N as f64 / 2. / last.elapsed().as_secs_f64();
-
-            average_counter += 1.;
-            average_apu_freq = average_apu_freq + ((apu_freq - average_apu_freq) / average_counter);
-
-            self.apu.borrow_mut().update_apu_freq(average_apu_freq);
 
             last = std::time::Instant::now();
         }

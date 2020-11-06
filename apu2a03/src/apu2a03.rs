@@ -6,12 +6,17 @@ use crate::tone_source::{APUChannel, APUChannelPlayer, BufferedChannel, TimedAPU
 use common::{
     interconnection::{APUCPUConnection, CPUIrqProvider},
     save_state::{Savable, SaveError},
+    CPU_FREQ,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 
 use rodio::DeviceTrait;
+
+// after how many apu clocks a sample should be recorded
+// APU, is clocked on every CPU clock
+const SAMPLES_EVERY_N_APU_CLOCK: f64 = CPU_FREQ / (crate::SAMPLE_RATE as f64);
 
 mod buffered_channel_serde {
     use crate::tone_source::BufferedChannel;
@@ -59,10 +64,7 @@ pub struct APU2A03 {
 
     wait_reset: i8,
 
-    apu_freq: f64,
     sample_counter: f64,
-
-    offset: f64,
 
     interrupt_flag: Cell<bool>,
     request_interrupt_flag_change: Cell<bool>,
@@ -93,10 +95,7 @@ impl APU2A03 {
 
             cycle: 0,
 
-            apu_freq: 0.,
             sample_counter: 0.,
-
-            offset: 0.5,
 
             wait_reset: 0,
 
@@ -440,10 +439,6 @@ impl APU2A03 {
         }
     }
 
-    pub fn update_apu_freq(&mut self, apu_freq: f64) {
-        self.apu_freq = apu_freq;
-    }
-
     fn get_mixer_output(&mut self) -> f32 {
         let square_pulse_1 = self.square_pulse_1.get_output();
         let square_pulse_2 = self.square_pulse_2.get_output();
@@ -466,6 +461,10 @@ impl APU2A03 {
         pulse_out + tnd_out
     }
 
+    pub fn empty_queue(&mut self) {
+        self.buffered_channel.lock().unwrap().clear_buffer();
+    }
+
     /// clock the APU **at** CPU clock rate, the clocks are handled correctly
     /// as it should be
     pub fn clock(&mut self) {
@@ -485,33 +484,14 @@ impl APU2A03 {
             std::cmp::Ordering::Greater => self.wait_reset -= 1,
         }
 
-        // after how many apu clocks a sample should be recorded
-        let samples_every_n_apu_clock = (self.apu_freq / (crate::SAMPLE_RATE as f64)) - self.offset;
-
-        if self.cycle % 300 == 0 {
-            if let Ok(mut buffered_channel) = self.buffered_channel.lock() {
-                let change = if buffered_channel.get_is_overusing() {
-                    0.001
-                } else if buffered_channel.get_is_underusing() {
-                    -0.0002
-                } else {
-                    0.
-                };
-
-                self.offset += change;
-                buffered_channel.clear_using_flags();
-            }
-        }
-
-        // since, this is running in CPU clock, add half of the time to match
-        // the APU clock
-        self.sample_counter += 0.5;
-        if self.sample_counter >= samples_every_n_apu_clock {
+        // since, this is running in CPU clock
+        self.sample_counter += 1.;
+        if self.sample_counter >= SAMPLES_EVERY_N_APU_CLOCK {
             let output = self.get_mixer_output();
 
             self.buffered_channel.lock().unwrap().recored_sample(output);
 
-            self.sample_counter -= samples_every_n_apu_clock;
+            self.sample_counter -= SAMPLES_EVERY_N_APU_CLOCK;
         }
 
         // clocked on every CPU cycle
