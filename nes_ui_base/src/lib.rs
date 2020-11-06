@@ -1,3 +1,4 @@
+mod frame_limiter;
 pub mod nes;
 
 pub mod nes_controller {

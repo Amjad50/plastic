@@ -3,7 +3,7 @@ use cartridge::{Cartridge, CartridgeError};
 use common::{
     interconnection::*,
     save_state::{Savable, SaveError},
-    Bus, Device, MirroringProvider, CPU_FREQ,
+    Bus, Device, MirroringProvider,
 };
 use controller::{Controller, StandardNESControllerState};
 use cpu6502::{CPUBusTrait, CPU6502};
@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{mpsc::channel, Arc, Mutex};
 
-use crate::{BackendEvent, UiEvent, UiProvider};
+use crate::{frame_limiter::FrameLimiter, BackendEvent, UiEvent, UiProvider};
 
 struct PPUBus {
     cartridge: Rc<RefCell<dyn Bus>>,
@@ -434,6 +434,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
     pub fn run(&mut self) {
         let image = self.image.clone();
         let ctrl_state = self.ctrl_state.clone();
+        let mut frame_limiter = FrameLimiter::new(60);
 
         let (ui_to_nes_sender, ui_to_nes_receiver) = channel::<UiEvent>();
         let (nes_to_ui_sender, nes_to_ui_receiver) = channel::<BackendEvent>();
@@ -452,9 +453,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
         self.cpu.reset();
 
-        let mut last = std::time::Instant::now();
         const N: usize = 29780; // number of CPU cycles per loop, one full frame
-        const CPU_PER_CYCLE_NANOS: f64 = 1E9 / CPU_FREQ;
 
         // just a way to duplicate code, its not meant to be efficient way to do it
         // I used this, since `self` cannot be referenced here and anywhere else at
@@ -532,26 +531,21 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                 continue;
             }
 
-            for _ in 0..N {
-                self.apu.borrow_mut().clock();
+            if frame_limiter.begin() {
+                for _ in 0..N {
+                    self.apu.borrow_mut().clock();
 
-                self.cpu.run_next();
-                {
-                    let mut ppu = self.ppu.borrow_mut();
-                    ppu.clock();
-                    ppu.clock();
-                    ppu.clock();
+                    self.cpu.run_next();
+                    {
+                        let mut ppu = self.ppu.borrow_mut();
+                        ppu.clock();
+                        ppu.clock();
+                        ppu.clock();
+                    }
                 }
-            }
 
-            if let Some(d) =
-                std::time::Duration::from_nanos((CPU_PER_CYCLE_NANOS * N as f64) as u64)
-                    .checked_sub(last.elapsed())
-            {
-                std::thread::sleep(d);
+                frame_limiter.end();
             }
-
-            last = std::time::Instant::now();
         }
 
         ui_thread_handler.join().unwrap();
