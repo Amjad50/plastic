@@ -510,6 +510,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                     UiEvent::Resume => {
                         self.paused = false;
                         self.apu.borrow_mut().play();
+                        self.apu.borrow_mut().empty_queue();
                     }
                     UiEvent::SaveState(slot) => {
                         if let Err(err) = self.save_state(slot) {

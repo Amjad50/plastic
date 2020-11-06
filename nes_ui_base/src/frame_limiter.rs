@@ -27,6 +27,8 @@ pub struct FrameLimiter {
     frame_counter: u64,
     frame_counter_timestamp: u64,
     fps: u64,
+
+    tolerance_percentage: u64,
 }
 
 impl FrameLimiter {
@@ -43,6 +45,7 @@ impl FrameLimiter {
             frame_counter_timestamp: get_time(),
             fps: 0,
             begin_timestamp: 0,
+            tolerance_percentage: 5,
         }
     }
 
@@ -68,7 +71,7 @@ impl FrameLimiter {
     pub fn begin(&mut self) -> bool {
         self.begin_timestamp = get_time();
         let time_left = self.time_left_until_deadline(self.begin_timestamp);
-        if time_left > add_percent(self.average_frametime, 20) {
+        if time_left > add_percent(self.average_frametime, self.tolerance_percentage) {
             delay_1_ms();
 
             let elapsed = get_time() - self.begin_timestamp;
@@ -99,7 +102,7 @@ impl FrameLimiter {
             self.average_frametime = 1000;
         }
 
-        if elapsed_since_last_fps_update > add_percent(self.time_per_frame, 50) {
+        if elapsed_since_last_fps_update > add_percent(self.time_per_frame, 20) {
             self.last_frame_timestamp = current;
         } else {
             self.last_frame_timestamp += self.time_per_frame;
@@ -110,6 +113,13 @@ impl FrameLimiter {
             self.fps = (self.frame_counter * 1000 * 1000) / elapsed_since_last_fps_update;
             self.frame_counter_timestamp = current;
             self.frame_counter = 0;
+
+            if self.fps.saturating_sub(self.target_fps) > 5 {
+                if self.tolerance_percentage > 2 {
+                    self.tolerance_percentage -= 1;
+                }
+            }
+
             Some(self.fps)
         } else {
             None
