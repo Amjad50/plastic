@@ -142,7 +142,7 @@ pub struct PPU2C02<T: Bus + Savable> {
     secondary_oam: [Sprite; 8],
     rendering_oam: [Sprite; 8],
 
-    secondary_oam_counter: u8,
+    rendering_oam_counter: u8,
 
     sprite_0_present: bool,
     next_scanline_sprite_0_present: bool,
@@ -190,7 +190,7 @@ where
             secondary_oam: [Sprite::empty(); 8],
             rendering_oam: [Sprite::empty(); 8],
 
-            secondary_oam_counter: 0,
+            rendering_oam_counter: 0,
 
             sprite_0_present: false,
             next_scanline_sprite_0_present: false,
@@ -729,11 +729,11 @@ where
         self.fetch_pattern(pattern_table, location, fine_y)
     }
 
-    fn get_background_pixel(&self) -> (u8, u8) {
+    fn get_background_pixel(&self) -> u8 {
         if !self.reg_mask.background_enabled()
             || (self.cycle < 8 && self.reg_mask.background_left_clipping_enabled())
         {
-            return (0, 0);
+            return 0;
         }
 
         let fine_x = self.current_fine_x_scroll();
@@ -748,38 +748,48 @@ where
 
         let color_bit = high_plane_bit << 1 | low_plane_bit;
 
-        let low_palette_bit =
-            ((self.bg_palette_shift_registers[0] >> bit_location as u16) & 0x1) as u8;
-        let high_palette_bit =
-            ((self.bg_palette_shift_registers[1] >> bit_location as u16) & 0x1) as u8;
+        if color_bit != 0 {
+            let low_palette_bit =
+                ((self.bg_palette_shift_registers[0] >> bit_location as u16) & 0x1) as u8;
+            let high_palette_bit =
+                ((self.bg_palette_shift_registers[1] >> bit_location as u16) & 0x1) as u8;
 
-        let palette = high_palette_bit << 1 | low_palette_bit;
+            let palette = high_palette_bit << 1 | low_palette_bit;
 
-        (color_bit, palette)
+            palette << 2 | color_bit
+        } else {
+            0
+        }
     }
 
-    fn get_sprites_first_non_transparent_pixel(&mut self) -> (u8, u8, bool, bool) {
+    fn get_sprites_first_non_transparent_pixel(&mut self) -> (u8, bool, bool) {
         if !self.reg_mask.sprites_enabled()
             || (self.cycle < 8 && self.reg_mask.sprites_left_clipping_enabled())
             || self.cycle == 255
         {
-            return (0, 0, false, false);
+            return (0, false, false);
         }
 
-        for (i, sprite) in self.rendering_oam.iter().enumerate() {
+        for (i, sprite) in self
+            .rendering_oam
+            .iter()
+            .take(self.rendering_oam_counter as usize)
+            .enumerate()
+        {
             let current_color_bits = sprite.get_color_bits(self.cycle);
 
             if current_color_bits != 0 {
+                let attribute = sprite.get_attribute();
                 return (
-                    current_color_bits,
-                    sprite.get_attribute().palette(),
+                    // (1 << 4) to select the sprite table
+                    1 << 4 | attribute.palette() << 2 | current_color_bits,
                     sprite.get_attribute().is_behind_background(),
                     i == 0 && self.sprite_0_present,
                 );
             }
         }
 
-        (0, 0, false, false)
+        (0, false, false)
     }
 
     /// this method fetches background and sprite pixels, check overflow for
@@ -793,50 +803,26 @@ where
     /// |++--- Palette number from attribute table or OAM
     /// +----- Background/Sprite select
     fn generate_pixel(&mut self) -> u8 {
-        let (background_color_bits, background_palette) = self.get_background_pixel();
+        let background_color_location = self.get_background_pixel();
 
-        let (sprite_color_bits, sprite_palette, background_priority, is_sprite_0) =
+        let (sprite_color_location, background_priority, is_sprite_0) =
             self.get_sprites_first_non_transparent_pixel();
 
-        // 0 for background, 1 for sprite
-        let palette_selector;
-        // palette index
-        let mut palette;
-        let color_bits;
-
         // sprite and background multiplexer procedure
-        if sprite_color_bits != 0 && background_color_bits != 0 {
-            // use background priority flag
-            if background_priority {
-                color_bits = background_color_bits;
-                palette = background_palette;
-                palette_selector = 0;
-            } else {
-                color_bits = sprite_color_bits;
-                palette = sprite_palette;
-                palette_selector = 1;
-            }
+        let color_location = if sprite_color_location != 0 && background_color_location != 0 {
             if is_sprite_0 {
                 // if sprite and background are not transparent, then there is a collision
                 self.reg_status.get_mut().insert(StatusReg::SPRITE_0_HIT);
             }
-        } else if sprite_color_bits != 0 {
-            color_bits = sprite_color_bits;
-            palette = sprite_palette;
-            palette_selector = 1;
+            // use background priority flag
+            if background_priority {
+                background_color_location
+            } else {
+                sprite_color_location
+            }
         } else {
-            color_bits = background_color_bits;
-            palette = background_palette;
-            palette_selector = 0;
-        }
-
-        if color_bits == 0 {
-            // universal background color
-            palette = 0;
-        }
-
-        let color =
-            self.read_bus(0x3F00 | (palette_selector << 4 | palette << 2 | color_bits) as u16);
+            sprite_color_location | background_color_location
+        };
 
         // advance the shift registers
         for i in 0..=1 {
@@ -844,7 +830,7 @@ where
             self.bg_palette_shift_registers[i] = self.bg_palette_shift_registers[i].wrapping_shl(1);
         }
 
-        color
+        self.read_bus(0x3F00 | color_location as u16)
     }
 
     fn emphasis_color(&self, color: Color) -> Color {
@@ -937,7 +923,6 @@ where
                     }
                 }
             }
-
             (261, 257) => {
                 // reload all of them in one go
                 self.reload_sprite_shift_registers();
@@ -953,17 +938,14 @@ where
                 // idle
                 self.tv.signal_end_of_frame();
             }
-            (241..=260, _) => {
-                // vertical blanking
-                if self.cycle == 1 && self.scanline == 241 {
-                    // set v-blank
-                    self.reg_status.get_mut().insert(StatusReg::VERTICAL_BLANK);
+            (241, 1) => {
+                // set v-blank
+                self.reg_status.get_mut().insert(StatusReg::VERTICAL_BLANK);
 
-                    // if raising NMI is enabled
-                    if self.reg_control.nmi_enabled() && !self.nmi_occured_in_this_frame.get() {
-                        self.nmi_pin_status.set(true);
-                        self.nmi_occured_in_this_frame.set(true);
-                    }
+                // if raising NMI is enabled
+                if self.reg_control.nmi_enabled() && !self.nmi_occured_in_this_frame.get() {
+                    self.nmi_pin_status.set(true);
+                    self.nmi_occured_in_this_frame.set(true);
                 }
             }
             _ => {}
@@ -990,97 +972,82 @@ where
     // run one cycle which is part of a scanline execution
     fn run_render_cycle(&mut self) {
         match self.cycle {
-            0 => {
-                // idle
+            // secondary OAM clear, cycles 1-64, but we do it in one go
+            // TODO: should it be in multiple times, instead of one go?
+            1 => {
+                self.secondary_oam = [Sprite::filled_ff(); 8];
             }
-            1..=256 => {
-                // fetch and reload shift registers
-                if self.cycle % 8 == 0 {
-                    self.reload_background_shift_registers();
+            // fetch and reload shift registers
+            8..=256 if self.cycle % 8 == 0 => {
+                self.reload_background_shift_registers();
 
-                    if self.cycle != 256 {
-                        // increment scrolling X in current VRAM address
-                        self.increment_coarse_x_scroll();
-                    } else {
-                        // fine and carry to coarse
-                        self.increment_y_scroll();
-                    }
+                if self.cycle != 256 {
+                    // increment scrolling X in current VRAM address
+                    self.increment_coarse_x_scroll();
+                } else {
+                    // fine and carry to coarse
+                    self.increment_y_scroll();
                 }
+            }
+            // check all oam memory in one go
+            255 => {
+                let next_y = self.get_next_scroll_y_render() as i16;
 
-                // secondary OAM clear, cycles 1-64, but we do it in one go
-                // TODO: should it be in multiple times, instead of one go?
-                if self.cycle == 1 {
-                    self.secondary_oam = [Sprite::filled_ff(); 8];
+                let mut counter = 0;
+                for (i, sprite) in self.primary_oam.iter().enumerate() {
+                    let sprite_y = sprite.get_y() as i16;
 
-                    // reset counter
-                    self.secondary_oam_counter = 0;
-                }
+                    let diff = next_y - sprite_y;
+                    let height = self.reg_control.sprite_height() as i16;
 
-                // 65 - 256
-                if self.cycle >= 65 && self.cycle <= 256 {
-                    let next_y = self.get_next_scroll_y_render() as i16;
+                    if diff >= 0 && diff < height {
+                        // in range
 
-                    let mut index = (self.cycle - 65) as usize;
-                    // each takes 3 cycles
-                    if index % 3 == 0 {
-                        index /= 3;
-
-                        let sprite = self.primary_oam[index];
-                        let sprite_y = sprite.get_y() as i16;
-
-                        let diff = next_y - sprite_y;
-                        let height = self.reg_control.sprite_height() as i16;
-
-                        if diff >= 0 && diff < height {
-                            // in range
-
-                            // sprite 0
-                            if index == 0 {
-                                self.next_scanline_sprite_0_present = true;
-                            }
-
-                            if self.secondary_oam_counter > 7 {
-                                // overflow
-                                self.reg_status.get_mut().insert(StatusReg::SPRITE_OVERFLOW);
-                            } else {
-                                self.secondary_oam[self.secondary_oam_counter as usize] = sprite;
-
-                                self.secondary_oam_counter += 1;
-                            }
+                        // sprite 0
+                        if i == 0 {
+                            self.next_scanline_sprite_0_present = true;
                         }
+
+                        if counter > 7 {
+                            // overflow
+                            self.reg_status.get_mut().insert(StatusReg::SPRITE_OVERFLOW);
+                            break;
+                        }
+
+                        self.secondary_oam[counter] = *sprite;
+
+                        counter += 1;
                     }
                 }
+
+                self.rendering_oam_counter = counter as u8;
             }
             257 => {
                 self.restore_rendering_scroll_x();
+
                 // to fix nametable wrapping around
                 self.restore_nametable_horizontal();
-
+            }
+            258 => {
                 // reload them all in one go
                 self.reload_sprite_shift_registers();
             }
-            258..=320 => {}
-            321..=340 => {
-                // lets just do it in the beginning
-                if self.cycle == 321 {
-                    // load next 2 bytes
-                    for _ in 0..2 {
-                        for i in 0..=1 {
-                            // as this is the first time, shift the registers
-                            // as we are reloading 2 times
-                            self.bg_pattern_shift_registers[i] =
-                                self.bg_pattern_shift_registers[i].wrapping_shl(8);
-                            self.bg_palette_shift_registers[i] =
-                                self.bg_palette_shift_registers[i].wrapping_shl(8);
-                        }
-                        self.reload_background_shift_registers();
-                        self.increment_coarse_x_scroll();
+            321 => {
+                // load next 2 bytes
+                for _ in 0..2 {
+                    for i in 0..=1 {
+                        // as this is the first time, shift the registers
+                        // as we are reloading 2 times
+                        self.bg_pattern_shift_registers[i] =
+                            self.bg_pattern_shift_registers[i].wrapping_shl(8);
+                        self.bg_palette_shift_registers[i] =
+                            self.bg_palette_shift_registers[i].wrapping_shl(8);
                     }
+                    self.reload_background_shift_registers();
+                    self.increment_coarse_x_scroll();
                 }
             }
-            _ => {
-                unreachable!();
-            }
+            _ => {}
         }
 
         // render after reloading
@@ -1119,8 +1086,9 @@ where
 
         self.primary_oam = [Sprite::empty(); 64];
         self.secondary_oam = [Sprite::empty(); 8];
+        self.rendering_oam = [Sprite::empty(); 8];
 
-        self.secondary_oam_counter = 0;
+        self.rendering_oam_counter = 0;
 
         self.sprite_0_present = false;
         self.next_scanline_sprite_0_present = false;
@@ -1154,7 +1122,7 @@ where
         *self.nmi_occured_in_this_frame.get_mut() = state.nmi_occured_in_this_frame;
         self.primary_oam = primary_oam;
         self.secondary_oam = state.secondary_oam;
-        self.secondary_oam_counter = state.secondary_oam_counter;
+        self.rendering_oam_counter = state.rendering_oam_counter;
         self.sprite_0_present = state.sprite_0_present;
         self.next_scanline_sprite_0_present = state.next_scanline_sprite_0_present;
         self.is_dma_request = state.is_dma_request;
@@ -1221,11 +1189,12 @@ struct SavablePPUState {
     // FIXME: add `rendering_oam`
     secondary_oam: [Sprite; 8],
 
-    secondary_oam_counter: u8,
+    rendering_oam_counter: u8,
 
     sprite_pattern_shift_registers: [[u8; 2]; 8],
     sprite_attribute_registers: [SpriteAttribute; 8],
     sprite_counters: [u8; 8],
+
     sprite_0_present: bool,
     next_scanline_sprite_0_present: bool,
 
@@ -1258,7 +1227,7 @@ impl SavablePPUState {
             nmi_occured_in_this_frame: ppu.nmi_occured_in_this_frame.get(),
             primary_oam,
             secondary_oam: ppu.secondary_oam,
-            secondary_oam_counter: ppu.secondary_oam_counter,
+            rendering_oam_counter: ppu.rendering_oam_counter,
 
             // Since these are removed, we keep them in the save just to not corrupt
             // the files
