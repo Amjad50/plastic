@@ -6,6 +6,7 @@ ignore:
   - "nes_ui_sfml"
   - "nes_ui_gtk"
   - "nes_ui_tui"
+  - "nes_ui_native_windows"
   - "tests.rs"
   - "**/tests.rs"
   - "tests"
