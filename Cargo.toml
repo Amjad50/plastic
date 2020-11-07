@@ -14,3 +14,20 @@ members = [
     "nes_ui_base",
     "ppu2c02",
 ]
+
+[profile.dev]
+opt-level = 2
+debug = true
+rpath = false
+lto = false
+debug-assertions = true
+codegen-units = 16
+
+[profile.release]
+opt-level = 3
+debug = false 
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+
