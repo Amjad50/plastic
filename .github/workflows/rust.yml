@@ -11,7 +11,7 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  build:
+  linux:
 
     runs-on: ubuntu-20.04
 
@@ -33,3 +33,13 @@ jobs:
     - name: Run test cargo-tarpaulin
       run: cargo tarpaulin -t 300 --workspace -e nes_test nes_ui_base nes_ui_sfml nes_ui_gtk nes_ui_tui -v -o Xml
     - uses: codecov/codecov-action@v1.0.11
+  windows:
+    
+    runs-on: windows-latest
+    
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build native windows UI
+        run: cargo build -p nes_ui_native_windows --verbose
+      - name: Run tests
+        run: cargo test --workspace --exclude nes_ui_gtk --exclude nes_ui_sfml --lib
