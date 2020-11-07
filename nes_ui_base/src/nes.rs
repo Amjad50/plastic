@@ -478,6 +478,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
         // first time
         handle_apu_after_reset!();
+
         send_present_save_states_to_ui!();
 
         // run the emulator loop

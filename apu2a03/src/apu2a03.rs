@@ -66,6 +66,8 @@ pub struct APU2A03 {
 
     sample_counter: f64,
 
+    offset: f64,
+
     interrupt_flag: Cell<bool>,
     request_interrupt_flag_change: Cell<bool>,
 
@@ -96,6 +98,8 @@ impl APU2A03 {
             cycle: 0,
 
             sample_counter: 0.,
+
+            offset: 0.,
 
             wait_reset: 0,
 
@@ -462,7 +466,9 @@ impl APU2A03 {
     }
 
     pub fn empty_queue(&mut self) {
-        self.buffered_channel.lock().unwrap().clear_buffer();
+        if let Ok(mut buffer) = self.buffered_channel.lock() {
+            buffer.clear_buffer();
+        }
     }
 
     /// clock the APU **at** CPU clock rate, the clocks are handled correctly
@@ -484,14 +490,30 @@ impl APU2A03 {
             std::cmp::Ordering::Greater => self.wait_reset -= 1,
         }
 
-        // since, this is running in CPU clock
+        // after how many apu clocks a sample should be recorded
+        let samples_every_n_apu_clock = SAMPLES_EVERY_N_APU_CLOCK + self.offset;
+
         self.sample_counter += 1.;
-        if self.sample_counter >= SAMPLES_EVERY_N_APU_CLOCK {
+        if self.sample_counter >= samples_every_n_apu_clock {
             let output = self.get_mixer_output();
 
-            self.buffered_channel.lock().unwrap().recored_sample(output);
+            if let Ok(mut buffered_channel) = self.buffered_channel.lock() {
+                buffered_channel.recored_sample(output);
 
-            self.sample_counter -= SAMPLES_EVERY_N_APU_CLOCK;
+                // check for needed change in offset
+                let change = if buffered_channel.get_is_overusing() {
+                    -0.001
+                } else if buffered_channel.get_is_underusing() {
+                    0.001
+                } else {
+                    0.
+                };
+
+                self.offset += change;
+                buffered_channel.clear_using_flags();
+            }
+
+            self.sample_counter -= samples_every_n_apu_clock;
         }
 
         // clocked on every CPU cycle
