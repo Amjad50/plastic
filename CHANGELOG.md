@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2020-11-07
+### Added
+- A new `plastic` logo. ([984590c]) and ([3c1b2fe]) 
+- Icon to the GTK UI app. ([edacb0a])
+
+### Changed
+- Numerous optimizations in emulation.
+
+### Fixed
+- Windows slow performance bug, this was due to the way we handled sleep
+between frames.
+
 ## [0.2.1] - 2020-09-09
 ### Fixed
 - Windows GUI crash bug. ([0626860])
@@ -78,7 +90,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - This is the first release and has **SO** many rewrites and bug fixes.
 
-[Unreleased]: https://github.com/Amjad50/plastic/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Amjad50/plastic/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/Amjad50/plastic/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Amjad50/plastic/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Amjad50/plastic/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Amjad50/plastic/releases/tag/v0.1.0
@@ -91,6 +104,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0626860]: https://github.com/Amjad50/plastic/commit/0626860
 [853705a]: https://github.com/Amjad50/plastic/commit/853705a
 [3972696]: https://github.com/Amjad50/plastic/commit/3972696
+[984590c]: https://github.com/Amjad50/plastic/commit/984590c
+[3c1b2fe]: https://github.com/Amjad50/plastic/commit/3c1b2fe
+[edacb0a]: https://github.com/Amjad50/plastic/commit/edacb0a
 
 [Emulator tests]: http://wiki.nesdev.com/w/index.php/Emulator_tests
 
