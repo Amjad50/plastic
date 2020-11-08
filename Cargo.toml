@@ -15,6 +15,10 @@ members = [
     "ppu2c02",
 ]
 
+exclude = [
+    "plastic_mobile"
+]
+
 [profile.dev]
 opt-level = 2
 debug = true
