@@ -42,3 +42,5 @@ app.*.map.json
 
 *.so
 target
+# this is because its generated
+lib/libplastic_mobile/binding.dart

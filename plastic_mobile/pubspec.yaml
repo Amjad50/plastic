@@ -32,6 +32,13 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  ffigen: ^1.0.6
+
+ffigen:
+  output: 'lib/libplastic_mobile/binding.dart'
+  headers:
+    entry-points:
+      - 'target/binding.h'
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

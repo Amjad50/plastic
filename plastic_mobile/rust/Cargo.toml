@@ -5,6 +5,14 @@ authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+nes_ui_base = { path = "../../nes_ui_base" }
+
+lazy_static = "1.4.0"
+allo-isolate = "0.1.6"
+
+[build-dependencies]
+cbindgen = "0.15.0"
+dart-bindgen = "0.1.7"
 
 [lib]
 name = "plastic_mobile"
