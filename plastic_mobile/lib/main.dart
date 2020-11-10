@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -80,8 +79,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           print(Utf8Decoder().convert(msgList));
           break;
         case NesResponseType.Image:
-          ui.decodeImageFromPixels(msgList, 256, 240, ui.PixelFormat.bgra8888,
-              (img) {
+          ui.decodeImageFromPixels(
+              msgList, TV_WIDTH, TV_HEIGHT, ui.PixelFormat.bgra8888, (img) {
             setState(() {
               _currentImg = img;
             });
@@ -140,6 +139,17 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    double _width = 0;
+    double _height = 0;
+    Size size = MediaQuery.of(context).size;
+    if (size.width < size.height) {
+      _width = size.width;
+      _height = _width / TV_WIDTH * TV_HEIGHT;
+    } else {
+      _height = size.height;
+      _width = _height / TV_HEIGHT * TV_WIDTH;
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
@@ -150,8 +160,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           children: <Widget>[
             // drawing screen
             Container(
-              width: 256,
-              height: 240,
+              width: _width,
+              height: _height,
               child: CustomPaint(
                 painter: ImagePainter(_currentImg),
               ),

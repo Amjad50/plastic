@@ -7,6 +7,8 @@ import 'package:ffi/ffi.dart';
 
 import 'binding.dart';
 
+const TV_WIDTH = 256, TV_HEIGHT = 240;
+
 final DynamicLibrary _dl = _open();
 DynamicLibrary _open() {
   if (Platform.isAndroid) return DynamicLibrary.open('libplastic_mobile.so');
