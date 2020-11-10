@@ -7,12 +7,16 @@ import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:plastic_mobile/libplastic_mobile/binding.dart';
 import 'package:plastic_mobile/libplastic_mobile/lib.dart';
 import 'package:plastic_mobile/widgets/image_canvas.dart';
 import 'package:synchronized/synchronized.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // TODO: support different orientations, (this is temporary)
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   runApp(MyApp());
 }
 
