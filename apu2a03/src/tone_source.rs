@@ -71,6 +71,10 @@ impl BufferedChannel {
     pub fn len(&self) -> usize {
         self.buffer.len()
     }
+
+    pub fn take_current_buffer(&mut self) -> Vec<f32> {
+        self.buffer.drain(..).collect()
+    }
 }
 
 impl APUChannel for BufferedChannel {

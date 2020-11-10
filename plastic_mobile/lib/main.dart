@@ -7,10 +7,13 @@ import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_sound/flutter_sound.dart';
 import 'package:plastic_mobile/libplastic_mobile/binding.dart';
 import 'package:plastic_mobile/libplastic_mobile/lib.dart';
 import 'package:plastic_mobile/widgets/image_canvas.dart';
 import 'package:synchronized/synchronized.dart';
+
+const int SAMPLE_RATE = 22050;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,6 +50,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   ReceivePort _port;
   ui.Image _currentImg = null;
   Lock _imageDrawingLock = Lock();
+  FlutterSoundPlayer _mPlayer = FlutterSoundPlayer();
+  bool _mPlayerIsInited = false;
 
   @override
   void didChangeAppLifecycleState(ui.AppLifecycleState state) {
@@ -72,7 +77,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   void _nesHandler(dynamic msg) {
     if (msg is Uint8List && msg.isNotEmpty) {
-      Uint8List msgList = Uint8List.sublistView(msg, 1, msg.length);
+      Uint8List msgList = msg.sublist(1);
 
       switch (msg.first) {
         case NesResponseType.Log:
@@ -85,6 +90,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
               _currentImg = img;
             });
           });
+          break;
+        case NesResponseType.AudioBuffer:
+          if (_mPlayerIsInited && _mPlayer != null && !_mPlayer.isStopped) {
+            _mPlayer.foodSink.add(FoodData(msgList));
+          }
           break;
         case NesResponseType.SavesPresent:
           print("got saves");
@@ -112,6 +122,35 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
   }
 
+  void _clickHandler() async {
+    Isolate.spawn(run_nes, _port.sendPort);
+    _imgDrawer();
+    _play();
+  }
+
+  void _play() async {
+    if (_mPlayerIsInited && _mPlayer.isStopped) {
+      print("player starting");
+      await _mPlayer.startPlayerFromStream(
+        codec: Codec.pcm16,
+        numChannels: 1,
+        sampleRate: SAMPLE_RATE,
+      );
+      if (_mPlayer != null) {
+        // We must not do stopPlayer() directely //await stopPlayer();
+        _mPlayer.foodSink.add(FoodEvent(() async {
+          //await _mPlayer.stopPlayer();
+          //setState(() {});
+          print("food sink callback");
+        }));
+      }
+    }
+  }
+
+  Future<void> _stopPlayer() async {
+    if (_mPlayer != null) await _mPlayer.stopPlayer();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -121,11 +160,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     setup_ffi();
 
     WidgetsBinding.instance.addObserver(this);
-  }
 
-  void _clickHandler() async {
-    Isolate.spawn(run_nes, _port.sendPort);
-    _imgDrawer();
+    // Be careful : openAudioSession return a Future.
+    // Do not access your FlutterSoundPlayer or FlutterSoundRecorder before the completion of the Future
+    _mPlayer.openAudioSession().then((value) {
+      setState(() {
+        _mPlayerIsInited = true;
+      });
+    });
   }
 
   @override
@@ -134,6 +176,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     _port.close();
 
     WidgetsBinding.instance.removeObserver(this);
+
+    // maybe need await?
+    _stopPlayer();
+    _mPlayer.closeAudioSession();
+    _mPlayer = null;
     super.dispose();
   }
 

@@ -26,6 +26,7 @@ pub enum UiEvent {
 pub enum BackendEvent {
     PresentStates(Vec<u8>),
     Log(String),
+    AudioBuffer(Vec<f32>),
 }
 
 pub trait UiProvider {

@@ -572,6 +572,12 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                     }
                 }
 
+                nes_to_ui_sender
+                    .send(BackendEvent::AudioBuffer(
+                        self.apu.borrow_mut().take_current_buffer(),
+                    ))
+                    .unwrap();
+
                 if let Some(fps) = frame_limiter.end() {
                     nes_to_ui_sender
                         .send(BackendEvent::Log(format!("fps {}", fps)))

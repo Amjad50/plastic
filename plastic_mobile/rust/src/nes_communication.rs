@@ -141,8 +141,15 @@ pub enum NesResponseType {
     // vec u8 arg
     Image,
     SavesPresent,
+    // vec f32
+    AudioBuffer,
     // logging
     Log,
+}
+
+enum Either<TA, TB> {
+    A(TA),
+    B(TB),
 }
 
 /// using [`NesRequest::from_nes_request`] to convert [`NesRequestType`]
@@ -154,31 +161,59 @@ pub(crate) enum NesResponse {
     // vec u8 arg
     Image(Vec<u8>),
     SavesPresent(Vec<u8>),
+    // vec f32 arg
+    AudioBuffer(Vec<f32>),
     // string
     Log(String),
 }
 
 impl NesResponse {
-    pub(crate) fn to_nes_response_type_and_data(self) -> (NesResponseType, Vec<u8>) {
+    fn to_nes_response_type_and_data(self) -> (NesResponseType, Either<Vec<u8>, Vec<f32>>) {
         match self {
-            NesResponse::Exit => (NesResponseType::ExitResponse, Vec::with_capacity(0)),
-            NesResponse::Image(data) => (NesResponseType::Image, data),
-            NesResponse::SavesPresent(data) => (NesResponseType::SavesPresent, data),
+            NesResponse::Exit => (
+                NesResponseType::ExitResponse,
+                Either::A(Vec::with_capacity(0)),
+            ),
+            NesResponse::Image(data) => (NesResponseType::Image, Either::A(data)),
+            NesResponse::SavesPresent(data) => (NesResponseType::SavesPresent, Either::A(data)),
             NesResponse::Log(data) => (
                 NesResponseType::Log,
-                format!("libplastic_mobile [LOG]: {}", data).into_bytes(),
+                Either::A(format!("libplastic_mobile [LOG]: {}", data).into_bytes()),
             ),
+            NesResponse::AudioBuffer(data) => (NesResponseType::AudioBuffer, Either::B(data)),
         }
     }
 }
 
 impl IntoDart for NesResponse {
     fn into_dart(self) -> DartCObject {
-        let (ty, mut data) = self.to_nes_response_type_and_data();
+        // the manual types here is just to make sure the second either is Vec<f32>,
+        // as this is a SAFETY concerns for below
+        let (ty, data): (_, Either<_, Vec<f32>>) = self.to_nes_response_type_and_data();
+
+        let mut data = match data {
+            Either::A(d) => d,
+            Either::B(d) => {
+                let d = d
+                    .iter()
+                    .map(|e| (e * std::i16::MAX as f32) as i16)
+                    .collect::<Vec<i16>>();
+                // SAFETY: `d` is [i16] here, when converted to [u8], every 1 elemnt
+                // will be converted into 2 `u8` integers, _pre and _post will
+                // be empty,
+                // This is safe because u8 has size of 1 and alignment of 1,
+                // i16 has size of 2 and alignment of 2, which can be divided into
+                // u8 without problems
+                let (pre, middle, post) = unsafe { d.align_to::<u8>() };
+                // just to make sure
+                assert!(pre.is_empty() && post.is_empty());
+                middle.to_vec()
+            }
+        };
+
         let mut result = Vec::with_capacity(data.len() + 1);
         result.push(ty as u8);
         result.append(&mut data);
-
         result.into_dart()
     }
 }

@@ -471,6 +471,15 @@ impl APU2A03 {
         }
     }
 
+    pub fn take_current_buffer(&mut self) -> Vec<f32> {
+        if let Ok(mut buffer) = self.buffered_channel.lock() {
+            buffer.take_current_buffer()
+        } else {
+            // ignore error
+            Vec::new()
+        }
+    }
+
     pub fn can_play(&self) -> bool {
         self.player.is_some()
     }

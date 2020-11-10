@@ -94,13 +94,17 @@ impl UiProvider for MobileProvider {
                 }
             }
 
-            match nes_to_ui_receiver.try_recv() {
-                Ok(BackendEvent::PresentStates(states)) => self.current_saves_present = states,
-                Ok(BackendEvent::Log(msg)) => {
-                    self.port
-                        .post(NesResponse::Log(format!("NES backend: {}", msg)));
+            if let Ok(event) = nes_to_ui_receiver.try_recv() {
+                match event {
+                    BackendEvent::PresentStates(states) => self.current_saves_present = states,
+                    BackendEvent::Log(msg) => {
+                        self.port
+                            .post(NesResponse::Log(format!("NES backend: {}", msg)));
+                    }
+                    BackendEvent::AudioBuffer(buffer) => {
+                        self.port.post(NesResponse::AudioBuffer(buffer));
+                    }
                 }
-                _ => {}
             }
         }
 
