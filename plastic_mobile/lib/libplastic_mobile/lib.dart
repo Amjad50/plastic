@@ -24,7 +24,7 @@ void run_nes(SendPort port) {
   _nativeLib.run_nes(port.nativePort);
 }
 
-void nes_request(int event, {dynamic data = 0}) {
+void nes_request(int event, [dynamic data = 0]) {
   Pointer<Utf8> dataToSend;
 
   switch (data.runtimeType) {
