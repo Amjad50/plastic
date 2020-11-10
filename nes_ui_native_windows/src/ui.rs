@@ -496,6 +496,9 @@ impl ProviderApp {
                         }
                     }
                 }
+                BackendEvent::Log(_) => {
+                    // ignore for now
+                }
             }
         }
 

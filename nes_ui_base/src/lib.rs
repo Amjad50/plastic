@@ -25,6 +25,7 @@ pub enum UiEvent {
 
 pub enum BackendEvent {
     PresentStates(Vec<u8>),
+    Log(String),
 }
 
 pub trait UiProvider {

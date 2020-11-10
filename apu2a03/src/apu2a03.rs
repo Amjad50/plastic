@@ -471,6 +471,10 @@ impl APU2A03 {
         }
     }
 
+    pub fn can_play(&self) -> bool {
+        self.player.is_some()
+    }
+
     /// clock the APU **at** CPU clock rate, the clocks are handled correctly
     /// as it should be
     pub fn clock(&mut self) {

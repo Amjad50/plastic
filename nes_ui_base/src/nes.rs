@@ -481,6 +481,13 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
         send_present_save_states_to_ui!();
 
+        nes_to_ui_sender
+            .send(BackendEvent::Log(format!(
+                "Audio can play: {}",
+                self.apu.borrow().can_play()
+            )))
+            .unwrap();
+
         // run the emulator loop
         loop {
             // check for events
@@ -499,7 +506,17 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                             self.cartridge.replace(cartridge);
                             self.reset();
                             handle_apu_after_reset!();
+                            nes_to_ui_sender
+                                .send(BackendEvent::Log(
+                                    "Cartridge opened the file succesfully".to_string(),
+                                ))
+                                .unwrap();
                         } else {
+                            nes_to_ui_sender
+                                .send(BackendEvent::Log(
+                                    "Cartridge could not open the file".to_string(),
+                                ))
+                                .unwrap();
                             println!("This game is not supported yet");
                         }
                         send_present_save_states_to_ui!();
@@ -555,7 +572,11 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                     }
                 }
 
-                frame_limiter.end();
+                if let Some(fps) = frame_limiter.end() {
+                    nes_to_ui_sender
+                        .send(BackendEvent::Log(format!("fps {}", fps)))
+                        .unwrap();
+                }
             }
         }
 
