@@ -9,6 +9,8 @@ fn main() {
         .with_crate(crate_dir)
         .with_config(config)
         .with_no_includes()
+        // allow ffigen to detect int64_t
+        .with_include("stdint.h")
         // for allo_isolate
         .with_trailer("void store_dart_post_cobject(char (*)(long, *Dart_CObject));")
         .generate()

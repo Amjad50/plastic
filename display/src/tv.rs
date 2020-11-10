@@ -14,7 +14,7 @@ pub struct TV {
 
     /// A temporary buffer to holds the screen state while the PPU is drawing
     /// in the current frame
-    building_pixels: [Color; TV_WIDTH * TV_HEIGHT],
+    building_pixels: Box<[Color; TV_WIDTH * TV_HEIGHT]>,
 
     /// A function to convert from [`Color`] to 4 byte value, which is used by
     /// the UI provider
@@ -25,7 +25,7 @@ impl TV {
     pub fn new(pixels_handler: fn(&Color) -> [u8; COLOR_BYTES_LEN]) -> Self {
         Self {
             pixels_to_display: Arc::new(Mutex::new(vec![0; TV_BUFFER_SIZE])),
-            building_pixels: [color!(0, 0, 0); TV_WIDTH * TV_HEIGHT],
+            building_pixels: Box::new([color!(0, 0, 0); TV_WIDTH * TV_HEIGHT]),
             pixels_handler,
         }
     }
@@ -63,7 +63,7 @@ impl TV {
             }
         }
 
-        for i in &mut self.building_pixels {
+        for i in self.building_pixels.iter_mut() {
             *i = color!(0, 0, 0);
         }
     }
