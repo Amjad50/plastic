@@ -42,3 +42,7 @@ void nes_request(int event, [dynamic data = 0]) {
 
   _nativeLib.nes_request(event, dataToSend.cast());
 }
+
+int nes_sample_rate() {
+  return _nativeLib.nes_sample_rate();
+}

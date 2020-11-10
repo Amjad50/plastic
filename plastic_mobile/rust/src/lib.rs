@@ -36,6 +36,11 @@ pub extern "C" fn nes_response_empty_do_not_call(_: NesResponseType) {}
 pub extern "C" fn nes_key_empty_do_not_call(_: NesKey) {}
 
 #[no_mangle]
+pub extern "C" fn nes_sample_rate() -> u32 {
+    nes_ui_base::nes_audio::SAMPLE_RATE
+}
+
+#[no_mangle]
 pub extern "C" fn nes_request(event: NesRequestType, data: *const c_char) {
     // TODO: send errors to dart
     if let Ok(event) = NesRequest::from_nes_request(event, data) {

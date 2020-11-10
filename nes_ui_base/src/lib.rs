@@ -7,6 +7,9 @@ pub mod nes_controller {
 pub mod nes_display {
     pub use display::{Color, TV_BUFFER_SIZE, TV_HEIGHT, TV_WIDTH};
 }
+pub mod nes_audio {
+    pub use apu2a03::SAMPLE_RATE;
+}
 
 use std::sync::{
     mpsc::{Receiver, Sender},

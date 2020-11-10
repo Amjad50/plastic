@@ -337,6 +337,9 @@ impl UiProvider for GtkProvider {
                     BackendEvent::Log(_) => {
                         // ignore for now
                     }
+                    BackendEvent::AudioBuffer(_) => {
+                        // ignore
+                    }
                 }
             }
 

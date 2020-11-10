@@ -499,6 +499,9 @@ impl ProviderApp {
                 BackendEvent::Log(_) => {
                     // ignore for now
                 }
+                BackendEvent::AudioBuffer(_) => {
+                    // ignore
+                }
             }
         }
 
