@@ -509,21 +509,30 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                         self.apu.borrow_mut().pause();
                     }
                     UiEvent::Resume => {
-                        self.paused = false;
-                        self.apu.borrow_mut().play();
-                        self.apu.borrow_mut().empty_queue();
+                        // only resume if we can
+                        if !self.cartridge.borrow().is_empty() {
+                            self.paused = false;
+                            self.apu.borrow_mut().play();
+                            self.apu.borrow_mut().empty_queue();
+                        }
                     }
                     UiEvent::SaveState(slot) => {
-                        if let Err(err) = self.save_state(slot) {
-                            eprintln!("Error in saving the state: {}", err);
+                        // only if there is a game
+                        if !self.cartridge.borrow().is_empty() {
+                            if let Err(err) = self.save_state(slot) {
+                                eprintln!("Error in saving the state: {}", err);
+                            }
+                            send_present_save_states_to_ui!();
                         }
-                        send_present_save_states_to_ui!();
                     }
                     UiEvent::LoadState(slot) => {
-                        if let Err(err) = self.load_state(slot) {
-                            eprintln!("Error in loading the state: {}", err);
+                        // only if there is a game
+                        if !self.cartridge.borrow().is_empty() {
+                            if let Err(err) = self.load_state(slot) {
+                                eprintln!("Error in loading the state: {}", err);
+                            }
+                            send_present_save_states_to_ui!();
                         }
-                        send_present_save_states_to_ui!();
                     }
                 }
             }
