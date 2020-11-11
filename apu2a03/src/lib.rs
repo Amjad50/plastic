@@ -14,4 +14,4 @@ mod tests;
 pub use crate::apu2a03::APU2A03;
 
 // for performance
-pub const SAMPLE_RATE: u32 = 22050;
+pub const SAMPLE_RATE: u32 = 44100;
