@@ -484,6 +484,14 @@ impl APU2A03 {
         self.player.is_some()
     }
 
+    pub fn get_buffer_len(&self) -> usize {
+        if let Ok(buffer) = self.buffered_channel.lock() {
+            buffer.len()
+        } else {
+            0
+        }
+    }
+
     /// clock the APU **at** CPU clock rate, the clocks are handled correctly
     /// as it should be
     pub fn clock(&mut self) {

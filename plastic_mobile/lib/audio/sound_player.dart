@@ -16,7 +16,10 @@ class SoundPlayer {
   }
 
   void addBuffer(Uint8List buffer) {
-    if (_mPlayerIsInited && _player != null && !_player.isStopped) {
+    if (_mPlayerIsInited &&
+        _player != null &&
+        !_player.isStopped &&
+        !_player.isPaused) {
       _player.foodSink.add(FoodData(buffer));
     }
   }

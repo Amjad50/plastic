@@ -3,7 +3,7 @@ use cartridge::{Cartridge, CartridgeError};
 use common::{
     interconnection::*,
     save_state::{Savable, SaveError},
-    Bus, Device, MirroringProvider,
+    Bus, Device, MirroringProvider, CPU_FREQ,
 };
 use controller::{Controller, StandardNESControllerState};
 use cpu6502::{CPUBusTrait, CPU6502};
@@ -434,7 +434,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
     pub fn run(&mut self) {
         let image = self.image.clone();
         let ctrl_state = self.ctrl_state.clone();
-        let mut frame_limiter = FrameLimiter::new(60);
+        let mut frame_limiter = FrameLimiter::new(60.);
 
         let (ui_to_nes_sender, ui_to_nes_receiver) = channel::<UiEvent>();
         let (nes_to_ui_sender, nes_to_ui_receiver) = channel::<BackendEvent>();
@@ -453,7 +453,7 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
         self.cpu.reset();
 
-        const N: usize = 29780; // number of CPU cycles per loop, one full frame
+        let cpu_cycles_per_frame = (CPU_FREQ / frame_limiter.target_fps()) as usize; // number of CPU cycles per loop, one full frame
 
         // just a way to duplicate code, its not meant to be efficient way to do it
         // I used this, since `self` cannot be referenced here and anywhere else at
@@ -556,35 +556,38 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
             if self.paused {
                 std::thread::sleep(std::time::Duration::from_millis(50));
+                // always reset
+                frame_limiter.reset();
                 continue;
             }
 
-            if frame_limiter.begin() {
-                for _ in 0..N {
-                    self.apu.borrow_mut().clock();
+            frame_limiter.begin();
 
-                    self.cpu.run_next();
-                    {
-                        let mut ppu = self.ppu.borrow_mut();
-                        ppu.clock();
-                        ppu.clock();
-                        ppu.clock();
-                    }
-                }
+            for _ in 0..cpu_cycles_per_frame {
+                self.apu.borrow_mut().clock();
 
-                if !self.apu.borrow().can_play() {
-                    nes_to_ui_sender
-                        .send(BackendEvent::AudioBuffer(
-                            self.apu.borrow_mut().take_current_buffer(),
-                        ))
-                        .unwrap();
+                self.cpu.run_next();
+                {
+                    let mut ppu = self.ppu.borrow_mut();
+                    ppu.clock();
+                    ppu.clock();
+                    ppu.clock();
                 }
+            }
 
-                if let Some(fps) = frame_limiter.end() {
-                    nes_to_ui_sender
-                        .send(BackendEvent::Log(format!("fps {}", fps)))
-                        .unwrap();
-                }
+            // send to Ui if we can't play the audio by ourselves
+            if !self.apu.borrow().can_play() {
+                nes_to_ui_sender
+                    .send(BackendEvent::AudioBuffer(
+                        self.apu.borrow_mut().take_current_buffer(),
+                    ))
+                    .unwrap();
+            }
+
+            if let Some(fps) = frame_limiter.end() {
+                nes_to_ui_sender
+                    .send(BackendEvent::Log(format!("fps {}", fps)))
+                    .unwrap();
             }
         }
 
