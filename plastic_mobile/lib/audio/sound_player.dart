@@ -42,11 +42,13 @@ class SoundPlayer {
   }
 
   void pause() async {
-    _player.pausePlayer();
+    if (_player.isPlaying) _player.pausePlayer();
   }
 
   void resume() async {
-    _player.resumePlayer();
+    if (_player.isPaused)
+      _player.resumePlayer();
+    else if (_player.isStopped) play();
   }
 
   void stop() async {
