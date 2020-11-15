@@ -11,6 +11,7 @@ import 'package:plastic_mobile/audio/sound_player.dart';
 import 'package:plastic_mobile/libplastic_mobile/binding.dart';
 import 'package:plastic_mobile/libplastic_mobile/lib.dart';
 import 'package:plastic_mobile/widgets/image_canvas.dart';
+import 'package:plastic_mobile/widgets/nes_controller.dart';
 import 'package:synchronized/synchronized.dart';
 
 void main() async {
@@ -24,12 +25,12 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
+      title: 'Plastic',
+      theme: ThemeData.dark().copyWith(
+        primaryColor: Colors.red,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MyHomePage(title: 'Plastic'),
     );
   }
 }
@@ -44,9 +45,8 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
-  int _counter = 0;
   ReceivePort _port;
-  ui.Image _currentImg = null;
+  ui.Image _currentImg;
   Lock _imageDrawingLock = Lock();
   SoundPlayer _player = SoundPlayer();
 
@@ -54,20 +54,16 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(ui.AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.resumed:
-        print("resume");
         nes_request(NesRequestType.Resume);
         _player.resume();
         break;
       case AppLifecycleState.inactive:
-        print("inactive");
         break;
       case AppLifecycleState.paused:
-        print("pause");
         nes_request(NesRequestType.Pause);
         _player.pause();
         break;
       case AppLifecycleState.detached:
-        print("detach");
         nes_request(NesRequestType.Exit);
         _player.stop();
         _port.close();
@@ -120,12 +116,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
   }
 
-  void _clickHandler() async {
-    Isolate.spawn(run_nes, _port.sendPort);
-    _imgDrawer();
-    _player.play();
-  }
-
   @override
   void initState() {
     super.initState();
@@ -135,6 +125,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     setup_ffi();
 
     WidgetsBinding.instance.addObserver(this);
+
+    // start the backend stuff now
+    Isolate.spawn(run_nes, _port.sendPort);
+    _imgDrawer();
+    _player.play();
   }
 
   @override
@@ -164,36 +159,41 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            // drawing screen
-            Container(
-              width: _width,
-              height: _height,
-              child: CustomPaint(
-                painter: ImagePainter(_currentImg),
-              ),
-            ),
-            RaisedButton(
-              onPressed: () async {
-                FilePickerResult result = await FilePicker.platform.pickFiles();
+        actions: [
+          IconButton(
+            icon: Icon(Icons.launch),
+            onPressed: () async {
+              FilePickerResult result = await FilePicker.platform.pickFiles();
 
-                if (result != null) {
-                  nes_request(NesRequestType.LoadRom, result.files.first.path);
-                }
-              },
-              child: Text("open game"),
-            ),
-          ],
-        ),
+              if (result != null) {
+                nes_request(NesRequestType.LoadRom, result.files.first.path);
+              }
+            },
+          )
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _clickHandler,
-        tooltip: 'Start Nes',
-        child: Icon(Icons.add),
+      body: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        mainAxisSize: MainAxisSize.max,
+        children: <Widget>[
+          // drawing screen
+          Container(
+            width: _width,
+            height: _height,
+            child: CustomPaint(
+              willChange: true,
+              painter: ImagePainter(_currentImg),
+            ),
+          ),
+          NesController(
+            onPress: (btn) {
+              nes_request(NesRequestType.ButtonPress, btn.nativeKeyIndex);
+            },
+            onRelease: (btn) {
+              nes_request(NesRequestType.ButtonRelease, btn.nativeKeyIndex);
+            },
+          ),
+        ],
       ),
     );
   }

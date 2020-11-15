@@ -15,6 +15,7 @@ dependencies:
   file_picker: ^2.0.12
   synchronized: ^2.2.0+2
   flutter_sound: ^6.4.2+1
+  provider: ^4.3.2+2
 
 
   # The following adds the Cupertino Icons font to your application.

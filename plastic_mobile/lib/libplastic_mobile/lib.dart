@@ -17,6 +17,18 @@ DynamicLibrary _open() {
 
 final _nativeLib = NativeLibrary(_dl);
 
+// used as a safer way to send buttons
+enum NesControllerKey {
+  A,
+  B,
+  Select,
+  Start,
+  Up,
+  Down,
+  Left,
+  Right,
+}
+
 /// Must be called before anything
 void setup_ffi() {
   _nativeLib.store_dart_post_cobject(NativeApi.postCObject.cast());
