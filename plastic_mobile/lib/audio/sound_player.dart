@@ -1,63 +1,49 @@
+import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter_sound/flutter_sound.dart';
+import 'package:plastic_mobile/audio/raw_audio_plugin.dart';
 import 'package:plastic_mobile/libplastic_mobile/lib.dart';
+import 'package:synchronized/synchronized.dart';
 
 final int SAMPLE_RATE = nes_sample_rate();
 
 class SoundPlayer {
-  FlutterSoundPlayer _player = FlutterSoundPlayer();
-  bool _mPlayerIsInited = false;
+  StreamController<Uint8List> _dataStream = StreamController();
+  StreamSubscription<Uint8List> _dataStreamSubscription;
+  Lock _lock = Lock();
 
   SoundPlayer() {
-    _player.openAudioSession().then((value) {
-      _mPlayerIsInited = true;
+    _dataStreamSubscription = _dataStream.stream.listen((data) {
+      _dataStreamSubscription.pause(RawAudioPlugin.addBuffer(data));
     });
+
+    RawAudioPlugin.newAudioPlayer(SAMPLE_RATE);
   }
 
   void addBuffer(Uint8List buffer) {
-    if (_mPlayerIsInited &&
-        _player != null &&
-        !_player.isStopped &&
-        !_player.isPaused) {
-      _player.foodSink.add(FoodData(buffer));
-    }
-  }
-
-  void play() async {
-    if (_mPlayerIsInited && _player.isStopped) {
-      print("player starting");
-      await _player.startPlayerFromStream(
-        codec: Codec.pcm16,
-        numChannels: 1,
-        sampleRate: SAMPLE_RATE,
-      );
-      // We must not do stopPlayer() directely //await stopPlayer();
-      _player.foodSink.add(FoodEvent(() async {
-        //await _mPlayer.stopPlayer();
-        //setState(() {});
-        print("food sink callback");
-      }));
-    }
+    _dataStream.sink.add(buffer);
   }
 
   void pause() async {
-    if (_player.isPlaying) _player.pausePlayer();
+    _lock.synchronized(() {
+      RawAudioPlugin.pause();
+    });
   }
 
   void resume() async {
-    if (_player.isPaused)
-      _player.resumePlayer();
-    else if (_player.isStopped) play();
+    _lock.synchronized(() {
+      RawAudioPlugin.resume();
+    });
   }
 
   void stop() async {
-    if (_player != null) await _player.stopPlayer();
+    RawAudioPlugin.stop();
+    if (_dataStreamSubscription != null) _dataStreamSubscription.cancel();
+    _dataStream.close();
+    _dataStream.sink.close();
   }
 
   void dispose() {
     stop();
-    _player.closeAudioSession();
-    _player = null;
   }
 }

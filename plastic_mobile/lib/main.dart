@@ -129,7 +129,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     // start the backend stuff now
     Isolate.spawn(run_nes, _port.sendPort);
     _imgDrawer();
-    _player.play();
   }
 
   @override
