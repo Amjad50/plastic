@@ -9,6 +9,7 @@ pub use nes_communication::{NesKey, NesRequestType, NesResponseType};
 
 use allo_isolate::Isolate;
 use lazy_static::lazy_static;
+use std::convert::TryFrom;
 use std::os::raw::c_char;
 use std::sync::mpsc::*;
 use std::sync::Mutex;
@@ -35,16 +36,27 @@ pub extern "C" fn nes_response_empty_do_not_call(_: NesResponseType) {}
 #[no_mangle]
 pub extern "C" fn nes_key_empty_do_not_call(_: NesKey) {}
 
+/// This is only here to add it to the binding.h file when building,
+/// looks like if the enum is not used, it will not be generated
+#[no_mangle]
+pub extern "C" fn nes_request_empty_do_not_call(_: NesRequestType) {}
+
 #[no_mangle]
 pub extern "C" fn nes_sample_rate() -> u32 {
     nes_ui_base::nes_audio::SAMPLE_RATE
 }
 
+/// `event` here is i32, and that is because when `Dart` bindings are generated,
+/// Enums are converted into Int32, I would like to get away from any undefined
+/// behaviours, like `Dart` passed a value outside the range of the enum,
+/// We use `try_from` to convert from i32 into the enum value before using it
 #[no_mangle]
-pub extern "C" fn nes_request(event: NesRequestType, data: *const c_char) {
-    // TODO: send errors to dart
-    if let Ok(event) = NesRequest::from_nes_request(event, data) {
-        send(event);
+pub extern "C" fn nes_request(event: i32, data: *const c_char) {
+    if let Ok(event) = NesRequestType::try_from(event) {
+        // TODO: send errors to dart
+        if let Ok(event) = NesRequest::from_nes_request(event, data) {
+            send(event);
+        }
     }
 }
 

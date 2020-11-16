@@ -23,6 +23,26 @@ pub enum NesRequestType {
     LoadRom,
 }
 
+impl std::convert::TryFrom<i32> for NesRequestType {
+    type Error = ();
+    fn try_from(v: i32) -> Result<Self, Self::Error> {
+        match v {
+            x if x == NesRequestType::Reset as i32 => Ok(NesRequestType::Reset),
+            x if x == NesRequestType::Exit as i32 => Ok(NesRequestType::Exit),
+            x if x == NesRequestType::Pause as i32 => Ok(NesRequestType::Pause),
+            x if x == NesRequestType::Resume as i32 => Ok(NesRequestType::Resume),
+            x if x == NesRequestType::GetImage as i32 => Ok(NesRequestType::GetImage),
+            x if x == NesRequestType::GetSavesPresent as i32 => Ok(NesRequestType::GetSavesPresent),
+            x if x == NesRequestType::ButtonPress as i32 => Ok(NesRequestType::ButtonPress),
+            x if x == NesRequestType::ButtonRelease as i32 => Ok(NesRequestType::ButtonRelease),
+            x if x == NesRequestType::LoadState as i32 => Ok(NesRequestType::LoadState),
+            x if x == NesRequestType::SaveState as i32 => Ok(NesRequestType::SaveState),
+            x if x == NesRequestType::LoadRom as i32 => Ok(NesRequestType::LoadRom),
+            _ => Err(()),
+        }
+    }
+}
+
 /// using [`NesRequest::from_nes_request`] to convert [`NesRequestType`]
 /// into a better enum to deal with
 #[derive(Debug)]
