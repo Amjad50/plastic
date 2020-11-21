@@ -15,6 +15,7 @@ dependencies:
   file_picker: ^2.0.12
   synchronized: ^2.2.0+2
   provider: ^4.3.2+2
+  control_pad: ^1.1.1+1
 
 
   # The following adds the Cupertino Icons font to your application.

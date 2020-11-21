@@ -1,9 +1,12 @@
+import 'package:control_pad/views/joystick_view.dart';
 import 'package:flutter/material.dart';
 import 'dart:math';
 
 import 'package:flutter/rendering.dart';
+import 'package:plastic_mobile/libplastic_mobile/binding.dart';
 import 'package:plastic_mobile/libplastic_mobile/lib.dart';
 import 'package:plastic_mobile/widgets/nes_controller_button.dart';
+import 'package:plastic_mobile/widgets/nes_joystick.dart';
 import 'package:provider/provider.dart';
 
 extension NesControllerConverter on NesControllerKey {
@@ -15,8 +18,8 @@ extension NesControllerConverter on NesControllerKey {
 class NesController extends StatelessWidget {
   final NesKeyHandler onPress;
   final NesKeyHandler onRelease;
-  const NesController(
-      {@required this.onPress, @required this.onRelease, Key key})
+
+  NesController({@required this.onPress, @required this.onRelease, Key key})
       : assert(onPress != null),
         assert(onRelease != null),
         super(key: key);
@@ -167,6 +170,17 @@ class NesController extends StatelessWidget {
     );
   }
 
+  Widget _buildJoyStick(context, constraints) {
+    return Container(
+      color: Colors.black87,
+      child: NesJoyStick(
+        onPress: onPress,
+        onRelease: onRelease,
+        constraints: constraints,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Provider(
@@ -183,7 +197,7 @@ class NesController extends StatelessWidget {
                   children: [
                     Expanded(
                       child: LayoutBuilder(
-                        builder: _buildArrowButtons,
+                        builder: _buildJoyStick,
                       ),
                     ),
                     Expanded(

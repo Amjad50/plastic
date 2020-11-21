@@ -10,15 +10,24 @@ import 'package:flutter/services.dart';
 import 'package:plastic_mobile/audio/sound_player.dart';
 import 'package:plastic_mobile/libplastic_mobile/binding.dart';
 import 'package:plastic_mobile/libplastic_mobile/lib.dart';
-import 'package:plastic_mobile/widgets/image_canvas.dart';
+import 'package:plastic_mobile/providers/frame_provider.dart';
 import 'package:plastic_mobile/widgets/nes_controller.dart';
+import 'package:plastic_mobile/widgets/nes_tv.dart';
+import 'package:provider/provider.dart';
 import 'package:synchronized/synchronized.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // TODO: support different orientations, (this is temporary)
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  runApp(MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => FrameProvider()),
+      ],
+      child: MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -46,7 +55,6 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   ReceivePort _port;
-  ui.Image _currentImg;
   Lock _imageDrawingLock = Lock();
   SoundPlayer _player = SoundPlayer();
 
@@ -81,11 +89,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           break;
         case NesResponseType.Image:
           ui.decodeImageFromPixels(
-              msgList, TV_WIDTH, TV_HEIGHT, ui.PixelFormat.bgra8888, (img) {
-            setState(() {
-              _currentImg = img;
-            });
-          });
+            msgList,
+            TV_WIDTH,
+            TV_HEIGHT,
+            ui.PixelFormat.bgra8888,
+            (img) {
+              context.read<FrameProvider>().image = img;
+            },
+          );
           break;
         case NesResponseType.AudioBuffer:
           _player.addBuffer(msgList);
@@ -179,16 +190,16 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           Container(
             width: _width,
             height: _height,
-            child: CustomPaint(
-              willChange: true,
-              painter: ImagePainter(_currentImg),
-            ),
+            child: NesTV(),
           ),
           NesController(
             onPress: (btn) {
+              print("press $btn");
               nes_request(NesRequestType.ButtonPress, btn.nativeKeyIndex);
             },
             onRelease: (btn) {
+              print("release $btn");
+
               nes_request(NesRequestType.ButtonRelease, btn.nativeKeyIndex);
             },
           ),
