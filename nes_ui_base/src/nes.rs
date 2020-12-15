@@ -7,7 +7,7 @@ use common::{
 };
 use controller::{Controller, StandardNESControllerState};
 use cpu6502::{CPUBusTrait, CPU6502};
-use directories::ProjectDirs;
+use directories_next::ProjectDirs;
 use display::TV;
 use ppu2c02::{Palette, VRam, PPU2C02};
 use regex::{self, Regex};
