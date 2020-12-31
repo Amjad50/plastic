@@ -17,7 +17,6 @@ This is a personal project for fun and to experience emulating hardware and conn
   - [Pre-built](#pre-built)
   - [Building](#building)
 - [Components](#components)
-- [Components graph](#components-graph)
 - [Interfaces](#interfaces)
   - [SFML](#sfml)
   - [GTK](#gtk)
@@ -80,27 +79,13 @@ cargo run --release -p nes_ui_native_windows
 - [x] Controller:
   controllable using the keyboard and controller (tested with PS4 controller)
 
-### Components graph
-![dep graph](./images/depgraph.png)
-
-> Blue lines mean test dependency
-
-> [`nes_ui_base`](./nes_ui_base/) is where the NES components are connected and emulated.
-
-generated using [cargo-depgraph](https://sr.ht/~jplatte/cargo-depgraph/):
-
-```
-cargo depgraph --all-deps --exclude gtk,gio,glib,gdk,cairo-rs,native-windows-gui,native-windows-derive,winapi,sfml,tui,crossterm,gilrs,cpal,lazy_static | dot -Tpng > images/depgraph.rs
-```
-
-
 ### Interfaces
 One advantage of this emulator is the great abstraction, for example, adding UI
 handlers for the emulator is very easy and straight forward. All you have to do
-is to write a [`UiProvider`](./nes_ui_base/src/lib.rs), and simply
-use it with [`NES`](./nes_ui_base/src/nes.rs) like so:
+is to write a [`UiProvider`](./plastic_core/src/lib.rs), and simply
+use it with [`NES`](./plastic_core/src/nes.rs) like so:
 ```rust
-use nes_ui_base::nes::NES;
+use plastic_core::nes::NES;
 
 // Provider implement trait `UiProvider`
 let mut nes = NES::new("path/to/rom.nes", Provider {})?;

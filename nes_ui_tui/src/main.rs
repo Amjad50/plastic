@@ -1,6 +1,6 @@
 mod event;
 mod ui;
-use nes_ui_base::nes::NES;
+use plastic_core::nes::NES;
 use std::env::args;
 use ui::TuiProvider;
 

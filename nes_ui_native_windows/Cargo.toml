@@ -8,7 +8,7 @@ edition = "2018"
 
 # this package as a whole is only for windows
 [target.'cfg(windows)'.dependencies]
-nes_ui_base = { path = "../nes_ui_base" }
+plastic_core = { path = "../plastic_core" }
 
 native-windows-gui = "^1.0.3"
 native-windows-derive = "^1.0.1"

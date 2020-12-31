@@ -5,7 +5,7 @@ mod ui;
 
 #[cfg(target_os = "windows")]
 fn main() {
-    use nes_ui_base::nes::NES;
+    use plastic_core::nes::NES;
     use std::env::args;
     use ui::NwgProvider;
 

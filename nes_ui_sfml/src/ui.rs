@@ -1,4 +1,4 @@
-use nes_ui_base::{
+use plastic_core::{
     nes_controller::{StandardNESControllerState, StandardNESKey},
     nes_display::{Color as NESColor, TV_HEIGHT, TV_WIDTH},
     BackendEvent, UiEvent, UiProvider,

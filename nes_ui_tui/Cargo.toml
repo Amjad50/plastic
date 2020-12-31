@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nes_ui_base = { path = "../nes_ui_base" }
+plastic_core = { path = "../plastic_core" }
 
 crossterm = "^0.17"
 tui = { git = "https://github.com/fdehau/tui-rs", default-features = false, features = ['crossterm'] }

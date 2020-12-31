@@ -1,33 +1,17 @@
 [workspace]
 members = [
-    "apu2a03",
-    "cartridge",
-    "common",
-    "controller",
-    "cpu6502",
-    "display",
     "nes_ui_sfml", 
     "nes_ui_gtk",
     "nes_ui_tui",
     "nes_ui_native_windows",
-    "nes_tester", # This is for unit testing (headless)
-    "nes_ui_base",
-    "ppu2c02",
+    "plastic_core",
 ]
 
 [profile.dev]
 opt-level = 2
-debug = true
-rpath = false
-lto = false
-debug-assertions = true
-codegen-units = 16
 
 [profile.release]
 opt-level = 3
-debug = false 
-rpath = false
-lto = true
-debug-assertions = false
-codegen-units = 1
+
+
 
