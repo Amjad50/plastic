@@ -1,16 +1,5 @@
+#[macro_use]
 mod color;
-
-// TODO: fix macro imports to `tv`
-macro_rules! color {
-    ($r:expr, $g:expr, $b:expr) => {
-        Color {
-            r: $r,
-            g: $g,
-            b: $b,
-        }
-    };
-}
-
 mod tv;
 
 pub use color::Color;

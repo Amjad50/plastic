@@ -12,7 +12,6 @@ pub trait Bus {
 /// macro used to generate binding for enum to convert it from u16
 /// which will make generating memory mapped registers much easier
 /// and its used in the PPU and APU
-#[macro_export]
 macro_rules! memory_mapped_registers {
     (($($vis:tt)*) enum $name:ident {$($field:ident =$expr:expr,)*}) => {
         $($vis)* enum $name {

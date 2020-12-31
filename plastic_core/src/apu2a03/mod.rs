@@ -6,8 +6,6 @@ mod length_counter;
 mod sequencer;
 mod tone_source;
 
-mod tests;
-
 pub use apu2a03::APU2A03;
 
 // for performance

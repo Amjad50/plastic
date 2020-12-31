@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod cpu_tests {
-    use crate::tests::{TestError, NES};
-
     use super::super::{CPUBusTrait, CPURunState, CPU6502};
     use crate::common::{interconnection::*, save_state::Savable};
 
@@ -84,24 +82,6 @@ mod cpu_tests {
         }
     }
 
-    fn run_blargg_test(filename: &str) -> Result<(), TestError> {
-        let mut nes = NES::new(filename)?;
-        nes.reset_cpu();
-
-        let result_location = 0x6000;
-
-        nes.clock_until_infinite_loop();
-        nes.clock_until_memory_neq(result_location, 0x80);
-
-        let result = nes.cpu_read_address(result_location);
-
-        if result != 0 {
-            Err(TestError::ResultError(result))
-        } else {
-            Ok(())
-        }
-    }
-
     #[test]
     fn functionality_test() {
         let file_data =
@@ -133,15 +113,5 @@ mod cpu_tests {
                 break;
             }
         }
-    }
-
-    #[test]
-    fn instructions_test() -> Result<(), TestError> {
-        run_blargg_test("../test_roms/instr_test-v5/all_instrs.nes")
-    }
-
-    #[test]
-    fn instructions_timing_test() -> Result<(), TestError> {
-        run_blargg_test("../test_roms/instr_timing/instr_timing.nes")
     }
 }

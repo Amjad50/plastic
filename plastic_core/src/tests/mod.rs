@@ -1,3 +1,4 @@
+#![cfg(test)]
 use crate::apu2a03::APU2A03;
 use crate::cartridge::{Cartridge, CartridgeError};
 use crate::common::{
@@ -17,6 +18,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+mod blargg_tests;
+
 // FIXME: used constants hosted in TV
 const TV_WIDTH: u32 = 256;
 const TV_HEIGHT: u32 = 240;
@@ -25,6 +28,7 @@ pub enum TestError {
     CartridgeError(CartridgeError),
     ResultError(u8),
 }
+
 impl TestError {
     fn get_message(&self) -> String {
         match self {
@@ -252,14 +256,14 @@ impl CPUIrqProvider for CPUBus {
     }
 }
 
-pub struct NES {
+pub struct NesTester {
     cpu: CPU6502<CPUBus>,
     ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
     tv_image: Arc<Mutex<Vec<u8>>>,
     apu: Rc<RefCell<APU2A03>>,
 }
 
-impl NES {
+impl NesTester {
     pub fn new(filename: &str) -> Result<Self, CartridgeError> {
         let cartridge = Rc::new(RefCell::new(Cartridge::from_file(filename)?));
 

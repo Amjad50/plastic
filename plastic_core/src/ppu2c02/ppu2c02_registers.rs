@@ -1,5 +1,4 @@
 use crate::common::{save_state::Savable, Bus, Device};
-use crate::memory_mapped_registers;
 use crate::ppu2c02::PPU2C02;
 use std::convert::TryInto;
 

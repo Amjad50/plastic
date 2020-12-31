@@ -1,11 +1,13 @@
+#[macro_use]
+mod common;
 mod apu2a03;
 mod cartridge;
-mod common;
 mod controller;
 mod cpu6502;
 mod display;
 mod ppu2c02;
 
+#[cfg(test)]
 mod tests;
 
 mod frame_limiter;

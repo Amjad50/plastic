@@ -1,6 +1,5 @@
 use crate::apu2a03::APU2A03;
 use crate::common::{Bus, Device};
-use crate::memory_mapped_registers;
 use std::convert::TryInto;
 
 memory_mapped_registers! {
