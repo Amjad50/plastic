@@ -36,12 +36,12 @@ impl Default for Palette {
 
 impl Bus for Palette {
     fn read(&self, address: u16, device: Device) -> u8 {
-        assert!(device == Device::PPU && address >= 0x3F00 && address <= 0x3FFF);
+        assert!(device == Device::Ppu && (0x3F00..=0x3FFF).contains(&address));
 
         self.palette_data[Self::map_address(address) as usize]
     }
     fn write(&mut self, address: u16, data: u8, device: Device) {
-        assert!(device == Device::PPU && address >= 0x3F00 && address <= 0x3FFF);
+        assert!(device == Device::Ppu && (0x3F00..=0x3FFF).contains(&address));
 
         self.palette_data[Self::map_address(address) as usize] = data;
     }

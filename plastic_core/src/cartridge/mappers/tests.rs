@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 #[cfg(test)]
 mod mappers_tests {
     use crate::tests::{NesTester, TestError};

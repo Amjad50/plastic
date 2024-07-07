@@ -114,10 +114,8 @@ impl FrameLimiter {
             self.frame_counter_timestamp = current;
             self.frame_counter = 0;
 
-            if self.fps.saturating_sub(self.target_fps) > 5 {
-                if self.tolerance_percentage > 2 {
-                    self.tolerance_percentage -= 1;
-                }
+            if self.fps.saturating_sub(self.target_fps) > 5 && self.tolerance_percentage > 2 {
+                self.tolerance_percentage -= 1;
             }
 
             Some(self.fps)

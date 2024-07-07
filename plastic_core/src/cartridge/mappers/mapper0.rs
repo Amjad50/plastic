@@ -26,7 +26,7 @@ impl Mapper for Mapper0 {
 
     fn map_read(&self, address: u16, device: Device) -> MappingResult {
         match device {
-            Device::CPU => {
+            Device::Cpu => {
                 match address {
                     0x6000..=0x7FFF => MappingResult::Denied,
                     0x8000..=0xFFFF => {
@@ -48,7 +48,7 @@ impl Mapper for Mapper0 {
                     _ => unreachable!(),
                 }
             }
-            Device::PPU => {
+            Device::Ppu => {
                 // it does not matter if its a ram or rom, same array location
                 if address < 0x2000 {
                     // only one fixed memory
@@ -64,8 +64,8 @@ impl Mapper for Mapper0 {
         // only for RAMs
 
         match device {
-            Device::CPU => MappingResult::Denied,
-            Device::PPU => {
+            Device::Cpu => MappingResult::Denied,
+            Device::Ppu => {
                 if self.is_chr_ram && address <= 0x1FFF {
                     MappingResult::Allowed(address as usize)
                 } else {

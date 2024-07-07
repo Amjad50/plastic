@@ -168,7 +168,7 @@ impl Mapper1 {
             self.chr_0_bank & 0b11110
         } else if address <= 0x0FFF {
             self.chr_0_bank
-        } else if address >= 0x1000 && address <= 0x1FFF {
+        } else if (0x1000..=0x1FFF).contains(&address) {
             self.chr_1_bank
         } else {
             unreachable!()
@@ -222,14 +222,14 @@ impl Mapper for Mapper1 {
 
     fn map_read(&self, address: u16, device: Device) -> MappingResult {
         match device {
-            Device::CPU => {
+            Device::Cpu => {
                 match address {
                     0x6000..=0x7FFF => self.map_prg_ram(address),
                     0x8000..=0xFFFF => {
                         let mut bank = if self.is_prg_32kb_mode() {
                             // ignore last bit
                             self.get_prg_bank() & 0b11110
-                        } else if address >= 0x8000 && address <= 0xBFFF {
+                        } else if (0x8000..=0xBFFF).contains(&address) {
                             if self.is_first_prg_chunk_fixed() {
                                 0
                             } else {
@@ -279,7 +279,7 @@ impl Mapper for Mapper1 {
                     _ => unreachable!(),
                 }
             }
-            Device::PPU => {
+            Device::Ppu => {
                 if address < 0x2000 {
                     self.map_ppu(address)
                 } else {
@@ -291,7 +291,7 @@ impl Mapper for Mapper1 {
 
     fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult {
         match device {
-            Device::CPU => {
+            Device::Cpu => {
                 match address {
                     0x6000..=0x7FFF => self.map_prg_ram(address),
                     0x8000..=0xFFFF => {
@@ -328,7 +328,7 @@ impl Mapper for Mapper1 {
                     _ => unreachable!(),
                 }
             }
-            Device::PPU => {
+            Device::Ppu => {
                 // CHR RAM
                 if self.is_chr_ram && address <= 0x1FFF {
                     self.map_ppu(address)

@@ -28,11 +28,11 @@ impl Mapper for Mapper2 {
 
     fn map_read(&self, address: u16, device: Device) -> MappingResult {
         match device {
-            Device::CPU => {
+            Device::Cpu => {
                 match address {
                     0x6000..=0x7FFF => MappingResult::Denied,
                     0x8000..=0xFFFF => {
-                        let mut bank = if address >= 0x8000 && address <= 0xBFFF {
+                        let mut bank = if (0x8000..=0xBFFF).contains(&address) {
                             self.prg_top_bank & 0xF
                         } else if address >= 0xC000 {
                             self.prg_count - 1
@@ -51,7 +51,7 @@ impl Mapper for Mapper2 {
                     _ => unreachable!(),
                 }
             }
-            Device::PPU => {
+            Device::Ppu => {
                 // it does not matter if its a ram or rom, same array location
                 if address < 0x2000 {
                     // only one fixed memory
@@ -65,7 +65,7 @@ impl Mapper for Mapper2 {
 
     fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult {
         match device {
-            Device::CPU => match address {
+            Device::Cpu => match address {
                 0x6000..=0x7FFF => MappingResult::Denied,
                 0x8000..=0xFFFF => {
                     self.prg_top_bank = data;
@@ -74,7 +74,7 @@ impl Mapper for Mapper2 {
                 0x4020..=0x5FFF => MappingResult::Denied,
                 _ => unreachable!(),
             },
-            Device::PPU => {
+            Device::Ppu => {
                 // CHR RAM
                 if self.is_chr_ram && address <= 0x1FFF {
                     MappingResult::Allowed(address as usize)

@@ -1,4 +1,3 @@
-#![cfg(test)]
 use crate::apu2a03::APU2A03;
 use crate::cartridge::{Cartridge, CartridgeError};
 use crate::common::{
@@ -22,6 +21,7 @@ mod blargg_tests;
 
 // FIXME: used constants hosted in TV
 const TV_WIDTH: u32 = 256;
+#[allow(dead_code)]
 const TV_HEIGHT: u32 = 240;
 
 pub enum TestError {
@@ -136,20 +136,20 @@ impl CPUBusTrait for CPUBus {
             0x2000..=0x3FFF => self
                 .ppu
                 .borrow()
-                .read(0x2000 | (address & 0x7), Device::CPU),
-            0x4000..=0x4013 => self.apu.borrow().read(address, Device::CPU),
-            0x4014 => self.ppu.borrow().read(address, Device::CPU),
-            0x4015 => self.apu.borrow().read(address, Device::CPU),
+                .read(0x2000 | (address & 0x7), Device::Cpu),
+            0x4000..=0x4013 => self.apu.borrow().read(address, Device::Cpu),
+            0x4014 => self.ppu.borrow().read(address, Device::Cpu),
+            0x4015 => self.apu.borrow().read(address, Device::Cpu),
             0x4016 => {
                 // controller
                 0
             }
-            0x4017 => self.apu.borrow().read(address, Device::CPU),
+            0x4017 => self.apu.borrow().read(address, Device::Cpu),
             0x4018..=0x401F => {
                 // unused CPU test mode registers
                 0
             }
-            0x4020..=0xFFFF => self.cartridge.borrow().read(address, Device::CPU),
+            0x4020..=0xFFFF => self.cartridge.borrow().read(address, Device::Cpu),
         }
     }
     fn write(&mut self, address: u16, data: u8) {
@@ -158,22 +158,22 @@ impl CPUBusTrait for CPUBus {
             0x2000..=0x3FFF => {
                 self.ppu
                     .borrow_mut()
-                    .write(0x2000 | (address & 0x7), data, Device::CPU)
+                    .write(0x2000 | (address & 0x7), data, Device::Cpu)
             }
-            0x4000..=0x4013 => self.apu.borrow_mut().write(address, data, Device::CPU),
-            0x4014 => self.ppu.borrow_mut().write(address, data, Device::CPU),
-            0x4015 => self.apu.borrow_mut().write(address, data, Device::CPU),
+            0x4000..=0x4013 => self.apu.borrow_mut().write(address, data, Device::Cpu),
+            0x4014 => self.ppu.borrow_mut().write(address, data, Device::Cpu),
+            0x4015 => self.apu.borrow_mut().write(address, data, Device::Cpu),
             0x4016 => {
                 // controller
             }
-            0x4017 => self.apu.borrow_mut().write(address, data, Device::CPU),
+            0x4017 => self.apu.borrow_mut().write(address, data, Device::Cpu),
             0x4018..=0x401F => {
                 // unused CPU test mode registers
             }
             0x4020..=0xFFFF => self
                 .cartridge
                 .borrow_mut()
-                .write(address, data, Device::CPU),
+                .write(address, data, Device::Cpu),
         };
     }
 
@@ -297,7 +297,7 @@ impl NesTester {
     }
 
     pub fn ppu_read_address(&self, address: u16) -> u8 {
-        self.ppu.borrow().ppu_bus().read(address, Device::PPU)
+        self.ppu.borrow().ppu_bus().read(address, Device::Ppu)
     }
 
     pub fn clock(&mut self) -> CPURunState {

@@ -148,7 +148,7 @@ impl Mapper for Mapper10 {
 
     fn map_read(&self, address: u16, device: Device) -> MappingResult {
         match device {
-            Device::CPU => match address {
+            Device::Cpu => match address {
                 0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
                 0x8000..=0xFFFF => {
                     let mut bank = match address {
@@ -166,7 +166,7 @@ impl Mapper for Mapper10 {
                 0x4020..=0x5FFF => MappingResult::Denied,
                 _ => unreachable!(),
             },
-            Device::PPU => {
+            Device::Ppu => {
                 if address < 0x2000 {
                     self.map_ppu(address)
                 } else {
@@ -178,7 +178,7 @@ impl Mapper for Mapper10 {
 
     fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult {
         match device {
-            Device::CPU => match address {
+            Device::Cpu => match address {
                 0x6000..=0x7FFF => MappingResult::Allowed(address as usize & 0x1FFF),
                 0x8000..=0xFFFF => {
                     match address {
@@ -196,7 +196,7 @@ impl Mapper for Mapper10 {
                 0x4020..=0x5FFF => MappingResult::Denied,
                 _ => unreachable!(),
             },
-            Device::PPU => {
+            Device::Ppu => {
                 // CHR RAM
                 if self.is_chr_ram && address <= 0x1FFF {
                     self.map_ppu(address)

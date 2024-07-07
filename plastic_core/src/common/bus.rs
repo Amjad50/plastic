@@ -1,7 +1,7 @@
 #[derive(PartialEq, Clone, Copy)]
 pub enum Device {
-    CPU,
-    PPU,
+    Cpu,
+    Ppu,
 }
 
 pub trait Bus {
