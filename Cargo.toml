@@ -8,6 +8,7 @@ members = [
     "nes_ui_native_windows",
     "plastic_core",
 ]
+default-members = ["nes_ui_sfml"]
 
 [profile.dev]
 opt-level = 2
