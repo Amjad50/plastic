@@ -320,13 +320,13 @@ impl UiProvider for GtkProvider {
                             let label =
                                 format!("_{} {}", i + 1, if label { "saved" } else { "<empty>" });
 
-                            if let Some(item) = save_state_menu_list.get_children().get(i as usize)
+                            if let Some(item) = save_state_menu_list.get_children().get(i )
                             {
                                 if let Some(item) = item.downcast_ref::<MenuItem>() {
                                     item.set_label(&label);
                                 }
                             }
-                            if let Some(item) = load_state_menu_list.get_children().get(i as usize)
+                            if let Some(item) = load_state_menu_list.get_children().get(i )
                             {
                                 if let Some(item) = item.downcast_ref::<MenuItem>() {
                                     item.set_label(&label);

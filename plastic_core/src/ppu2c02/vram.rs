@@ -41,18 +41,18 @@ impl VRam {
 
 impl Bus for VRam {
     fn read(&self, address: u16, device: Device) -> u8 {
-        assert!(device == Device::PPU);
+        assert!(device == Device::Ppu);
 
         let address = self.map_address(address);
 
-        self.vram_data[address as usize]
+        self.vram_data[address]
     }
     fn write(&mut self, address: u16, data: u8, device: Device) {
-        assert!(device == Device::PPU);
+        assert!(device == Device::Ppu);
 
         let address = self.map_address(address);
 
-        self.vram_data[address as usize] = data;
+        self.vram_data[address] = data;
     }
 }
 

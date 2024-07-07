@@ -39,7 +39,7 @@ impl Mapper for Mapper7 {
 
     fn map_read(&self, address: u16, device: Device) -> MappingResult {
         match device {
-            Device::CPU => {
+            Device::Cpu => {
                 match address {
                     0x6000..=0x7FFF => MappingResult::Denied,
                     0x8000..=0xFFFF => {
@@ -54,7 +54,7 @@ impl Mapper for Mapper7 {
                     _ => unreachable!(),
                 }
             }
-            Device::PPU => {
+            Device::Ppu => {
                 // it does not matter if its a ram or rom, same array location
                 if address < 0x2000 {
                     // only one fixed memory
@@ -68,7 +68,7 @@ impl Mapper for Mapper7 {
 
     fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult {
         match device {
-            Device::CPU => match address {
+            Device::Cpu => match address {
                 0x6000..=0x7FFF => MappingResult::Denied,
                 0x8000..=0xFFFF => {
                     self.prg_bank = data & 0xF;
@@ -79,7 +79,7 @@ impl Mapper for Mapper7 {
                 0x4020..=0x5FFF => MappingResult::Denied,
                 _ => unreachable!(),
             },
-            Device::PPU => {
+            Device::Ppu => {
                 // CHR RAM
                 if self.is_chr_ram && address <= 0x1FFF {
                     MappingResult::Allowed(address as usize)

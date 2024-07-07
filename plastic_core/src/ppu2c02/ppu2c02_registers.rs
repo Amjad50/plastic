@@ -22,7 +22,7 @@ where
 {
     fn read(&self, address: u16, device: Device) -> u8 {
         // only the CPU is allowed to read from PPU registers
-        if device == Device::CPU {
+        if device == Device::Cpu {
             if let Ok(register) = address.try_into() {
                 self.read_register(register)
             } else {
@@ -35,7 +35,7 @@ where
 
     fn write(&mut self, address: u16, data: u8, device: Device) {
         // only the CPU is allowed to write to PPU registers
-        if device == Device::CPU {
+        if device == Device::Cpu {
             if let Ok(register) = address.try_into() {
                 self.write_register(register, data);
             } else {

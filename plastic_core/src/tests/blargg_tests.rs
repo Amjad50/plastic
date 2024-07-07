@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use super::{NesTester, TestError};
 
 fn run_sprite_hit_test(filename: &str) -> Result<(), TestError> {

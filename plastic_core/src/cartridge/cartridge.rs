@@ -14,6 +14,7 @@ use std::{
     path::Path,
 };
 
+#[allow(dead_code)]
 struct INesHeader {
     // in 16kb units
     prg_rom_size: u16,
@@ -51,7 +52,7 @@ impl INesHeader {
         header[6] >>= 1;
         let mapper_id_low = (header[6] & 0xF) as u16;
 
-        let mut console_type = header[7] & 0x3;
+        // let mut console_type = header[7] & 0x3;
         header[7] >>= 2;
         let ines_2_ident = header[7] & 0x3;
         header[7] >>= 2;
@@ -69,17 +70,17 @@ impl INesHeader {
 
             if !is_archaic_ines {
                 prg_ram_size = if header[8] == 0 { 1 } else { header[8] };
-                let ntcs_tv_system = header[9] & 1 == 0;
+                // let ntcs_tv_system = header[9] & 1 == 0;
 
                 if header[9] >> 1 != 0 {
                     return Err(CartridgeError::HeaderError);
                 }
 
-                let is_prg_ram_present = (header[10] >> 4) & 1 == 0;
-                let board_has_bus_conflict = (header[10] >> 5) & 1 != 0;
+                // let is_prg_ram_present = (header[10] >> 4) & 1 == 0;
+                // let board_has_bus_conflict = (header[10] >> 5) & 1 != 0;
             } else {
                 // ignore `header[7]` data
-                console_type = 0;
+                // console_type = 0;
                 mapper_id_middle = 0;
 
                 prg_ram_size = 1;
@@ -227,7 +228,7 @@ impl Cartridge {
                 };
 
                 // there are missing parts
-                let current = file.seek(SeekFrom::Current(0))?;
+                let current = file.stream_position()?;
                 let end = file.seek(SeekFrom::End(0))?;
                 if current != end {
                     Err(CartridgeError::TooLargeFile(end - current))
@@ -350,8 +351,8 @@ impl Bus for Cartridge {
     fn read(&self, address: u16, device: Device) -> u8 {
         if self.is_empty {
             return match device {
-                Device::CPU => 0xEA, // NOP instruction just in case, this
-                Device::PPU => 0x00, // should not be called
+                Device::Cpu => 0xEA, // NOP instruction just in case, this
+                Device::Ppu => 0x00, // should not be called
             };
         }
 
@@ -359,7 +360,7 @@ impl Bus for Cartridge {
 
         if let MappingResult::Allowed(new_address) = result {
             match device {
-                Device::CPU => match address {
+                Device::Cpu => match address {
                     0x6000..=0x7FFF => *self
                         .prg_ram_data
                         .get(new_address)
@@ -369,7 +370,7 @@ impl Bus for Cartridge {
                         unreachable!();
                     }
                 },
-                Device::PPU => {
+                Device::Ppu => {
                     if address <= 0x1FFF {
                         *self.chr_data.get(new_address).expect("CHR out of bounds")
                     } else {
@@ -391,7 +392,7 @@ impl Bus for Cartridge {
 
         if let MappingResult::Allowed(new_address) = result {
             match device {
-                Device::CPU => match address {
+                Device::Cpu => match address {
                     0x6000..=0x7FFF => {
                         *self
                             .prg_ram_data
@@ -408,7 +409,7 @@ impl Bus for Cartridge {
                         unreachable!();
                     }
                 },
-                Device::PPU => {
+                Device::Ppu => {
                     if address <= 0x1FFF {
                         *self
                             .chr_data

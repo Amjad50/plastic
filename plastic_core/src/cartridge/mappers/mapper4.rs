@@ -231,7 +231,7 @@ impl Mapper for Mapper4 {
 
     fn map_read(&self, address: u16, device: Device) -> MappingResult {
         match device {
-            Device::CPU => {
+            Device::Cpu => {
                 match address {
                     0x6000..=0x7FFF => {
                         if self.prg_ram_enabled && self.has_prg_ram {
@@ -273,7 +273,7 @@ impl Mapper for Mapper4 {
                     _ => unreachable!(),
                 }
             }
-            Device::PPU => {
+            Device::Ppu => {
                 if address < 0x2000 {
                     self.map_ppu(address)
                 } else {
@@ -285,7 +285,7 @@ impl Mapper for Mapper4 {
 
     fn map_write(&mut self, address: u16, data: u8, device: Device) -> MappingResult {
         match device {
-            Device::CPU => {
+            Device::Cpu => {
                 match address {
                     0x6000..=0x7FFF => {
                         if self.prg_ram_enabled && self.prg_ram_allow_writes && self.has_prg_ram {
@@ -357,7 +357,7 @@ impl Mapper for Mapper4 {
                     _ => unreachable!(),
                 }
             }
-            Device::PPU => {
+            Device::Ppu => {
                 // CHR RAM
                 if self.is_chr_ram && address <= 0x1FFF {
                     self.map_ppu(address)

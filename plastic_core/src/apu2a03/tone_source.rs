@@ -67,10 +67,6 @@ impl BufferedChannel {
     pub fn clear_buffer(&mut self) {
         self.buffer.clear();
     }
-
-    pub fn len(&self) -> usize {
-        self.buffer.len()
-    }
 }
 
 impl APUChannel for BufferedChannel {

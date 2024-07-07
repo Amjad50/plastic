@@ -6,6 +6,7 @@ pub mod instruction;
 
 mod tests;
 
+#[allow(unused_imports)]
 pub use cpu6502::CPURunState;
 pub use cpu6502::CPU6502;
 

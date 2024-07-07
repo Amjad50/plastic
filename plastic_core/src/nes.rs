@@ -111,17 +111,17 @@ impl CPUBusTrait for CPUBus {
             0x2000..=0x3FFF => self
                 .ppu
                 .borrow()
-                .read(0x2000 | (address & 0x7), Device::CPU),
-            0x4000..=0x4013 => self.apu.borrow().read(address, Device::CPU),
-            0x4014 => self.ppu.borrow().read(address, Device::CPU),
-            0x4015 => self.apu.borrow().read(address, Device::CPU),
-            0x4016 => self.contoller.read(address, Device::CPU),
-            0x4017 => self.apu.borrow().read(address, Device::CPU),
+                .read(0x2000 | (address & 0x7), Device::Cpu),
+            0x4000..=0x4013 => self.apu.borrow().read(address, Device::Cpu),
+            0x4014 => self.ppu.borrow().read(address, Device::Cpu),
+            0x4015 => self.apu.borrow().read(address, Device::Cpu),
+            0x4016 => self.contoller.read(address, Device::Cpu),
+            0x4017 => self.apu.borrow().read(address, Device::Cpu),
             0x4018..=0x401F => {
                 // unused CPU test mode registers
                 0
             }
-            0x4020..=0xFFFF => self.cartridge.borrow().read(address, Device::CPU),
+            0x4020..=0xFFFF => self.cartridge.borrow().read(address, Device::Cpu),
         }
     }
 
@@ -131,20 +131,20 @@ impl CPUBusTrait for CPUBus {
             0x2000..=0x3FFF => {
                 self.ppu
                     .borrow_mut()
-                    .write(0x2000 | (address & 0x7), data, Device::CPU)
+                    .write(0x2000 | (address & 0x7), data, Device::Cpu)
             }
-            0x4000..=0x4013 => self.apu.borrow_mut().write(address, data, Device::CPU),
-            0x4014 => self.ppu.borrow_mut().write(address, data, Device::CPU),
-            0x4015 => self.apu.borrow_mut().write(address, data, Device::CPU),
-            0x4016 => self.contoller.write(address, data, Device::CPU),
-            0x4017 => self.apu.borrow_mut().write(address, data, Device::CPU),
+            0x4000..=0x4013 => self.apu.borrow_mut().write(address, data, Device::Cpu),
+            0x4014 => self.ppu.borrow_mut().write(address, data, Device::Cpu),
+            0x4015 => self.apu.borrow_mut().write(address, data, Device::Cpu),
+            0x4016 => self.contoller.write(address, data, Device::Cpu),
+            0x4017 => self.apu.borrow_mut().write(address, data, Device::Cpu),
             0x4018..=0x401F => {
                 // unused CPU test mode registers
             }
             0x4020..=0xFFFF => self
                 .cartridge
                 .borrow_mut()
-                .write(address, data, Device::CPU),
+                .write(address, data, Device::Cpu),
         }
     }
 
@@ -326,19 +326,16 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
         let cartridge_path = self.cartridge.borrow().cartridge_path().to_path_buf();
 
-        if let Some(base_saved_states_dir) = self.get_base_save_state_folder() {
-            Some(
+        self.get_base_save_state_folder()
+            .map(|base_saved_states_dir| {
                 base_saved_states_dir
                     .join(format!(
                         "{}_{}.pst",
                         cartridge_path.file_stem().unwrap().to_string_lossy(),
                         slot
                     ))
-                    .into_boxed_path(),
-            )
-        } else {
-            None
-        }
+                    .into_boxed_path()
+            })
     }
 
     fn get_present_save_states(&self) -> Option<Vec<u8>> {
@@ -366,14 +363,12 @@ impl<P: UiProvider + Send + 'static> NES<P> {
                         }
                     })
                     .filter_map(|path| {
-                        Some(
-                            saved_states_files_regex
-                                .captures(path.file_name()?.to_str()?)?
-                                .get(1)?
-                                .as_str()
-                                .parse::<u8>()
-                                .ok()?,
-                        )
+                        saved_states_files_regex
+                            .captures(path.file_name()?.to_str()?)?
+                            .get(1)?
+                            .as_str()
+                            .parse::<u8>()
+                            .ok()
                     })
                     .collect::<Vec<u8>>(),
             )

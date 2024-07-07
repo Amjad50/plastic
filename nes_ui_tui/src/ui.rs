@@ -38,7 +38,7 @@ impl Shape for ImageView {
 
         for x in 0..TV_WIDTH {
             for y in 0..TV_HEIGHT {
-                let index = ((TV_HEIGHT - y - 1) * TV_WIDTH + x) as usize;
+                let index = (TV_HEIGHT - y - 1) * TV_WIDTH + x;
                 if let Some((x, y)) = painter.get_point(x as f64, y as f64) {
                     let pixel = data.get(index * 4..(index + 1) * 4).unwrap();
                     painter.paint(x, y, Color::Rgb(pixel[0], pixel[1], pixel[2]));
@@ -171,7 +171,7 @@ impl UiProvider for TuiProvider {
                         active_gamepad = None;
                     }
                 }
-                keyboard_events.set_stopped_state(active_gamepad != None);
+                keyboard_events.set_stopped_state(active_gamepad.is_some());
 
                 if let Some(gamepad) = active_gamepad.map(|id| gilrs.gamepad(id)) {
                     for (controller_button, nes_button) in &[

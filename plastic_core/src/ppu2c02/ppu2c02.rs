@@ -361,16 +361,17 @@ where
     }
 
     /// expose the bus for reading only
+    #[cfg(test)]
     pub fn ppu_bus(&self) -> &T {
         &self.bus
     }
 
     fn read_bus(&self, address: u16) -> u8 {
-        self.bus.read(address, Device::PPU)
+        self.bus.read(address, Device::Ppu)
     }
 
     fn write_bus(&mut self, address: u16, data: u8) {
-        self.bus.write(address, data, Device::PPU);
+        self.bus.write(address, data, Device::Ppu);
     }
 
     fn read_sprite_byte(&self, address: u8) -> u8 {
@@ -695,7 +696,7 @@ where
         // loop through all secondary_oam, even the empty ones (0xFF)
         // a write to the cartridge MUST be done here even if no sprites
         // are drawn
-        for i in 0..8 as usize {
+        for i in 0..8_usize {
             let mut sprite = self.secondary_oam[i];
             let mut fine_y = next_y.wrapping_sub(sprite.get_y());
 

@@ -118,6 +118,7 @@ where
         self.bus.reset()
     }
 
+    #[cfg(test)]
     pub fn bus(&self) -> &T {
         &self.bus
     }
