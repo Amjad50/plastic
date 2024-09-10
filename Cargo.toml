@@ -2,13 +2,15 @@
 [workspace]
 resolver = "2"
 members = [
+    "plastic_core", "plastic_ui",
+]
+exclude = [
     "nes_ui_sfml", 
     "nes_ui_gtk",
     "nes_ui_tui",
     "nes_ui_native_windows",
-    "plastic_core",
 ]
-default-members = ["nes_ui_sfml"]
+default-members = ["plastic_ui"]
 
 [profile.dev]
 opt-level = 2
