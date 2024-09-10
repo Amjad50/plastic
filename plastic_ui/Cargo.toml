@@ -8,3 +8,4 @@ plastic_core = { path = "../plastic_core" }
 egui = "0.28"
 eframe = "0.28"
 rfd = "0.14"
+dynwave = "0.1"

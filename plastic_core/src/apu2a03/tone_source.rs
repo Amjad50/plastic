@@ -1,7 +1,5 @@
-use rodio::Source;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
 
 pub trait APUChannel {
     fn get_output(&mut self) -> f32;
@@ -64,8 +62,8 @@ impl BufferedChannel {
         }
     }
 
-    pub fn clear_buffer(&mut self) {
-        self.buffer.clear();
+    pub fn take_buffer(&mut self) -> Vec<f32> {
+        self.buffer.drain(..).collect()
     }
 }
 
@@ -86,55 +84,5 @@ impl APUChannel for BufferedChannel {
         } else {
             self.buffer.pop_front().unwrap()
         }
-    }
-}
-
-pub struct APUChannelPlayer<S>
-where
-    S: APUChannel,
-{
-    source: Arc<Mutex<S>>,
-}
-
-impl<S> APUChannelPlayer<S>
-where
-    S: APUChannel,
-{
-    pub fn from_clone(source: Arc<Mutex<S>>) -> Self {
-        Self { source }
-    }
-}
-
-impl<S> Iterator for APUChannelPlayer<S>
-where
-    S: APUChannel,
-{
-    type Item = f32;
-    fn next(&mut self) -> Option<Self::Item> {
-        Some(self.source.lock().unwrap().get_output())
-    }
-}
-
-impl<S> Source for APUChannelPlayer<S>
-where
-    S: APUChannel,
-{
-    #[inline]
-    fn current_frame_len(&self) -> Option<usize> {
-        None
-    }
-
-    #[inline]
-    fn channels(&self) -> u16 {
-        1
-    }
-
-    #[inline]
-    fn sample_rate(&self) -> u32 {
-        super::SAMPLE_RATE
-    }
-
-    fn total_duration(&self) -> Option<std::time::Duration> {
-        None
     }
 }

@@ -18,8 +18,6 @@ pub mod nes_controller {
 pub mod nes_display {
     pub use super::display::{Color, TV_BUFFER_SIZE, TV_HEIGHT, TV_WIDTH};
 }
-
-use std::sync::{
-    mpsc::{Receiver, Sender},
-    Arc, Mutex,
-};
+pub mod nes_audio {
+    pub use super::apu2a03::SAMPLE_RATE;
+}

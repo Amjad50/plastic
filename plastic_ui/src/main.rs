@@ -1,10 +1,13 @@
+use dynwave::AudioPlayer;
 use plastic_core::{
     nes::NES,
+    nes_audio::SAMPLE_RATE,
     nes_display::{TV_HEIGHT, TV_WIDTH},
 };
 
 struct App {
     nes: NES,
+    audio_player: AudioPlayer<f32>,
     image_texture: egui::TextureHandle,
     paused: bool,
     last_frame_time: std::time::Instant,
@@ -14,6 +17,8 @@ impl App {
     pub fn new(ctx: &egui::Context, nes: NES) -> Self {
         Self {
             nes,
+            audio_player: AudioPlayer::new(SAMPLE_RATE, dynwave::BufferSize::QuarterSecond)
+                .unwrap(),
             paused: false,
             last_frame_time: std::time::Instant::now(),
             image_texture: ctx.load_texture(
@@ -62,10 +67,9 @@ impl App {
                     .clicked()
                 {
                     self.paused = !self.paused;
-                    if self.paused {
-                        self.nes.pause();
-                    } else {
-                        self.nes.resume();
+                    if !self.paused {
+                        // clear the audio buffer
+                        _ = self.nes.audio_buffer();
                     }
                 }
                 if ui.button("Close Game").clicked() {
@@ -81,8 +85,19 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if !self.paused {
+        if !self.paused && !self.nes.is_empty() {
             self.nes.clock_for_frame();
+            let audio_buffer = self.nes.audio_buffer();
+            // convert from 1 channel to 2 channels
+            self.audio_player.queue(
+                &audio_buffer
+                    .iter()
+                    .flat_map(|&s| [s, s])
+                    .collect::<Vec<_>>(),
+            );
+            self.audio_player.play().unwrap();
+        } else {
+            self.audio_player.pause().unwrap();
         }
 
         // update the title

@@ -17,12 +17,10 @@ use length_counter::LengthCountedChannel;
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::sync::{Arc, Mutex};
-use tone_source::{APUChannel, APUChannelPlayer, BufferedChannel, TimedAPUChannel};
-
-use rodio::DeviceTrait;
+use tone_source::{APUChannel, BufferedChannel, TimedAPUChannel};
 
 // for performance
-pub const SAMPLE_RATE: u32 = 22050;
+pub const SAMPLE_RATE: u32 = 44100;
 
 // after how many apu clocks a sample should be recorded
 // APU, is clocked on every CPU clock
@@ -80,9 +78,6 @@ pub struct APU2A03 {
 
     interrupt_flag: Cell<bool>,
     request_interrupt_flag_change: Cell<bool>,
-
-    #[serde(skip)]
-    player: Option<rodio::Sink>,
 }
 
 impl APU2A03 {
@@ -115,31 +110,6 @@ impl APU2A03 {
 
             interrupt_flag: Cell::new(false),
             request_interrupt_flag_change: Cell::new(false),
-
-            player: Self::get_player(buffered_channel),
-        }
-    }
-
-    fn get_player<S: APUChannel + Send + 'static>(channel: Arc<Mutex<S>>) -> Option<rodio::Sink> {
-        let device = rodio::default_output_device()?;
-
-        // bug in rodio, that it panics if the device does not support any format
-        // it is fixed now in github, not sure when is the release coming
-        let formats = device.supported_output_formats().ok()?;
-        if formats.count() > 0 {
-            let sink = rodio::Sink::new(&device);
-
-            let low_pass_player =
-                rodio::source::Source::low_pass(APUChannelPlayer::from_clone(channel), 10000);
-
-            sink.append(low_pass_player);
-            sink.set_volume(0.15);
-
-            sink.pause();
-
-            Some(sink)
-        } else {
-            None
         }
     }
 
@@ -418,18 +388,6 @@ impl APU2A03 {
         }
     }
 
-    pub fn play(&self) {
-        if let Some(ref player) = self.player {
-            player.play();
-        }
-    }
-
-    pub fn pause(&self) {
-        if let Some(ref player) = self.player {
-            player.pause();
-        }
-    }
-
     fn generate_quarter_frame_clock(&mut self) {
         self.square_pulse_1.clock_envlope();
         self.square_pulse_2.clock_envlope();
@@ -473,12 +431,6 @@ impl APU2A03 {
         };
 
         pulse_out + tnd_out
-    }
-
-    pub fn empty_queue(&mut self) {
-        if let Ok(mut buffer) = self.buffered_channel.lock() {
-            buffer.clear_buffer();
-        }
     }
 
     /// clock the APU **at** CPU clock rate, the clocks are handled correctly
@@ -576,6 +528,10 @@ impl APU2A03 {
             }
         }
     }
+
+    pub fn take_audio_buffer(&self) -> Vec<f32> {
+        self.buffered_channel.lock().unwrap().take_buffer()
+    }
 }
 
 impl CPUIrqProvider for APU2A03 {
@@ -631,8 +587,6 @@ impl Savable for APU2A03 {
         })?;
 
         let _ = std::mem::replace(self, state);
-
-        self.player = Self::get_player(self.buffered_channel.clone());
 
         Ok(())
     }

@@ -9,14 +9,12 @@ use crate::controller::{Controller, StandardNESControllerState};
 use crate::cpu6502::{CPUBusTrait, CPU6502};
 use crate::display::TV;
 use crate::ppu2c02::{Palette, VRam, PPU2C02};
-use regex::{self, Regex};
 use std::cell::Cell;
 use std::cell::RefCell;
-use std::fs::{self, File};
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
-use std::sync::{mpsc::channel, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 
 struct PPUBus {
     cartridge: Rc<RefCell<dyn Bus>>,
@@ -297,8 +295,6 @@ impl NES {
             return;
         }
 
-        self.apu.borrow().play();
-
         const N: usize = 29780; // number of CPU cycles per loop, one full frame
 
         for _ in 0..N {
@@ -319,17 +315,12 @@ impl NES {
         self.image.clone()
     }
 
+    pub fn audio_buffer(&self) -> Vec<f32> {
+        self.apu.borrow().take_audio_buffer()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.cartridge.borrow().is_empty()
-    }
-
-    pub fn pause(&mut self) {
-        self.apu.borrow_mut().pause();
-    }
-
-    pub fn resume(&mut self) {
-        self.apu.borrow_mut().empty_queue();
-        self.apu.borrow_mut().play();
     }
 
     // fn get_base_save_state_folder(&self) -> Option<PathBuf> {
