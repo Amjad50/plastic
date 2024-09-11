@@ -444,7 +444,12 @@ pub fn main() -> Result<(), eframe::Error> {
             event_loop_builder: Some(Box::new(|builder| {
                 builder.with_x11();
             })),
-            window_builder: Some(Box::new(|builder| builder.with_drag_and_drop(true))),
+            window_builder: Some(Box::new(|builder| {
+                builder.with_drag_and_drop(true).with_icon(
+                    eframe::icon_data::from_png_bytes(include_bytes!("../../images/icon.png"))
+                        .unwrap(),
+                )
+            })),
             vsync: false, // unlock FPS
             ..Default::default()
         },
