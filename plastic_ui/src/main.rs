@@ -313,13 +313,14 @@ impl App {
                     }
                 }
             });
-            ui.menu_button("FPS", |ui| {
-                ui.label(format!("{:.0} FPS", self.fps.target_fps));
+            ui.menu_button("Speed", |ui| {
+                let mut speed = self.fps.target_fps / TARGET_FPS;
                 ui.add(
-                    egui::Slider::new(&mut self.fps.target_fps, 1.0..=2048.0)
-                        .text("Target FPS")
+                    egui::Slider::new(&mut speed, 0.1..=10.0)
+                        .text("Emulation Speed")
                         .clamp_to_range(true),
                 );
+                self.fps.target_fps = TARGET_FPS * speed;
             });
         });
     }
@@ -327,8 +328,8 @@ impl App {
     /// Process the audio buffer to make it stereo
     /// Also add or remove samples to match the current FPS difference from TARGET_FPS
     fn process_audio(&self, audio_buffer: &[f32]) -> Vec<f32> {
-        let fps_ratio = TARGET_FPS / self.fps.fps();
-        let target_len = (audio_buffer.len() as f64 * fps_ratio) as usize;
+        let fps_ratio = TARGET_FPS / self.fps.target_fps;
+        let target_len = (audio_buffer.len() as f64 * fps_ratio).ceil() as usize;
         let mut adjusted_buffer = Vec::with_capacity(target_len * 2);
 
         for i in 0..target_len {
