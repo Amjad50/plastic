@@ -116,6 +116,13 @@ impl Fps {
     }
 }
 
+const RESET_SHORTCUT: egui::KeyboardShortcut =
+    egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::R);
+const PAUSE_SHORTCUT: egui::KeyboardShortcut =
+    egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::P);
+const CLOSE_SHORTCUT: egui::KeyboardShortcut =
+    egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::Q);
+
 struct App {
     fps: Fps,
     nes: NES,
@@ -194,7 +201,7 @@ impl App {
     }
 
     fn handle_input(&mut self, ctx: &egui::Context) {
-        ctx.input(|i| {
+        ctx.input_mut(|i| {
             if !i.raw.dropped_files.is_empty() {
                 let file = i
                     .raw
@@ -212,6 +219,21 @@ impl App {
             }
             if !i.focused {
                 return;
+            }
+
+            if i.consume_shortcut(&RESET_SHORTCUT) {
+                self.nes.reset();
+            }
+
+            if i.consume_shortcut(&PAUSE_SHORTCUT) {
+                self.paused = !self.paused;
+                if !self.paused {
+                    // clear the audio buffer
+                    _ = self.nes.audio_buffer();
+                }
+            }
+            if i.consume_shortcut(&CLOSE_SHORTCUT) {
+                self.nes = NES::new_without_file();
             }
 
             if !self.nes.is_empty() {
@@ -264,11 +286,21 @@ impl App {
                         self.nes = NES::new(file).unwrap();
                     }
                 }
-                if ui.button("Reset").clicked() {
+                if ui
+                    .add(
+                        egui::Button::new("Reset")
+                            .shortcut_text(ui.ctx().format_shortcut(&RESET_SHORTCUT)),
+                    )
+                    .clicked()
+                {
                     self.nes.reset();
                 }
                 if ui
-                    .button(if self.paused { "Resume" } else { "Pause" })
+                    .add(
+                        egui::Button::new("Pause")
+                            .selected(self.paused)
+                            .shortcut_text(ui.ctx().format_shortcut(&PAUSE_SHORTCUT)),
+                    )
                     .clicked()
                 {
                     self.paused = !self.paused;
@@ -277,7 +309,13 @@ impl App {
                         _ = self.nes.audio_buffer();
                     }
                 }
-                if ui.button("Close Game").clicked() {
+                if ui
+                    .add(
+                        egui::Button::new("Close")
+                            .shortcut_text(ui.ctx().format_shortcut(&CLOSE_SHORTCUT)),
+                    )
+                    .clicked()
+                {
                     self.nes = NES::new_without_file();
                 }
                 if ui.button("Exit").clicked() {
