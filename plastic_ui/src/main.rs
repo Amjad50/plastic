@@ -1,4 +1,8 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 
 use directories::ProjectDirs;
 use dynwave::AudioPlayer;
@@ -9,6 +13,9 @@ use plastic_core::{
     nes_controller::StandardNESKey,
     nes_display::{TV_HEIGHT, TV_WIDTH},
 };
+
+// 60 FPS gives audio glitches
+const TARGET_FPS: f64 = 61.;
 
 const MIN_STATE_SLOT: u8 = 0;
 const MAX_STATE_SLOT: u8 = 9;
@@ -28,22 +35,103 @@ fn base_save_state_folder() -> Option<PathBuf> {
     }
 }
 
+struct MovingAverage {
+    values: [f64; 100],
+    current_index: usize,
+    sum: f64,
+}
+
+impl MovingAverage {
+    fn new() -> Self {
+        Self {
+            values: [0.0; 100],
+            current_index: 0,
+            sum: 0.0,
+        }
+    }
+
+    fn add(&mut self, value: f64) {
+        self.sum -= self.values[self.current_index];
+        self.sum += value;
+        self.values[self.current_index] = value;
+        self.current_index = (self.current_index + 1) % self.values.len();
+    }
+
+    fn average(&self) -> f64 {
+        self.sum / self.values.len() as f64
+    }
+}
+
+/// Moving average fps counter
+struct Fps {
+    moving_average: MovingAverage,
+    last_frame: Instant,
+    target_fps: f64,
+}
+
+impl Fps {
+    fn new(target_fps: f64) -> Self {
+        Self {
+            moving_average: MovingAverage::new(),
+            last_frame: Instant::now(),
+            target_fps,
+        }
+    }
+
+    // check if we should start a new frame
+    // return true if we should start a new frame
+    // return false if we should skip this frame
+    fn start_frame(&mut self) -> bool {
+        let duration_per_frame = Duration::from_secs_f64(1.0 / self.target_fps);
+        let elapsed = self.last_frame.elapsed();
+        if elapsed < duration_per_frame {
+            return false;
+        }
+
+        let now = Instant::now();
+        let delta = now.duration_since(self.last_frame).as_secs_f64();
+        self.last_frame = now;
+
+        self.moving_average.add(delta);
+        true
+    }
+
+    fn fps(&self) -> f64 {
+        1.0 / self.moving_average.average()
+    }
+
+    /// Schedule the update so that the frame rate is capped at the target fps
+    fn schedule_update(&mut self, ctx: &egui::Context) {
+        let duration_per_frame = Duration::from_secs_f64(1.0 / self.target_fps);
+
+        let elapsed = self.last_frame.elapsed();
+
+        if elapsed >= duration_per_frame {
+            ctx.request_repaint();
+            return;
+        }
+
+        let remaining = duration_per_frame - elapsed;
+        ctx.request_repaint_after(remaining);
+    }
+}
+
 struct App {
+    fps: Fps,
     nes: NES,
     audio_player: AudioPlayer<f32>,
     image_texture: egui::TextureHandle,
     paused: bool,
-    last_frame_time: std::time::Instant,
 }
 
 impl App {
     pub fn new(ctx: &egui::Context, nes: NES) -> Self {
         Self {
+            fps: Fps::new(TARGET_FPS),
             nes,
             audio_player: AudioPlayer::new(SAMPLE_RATE, dynwave::BufferSize::QuarterSecond)
                 .unwrap(),
             paused: false,
-            last_frame_time: std::time::Instant::now(),
             image_texture: ctx.load_texture(
                 "nes-image",
                 egui::ColorImage::from_rgba_unmultiplied(
@@ -112,7 +200,8 @@ impl App {
                     .raw
                     .dropped_files
                     .iter()
-                    .filter_map(|f| f.path.as_ref()).find(|f| f.extension().map(|e| e == "nes").unwrap_or(false));
+                    .filter_map(|f| f.path.as_ref())
+                    .find(|f| f.extension().map(|e| e == "nes").unwrap_or(false));
 
                 if let Some(file) = file {
                     self.nes = NES::new(file).unwrap();
@@ -155,11 +244,9 @@ impl App {
     }
 
     fn update_title(&mut self, ctx: &egui::Context) {
-        let fps = 1.0 / self.last_frame_time.elapsed().as_secs_f64();
-        self.last_frame_time = std::time::Instant::now();
         let title = format!(
             "Plastic ({:.0} FPS) {}",
-            fps,
+            self.fps.fps(),
             if self.paused { "- Paused" } else { "" }
         );
 
@@ -172,7 +259,10 @@ impl App {
                 if ui.button("Open").clicked() {
                     if let Some(file) = rfd::FileDialog::new()
                         .add_filter("NES ROM", &["nes"])
-                        .pick_file() { self.nes = NES::new(file).unwrap(); }
+                        .pick_file()
+                    {
+                        self.nes = NES::new(file).unwrap();
+                    }
                 }
                 if ui.button("Reset").clicked() {
                     self.nes.reset();
@@ -194,7 +284,6 @@ impl App {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                 }
             });
-
             ui.menu_button("Save State", |ui| {
                 if let Some(slots) = self.get_present_save_states() {
                     for slot in slots {
@@ -224,29 +313,61 @@ impl App {
                     }
                 }
             });
+            ui.menu_button("FPS", |ui| {
+                ui.label(format!("{:.0} FPS", self.fps.target_fps));
+                ui.add(
+                    egui::Slider::new(&mut self.fps.target_fps, 1.0..=2048.0)
+                        .text("Target FPS")
+                        .clamp_to_range(true),
+                );
+            });
         });
+    }
+
+    /// Process the audio buffer to make it stereo
+    /// Also add or remove samples to match the current FPS difference from TARGET_FPS
+    fn process_audio(&self, audio_buffer: &[f32]) -> Vec<f32> {
+        let fps_ratio = TARGET_FPS / self.fps.fps();
+        let target_len = (audio_buffer.len() as f64 * fps_ratio) as usize;
+        let mut adjusted_buffer = Vec::with_capacity(target_len * 2);
+
+        for i in 0..target_len {
+            let src_index_f = i as f64 / fps_ratio;
+            let src_index = src_index_f.floor() as usize;
+            let next_index = std::cmp::min(src_index + 1, audio_buffer.len() - 1);
+            let fraction = src_index_f.fract() as f32;
+
+            let sample = if src_index < audio_buffer.len() {
+                let current_sample = audio_buffer[src_index];
+                let next_sample = audio_buffer[next_index];
+                current_sample * (1.0 - fraction) + next_sample * fraction
+            } else {
+                *audio_buffer.last().unwrap_or(&0.0)
+            };
+            // Add the sample twice for left and right channels
+            adjusted_buffer.push(sample);
+            adjusted_buffer.push(sample);
+        }
+
+        adjusted_buffer
     }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.update_title(ctx);
+        self.handle_input(ctx);
+
         if !self.paused && !self.nes.is_empty() {
-            self.nes.clock_for_frame();
-            let audio_buffer = self.nes.audio_buffer();
-            // convert from 1 channel to 2 channels
-            self.audio_player.queue(
-                &audio_buffer
-                    .iter()
-                    .flat_map(|&s| [s, s])
-                    .collect::<Vec<_>>(),
-            );
+            if self.fps.start_frame() {
+                self.nes.clock_for_frame();
+                let audio_buffer = self.nes.audio_buffer();
+                self.audio_player.queue(&self.process_audio(&audio_buffer));
+            }
             self.audio_player.play().unwrap();
         } else {
             self.audio_player.pause().unwrap();
         }
-
-        self.update_title(ctx);
-        self.handle_input(ctx);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             self.show_menu(ui);
@@ -308,7 +429,7 @@ impl eframe::App for App {
             });
         });
 
-        ctx.request_repaint();
+        self.fps.schedule_update(ctx);
     }
 }
 
@@ -326,6 +447,7 @@ pub fn main() -> Result<(), eframe::Error> {
                 builder.with_x11();
             })),
             window_builder: Some(Box::new(|builder| builder.with_drag_and_drop(true))),
+            vsync: false, // unlock FPS
             ..Default::default()
         },
         Box::new(|c| Ok(Box::new(App::new(&c.egui_ctx, nes)))),
