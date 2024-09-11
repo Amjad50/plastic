@@ -75,8 +75,8 @@ impl Savable for PPUBus {
 struct CPUBus {
     ram: [u8; 0x800],
     cartridge: Rc<RefCell<Cartridge>>,
-    ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
-    apu: Rc<RefCell<APU2A03>>,
+    ppu: PPU2C02<PPUBus>,
+    apu: APU2A03,
     contoller: Controller,
     irq_pin_change_requested: Cell<bool>,
 }
@@ -84,8 +84,8 @@ struct CPUBus {
 impl CPUBus {
     pub fn new(
         cartridge: Rc<RefCell<Cartridge>>,
-        ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
-        apu: Rc<RefCell<APU2A03>>,
+        ppu: PPU2C02<PPUBus>,
+        apu: APU2A03,
         contoller: Controller,
     ) -> Self {
         CPUBus {
@@ -107,15 +107,12 @@ impl CPUBusTrait for CPUBus {
     fn read(&self, address: u16) -> u8 {
         match address {
             0x0000..=0x1FFF => self.ram[(address & 0x7FF) as usize],
-            0x2000..=0x3FFF => self
-                .ppu
-                .borrow()
-                .read(0x2000 | (address & 0x7), Device::Cpu),
-            0x4000..=0x4013 => self.apu.borrow().read(address, Device::Cpu),
-            0x4014 => self.ppu.borrow().read(address, Device::Cpu),
-            0x4015 => self.apu.borrow().read(address, Device::Cpu),
+            0x2000..=0x3FFF => self.ppu.read(0x2000 | (address & 0x7), Device::Cpu),
+            0x4000..=0x4013 => self.apu.read(address, Device::Cpu),
+            0x4014 => self.ppu.read(address, Device::Cpu),
+            0x4015 => self.apu.read(address, Device::Cpu),
             0x4016 => self.contoller.read(address, Device::Cpu),
-            0x4017 => self.apu.borrow().read(address, Device::Cpu),
+            0x4017 => self.apu.read(address, Device::Cpu),
             0x4018..=0x401F => {
                 // unused CPU test mode registers
                 0
@@ -127,16 +124,12 @@ impl CPUBusTrait for CPUBus {
     fn write(&mut self, address: u16, data: u8) {
         match address {
             0x0000..=0x1FFF => self.ram[(address & 0x7FF) as usize] = data,
-            0x2000..=0x3FFF => {
-                self.ppu
-                    .borrow_mut()
-                    .write(0x2000 | (address & 0x7), data, Device::Cpu)
-            }
-            0x4000..=0x4013 => self.apu.borrow_mut().write(address, data, Device::Cpu),
-            0x4014 => self.ppu.borrow_mut().write(address, data, Device::Cpu),
-            0x4015 => self.apu.borrow_mut().write(address, data, Device::Cpu),
+            0x2000..=0x3FFF => self.ppu.write(0x2000 | (address & 0x7), data, Device::Cpu),
+            0x4000..=0x4013 => self.apu.write(address, data, Device::Cpu),
+            0x4014 => self.ppu.write(address, data, Device::Cpu),
+            0x4015 => self.apu.write(address, data, Device::Cpu),
             0x4016 => self.contoller.write(address, data, Device::Cpu),
-            0x4017 => self.apu.borrow_mut().write(address, data, Device::Cpu),
+            0x4017 => self.apu.write(address, data, Device::Cpu),
             0x4018..=0x401F => {
                 // unused CPU test mode registers
             }
@@ -168,51 +161,51 @@ impl Savable for CPUBus {
 
 impl PPUCPUConnection for CPUBus {
     fn is_nmi_pin_set(&self) -> bool {
-        self.ppu.borrow().is_nmi_pin_set()
+        self.ppu.is_nmi_pin_set()
     }
 
     fn clear_nmi_pin(&mut self) {
-        self.ppu.borrow_mut().clear_nmi_pin()
+        self.ppu.clear_nmi_pin()
     }
 
     fn is_dma_request(&self) -> bool {
-        self.ppu.borrow_mut().is_dma_request()
+        self.ppu.is_dma_request()
     }
 
     fn clear_dma_request(&mut self) {
-        self.ppu.borrow_mut().clear_dma_request()
+        self.ppu.clear_dma_request()
     }
 
     fn dma_address(&mut self) -> u8 {
-        self.ppu.borrow_mut().dma_address()
+        self.ppu.dma_address()
     }
 
     fn send_oam_data(&mut self, address: u8, data: u8) {
-        self.ppu.borrow_mut().send_oam_data(address, data)
+        self.ppu.send_oam_data(address, data)
     }
 }
 
 impl APUCPUConnection for CPUBus {
     fn request_dmc_reader_read(&self) -> Option<u16> {
-        self.apu.borrow().request_dmc_reader_read()
+        self.apu.request_dmc_reader_read()
     }
 
     fn submit_dmc_buffer_byte(&mut self, byte: u8) {
-        self.apu.borrow_mut().submit_dmc_buffer_byte(byte)
+        self.apu.submit_dmc_buffer_byte(byte)
     }
 }
 
 impl CPUIrqProvider for CPUBus {
     fn is_irq_change_requested(&self) -> bool {
-        let result = self.apu.borrow().is_irq_change_requested()
-            || self.cartridge.borrow().is_irq_change_requested();
+        let result =
+            self.apu.is_irq_change_requested() || self.cartridge.borrow().is_irq_change_requested();
         self.irq_pin_change_requested.set(result);
         result
     }
 
     fn irq_pin_state(&self) -> bool {
         if self.irq_pin_change_requested.get() {
-            let mut result = self.apu.borrow().irq_pin_state();
+            let mut result = self.apu.irq_pin_state();
             if self.cartridge.borrow().is_irq_change_requested() {
                 result = result || self.cartridge.borrow().irq_pin_state();
             }
@@ -225,15 +218,13 @@ impl CPUIrqProvider for CPUBus {
     fn clear_irq_request_pin(&mut self) {
         *self.irq_pin_change_requested.get_mut() = false;
         self.cartridge.borrow_mut().clear_irq_request_pin();
-        self.apu.borrow_mut().clear_irq_request_pin();
+        self.apu.clear_irq_request_pin();
     }
 }
 
 pub struct NES {
     cartridge: Rc<RefCell<Cartridge>>,
     cpu: CPU6502<CPUBus>,
-    ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
-    apu: Rc<RefCell<APU2A03>>,
     image: Arc<Mutex<Vec<u8>>>,
 }
 
@@ -259,13 +250,11 @@ impl NES {
 
         let ppu = PPU2C02::new(ppubus, tv);
 
-        let ppu = Rc::new(RefCell::new(ppu));
-
-        let apu = Rc::new(RefCell::new(APU2A03::new()));
+        let apu = APU2A03::new();
 
         let ctrl = Controller::new();
 
-        let cpubus = CPUBus::new(cartridge.clone(), ppu.clone(), apu.clone(), ctrl);
+        let cpubus = CPUBus::new(cartridge.clone(), ppu, apu, ctrl);
 
         let mut cpu = CPU6502::new(cpubus);
 
@@ -274,8 +263,6 @@ impl NES {
         Self {
             cartridge,
             cpu,
-            ppu,
-            apu,
             image,
         }
     }
@@ -286,9 +273,9 @@ impl NES {
 
         let ppubus = PPUBus::new(self.cartridge.clone());
 
-        self.ppu.borrow_mut().reset(ppubus);
+        self.cpu.bus_mut().ppu.reset(ppubus);
 
-        self.apu.replace(APU2A03::new());
+        self.cpu.bus_mut().apu = APU2A03::new();
     }
 
     pub fn clock_for_frame(&mut self) {
@@ -299,11 +286,11 @@ impl NES {
         const N: usize = 29780; // number of CPU cycles per loop, one full frame
 
         for _ in 0..N {
-            self.apu.borrow_mut().clock();
+            self.cpu.bus_mut().apu.clock();
 
             self.cpu.run_next();
             {
-                let mut ppu = self.ppu.borrow_mut();
+                let ppu = &mut self.cpu.bus_mut().ppu;
                 ppu.clock();
                 ppu.clock();
                 ppu.clock();
@@ -316,8 +303,8 @@ impl NES {
         self.image.clone()
     }
 
-    pub fn audio_buffer(&self) -> Vec<f32> {
-        self.apu.borrow().take_audio_buffer()
+    pub fn audio_buffer(&mut self) -> Vec<f32> {
+        self.cpu.bus().apu.take_audio_buffer()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -346,8 +333,8 @@ impl NES {
     pub fn save_state<W: std::io::Write>(&self, mut writer: W) -> Result<(), SaveError> {
         self.cartridge.borrow().save(&mut writer)?;
         self.cpu.save(&mut writer)?;
-        self.ppu.borrow().save(&mut writer)?;
-        self.apu.borrow().save(&mut writer)?;
+        self.cpu.bus().ppu.save(&mut writer)?;
+        self.cpu.bus().apu.save(&mut writer)?;
 
         Ok(())
     }
@@ -355,8 +342,8 @@ impl NES {
     pub fn load_state<R: std::io::Read>(&mut self, mut reader: R) -> Result<(), SaveError> {
         self.cartridge.borrow_mut().load(&mut reader)?;
         self.cpu.load(&mut reader)?;
-        self.ppu.borrow_mut().load(&mut reader)?;
-        self.apu.borrow_mut().load(&mut reader)?;
+        self.cpu.bus_mut().ppu.load(&mut reader)?;
+        self.cpu.bus_mut().apu.load(&mut reader)?;
 
         let mut rest = Vec::new();
         reader.read_to_end(&mut rest)?;
