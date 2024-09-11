@@ -1,33 +1,25 @@
 use super::color::Color;
-use std::sync::{Arc, Mutex};
 
 pub const TV_WIDTH: usize = 256;
 pub const TV_HEIGHT: usize = 240;
-const COLOR_BYTES_LEN: usize = 4;
+const COLOR_BYTES_LEN: usize = 3;
 pub const TV_BUFFER_SIZE: usize = TV_WIDTH * TV_HEIGHT * COLOR_BYTES_LEN;
 
 pub struct TV {
-    /// this buffer is being read by the UI provider, and written to by the PPU,
-    /// but for performance, we only update it once per frame, and the current
-    /// being drawn is being updated in [`building_pixels`]
-    pixels_to_display: Arc<Mutex<Vec<u8>>>,
+    /// Current pixel buffer ready for display.
+    pixels_to_display: Box<[u8; TV_BUFFER_SIZE]>,
 
     /// A temporary buffer to holds the screen state while the PPU is drawing
     /// in the current frame
-    building_pixels: [Color; TV_WIDTH * TV_HEIGHT],
+    building_pixels: Box<[Color; TV_WIDTH * TV_HEIGHT]>,
 }
 
 impl TV {
     pub fn new() -> Self {
         Self {
-            pixels_to_display: Arc::new(Mutex::new(vec![0; TV_BUFFER_SIZE])),
-            building_pixels: [color!(0, 0, 0); TV_WIDTH * TV_HEIGHT],
+            pixels_to_display: Box::new([0; TV_BUFFER_SIZE]),
+            building_pixels: Box::new([color!(0, 0, 0); TV_WIDTH * TV_HEIGHT]),
         }
-    }
-
-    /// this will be transfered to another thread
-    pub fn get_image_clone(&self) -> Arc<Mutex<Vec<u8>>> {
-        self.pixels_to_display.clone()
     }
 
     /// update the pixel of the temporary buffer [`building_pixels`]
@@ -40,28 +32,27 @@ impl TV {
     /// to tell the screen to copy and translate the [`Color`] data into the
     /// [`Arc`] shared screen buffer
     pub fn signal_end_of_frame(&mut self) {
-        if let Ok(mut buffer) = self.pixels_to_display.lock() {
-            for (result, color) in buffer
-                .chunks_exact_mut(COLOR_BYTES_LEN)
-                .zip(self.building_pixels.iter())
-            {
-                result[0..4].copy_from_slice(&[
-                    color.r, color.g, color.b, 0xFF, // alpha
-                ]);
-            }
+        for (result, color) in self
+            .pixels_to_display
+            .chunks_exact_mut(COLOR_BYTES_LEN)
+            .zip(self.building_pixels.iter())
+        {
+            result[0..COLOR_BYTES_LEN].copy_from_slice(&[color.r, color.g, color.b]);
         }
     }
 
     /// resets and zero all buffers
     pub fn reset(&mut self) {
-        if let Ok(mut buffer) = self.pixels_to_display.lock() {
-            for i in buffer.iter_mut() {
-                *i = 0;
-            }
+        for i in self.pixels_to_display.iter_mut() {
+            *i = 0;
         }
 
-        for i in &mut self.building_pixels {
+        for i in self.building_pixels.as_mut() {
             *i = color!(0, 0, 0);
         }
+    }
+
+    pub fn display_pixel_buffer(&self) -> &[u8] {
+        self.pixels_to_display.as_ref()
     }
 }

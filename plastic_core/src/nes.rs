@@ -14,7 +14,6 @@ use std::cell::RefCell;
 use std::io::Read;
 use std::path::Path;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 
 struct PPUBus {
     cartridge: Rc<RefCell<dyn Bus>>,
@@ -225,7 +224,6 @@ impl CPUIrqProvider for CPUBus {
 pub struct NES {
     cartridge: Rc<RefCell<Cartridge>>,
     cpu: CPU6502<CPUBus>,
-    image: Arc<Mutex<Vec<u8>>>,
 }
 
 impl NES {
@@ -246,7 +244,6 @@ impl NES {
         let ppubus = PPUBus::new(cartridge.clone());
 
         let tv = TV::new();
-        let image = tv.get_image_clone();
 
         let ppu = PPU2C02::new(ppubus, tv);
 
@@ -260,11 +257,7 @@ impl NES {
 
         cpu.reset();
 
-        Self {
-            cartridge,
-            cpu,
-            image,
-        }
+        Self { cartridge, cpu }
     }
 
     pub fn reset(&mut self) {
@@ -298,9 +291,9 @@ impl NES {
         }
     }
 
-    /// Return the pixel buffer as RGBA format
-    pub fn pixel_buffer(&self) -> Arc<Mutex<Vec<u8>>> {
-        self.image.clone()
+    /// Return the pixel buffer as RGB format
+    pub fn pixel_buffer(&self) -> &[u8] {
+        self.cpu.bus().ppu.tv().display_pixel_buffer()
     }
 
     pub fn audio_buffer(&mut self) -> Vec<f32> {

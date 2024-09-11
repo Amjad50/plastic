@@ -134,9 +134,9 @@ impl App {
             paused: false,
             image_texture: ctx.load_texture(
                 "nes-image",
-                egui::ColorImage::from_rgba_unmultiplied(
+                egui::ColorImage::from_rgb(
                     [TV_WIDTH, TV_HEIGHT],
-                    vec![0; TV_WIDTH * TV_HEIGHT * 4].as_slice(),
+                    vec![0; TV_WIDTH * TV_HEIGHT * 3].as_slice(),
                 ),
                 egui::TextureOptions {
                     magnification: egui::TextureFilter::Nearest,
@@ -375,13 +375,10 @@ impl eframe::App for App {
             ui.centered_and_justified(|ui| {
                 if !self.nes.is_empty() {
                     {
-                        let pixels = self.nes.pixel_buffer();
-                        let guard = pixels.lock().unwrap();
-
                         self.image_texture.set(
-                            egui::ColorImage::from_rgba_unmultiplied(
+                            egui::ColorImage::from_rgb(
                                 [TV_WIDTH, TV_HEIGHT],
-                                guard.as_slice(),
+                                self.nes.pixel_buffer(),
                             ),
                             egui::TextureOptions {
                                 magnification: egui::TextureFilter::Nearest,
