@@ -217,6 +217,10 @@ where
             CPURunState::Waiting
         }
     }
+
+    pub fn bus_mut(&mut self) -> &mut T {
+        &mut self.bus
+    }
 }
 
 // private

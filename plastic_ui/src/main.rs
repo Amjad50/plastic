@@ -1,7 +1,9 @@
 use dynwave::AudioPlayer;
+use egui_winit::winit::platform::x11::EventLoopBuilderExtX11 as _;
 use plastic_core::{
     nes::NES,
     nes_audio::SAMPLE_RATE,
+    nes_controller::StandardNESKey,
     nes_display::{TV_HEIGHT, TV_WIDTH},
 };
 
@@ -34,6 +36,57 @@ impl App {
                 },
             ),
         }
+    }
+
+    fn handle_input(&mut self, ctx: &egui::Context) {
+        ctx.input(|i| {
+            if !i.raw.dropped_files.is_empty() {
+                let file = i
+                    .raw
+                    .dropped_files
+                    .iter()
+                    .filter_map(|f| f.path.as_ref())
+                    .filter(|f| f.extension().map(|e| e == "nes").unwrap_or(false))
+                    .next();
+
+                if let Some(file) = file {
+                    self.nes = NES::new(file).unwrap();
+                } else {
+                    // convert to error alert
+                    println!("[ERROR] Dropped file is not a NES ROM, must have .nes extension");
+                }
+            }
+            if !i.focused {
+                return;
+            }
+
+            if !self.nes.is_empty() {
+                self.nes
+                    .controller()
+                    .set_state(StandardNESKey::B, i.key_down(egui::Key::J));
+                self.nes
+                    .controller()
+                    .set_state(StandardNESKey::A, i.key_down(egui::Key::K));
+                self.nes
+                    .controller()
+                    .set_state(StandardNESKey::Select, i.key_down(egui::Key::U));
+                self.nes
+                    .controller()
+                    .set_state(StandardNESKey::Start, i.key_down(egui::Key::I));
+                self.nes
+                    .controller()
+                    .set_state(StandardNESKey::Up, i.key_down(egui::Key::W));
+                self.nes
+                    .controller()
+                    .set_state(StandardNESKey::Down, i.key_down(egui::Key::S));
+                self.nes
+                    .controller()
+                    .set_state(StandardNESKey::Left, i.key_down(egui::Key::A));
+                self.nes
+                    .controller()
+                    .set_state(StandardNESKey::Right, i.key_down(egui::Key::D));
+            }
+        });
     }
 
     fn update_title(&mut self, ctx: &egui::Context) {
@@ -100,8 +153,8 @@ impl eframe::App for App {
             self.audio_player.pause().unwrap();
         }
 
-        // update the title
         self.update_title(ctx);
+        self.handle_input(ctx);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             self.show_menu(ui);
@@ -177,6 +230,10 @@ pub fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "Plastic",
         eframe::NativeOptions {
+            event_loop_builder: Some(Box::new(|builder| {
+                builder.with_x11();
+            })),
+            window_builder: Some(Box::new(|builder| builder.with_drag_and_drop(true))),
             ..Default::default()
         },
         Box::new(|c| Ok(Box::new(App::new(&c.egui_ctx, nes)))),

@@ -5,7 +5,7 @@ use crate::common::{
     save_state::{Savable, SaveError},
     Bus, Device, MirroringProvider,
 };
-use crate::controller::{Controller, StandardNESControllerState};
+use crate::controller::Controller;
 use crate::cpu6502::{CPUBusTrait, CPU6502};
 use crate::display::TV;
 use crate::ppu2c02::{Palette, VRam, PPU2C02};
@@ -96,6 +96,10 @@ impl CPUBus {
             contoller,
             irq_pin_change_requested: Cell::new(false),
         }
+    }
+
+    fn contoller_mut(&mut self) -> &mut Controller {
+        &mut self.contoller
     }
 }
 
@@ -231,7 +235,6 @@ pub struct NES {
     ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
     apu: Rc<RefCell<APU2A03>>,
     image: Arc<Mutex<Vec<u8>>>,
-    ctrl_state: Arc<Mutex<StandardNESControllerState>>,
 }
 
 impl NES {
@@ -261,7 +264,6 @@ impl NES {
         let apu = Rc::new(RefCell::new(APU2A03::new()));
 
         let ctrl = Controller::new();
-        let ctrl_state = ctrl.get_primary_controller_state();
 
         let cpubus = CPUBus::new(cartridge.clone(), ppu.clone(), apu.clone(), ctrl);
 
@@ -275,7 +277,6 @@ impl NES {
             ppu,
             apu,
             image,
-            ctrl_state,
         }
     }
 
@@ -321,6 +322,10 @@ impl NES {
 
     pub fn is_empty(&self) -> bool {
         self.cartridge.borrow().is_empty()
+    }
+
+    pub fn controller(&mut self) -> &mut Controller {
+        self.cpu.bus_mut().contoller_mut()
     }
 
     // fn get_base_save_state_folder(&self) -> Option<PathBuf> {

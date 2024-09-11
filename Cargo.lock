@@ -2480,6 +2480,7 @@ dependencies = [
  "dynwave",
  "eframe",
  "egui",
+ "egui-winit",
  "plastic_core",
  "rfd",
 ]
