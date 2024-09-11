@@ -7,6 +7,7 @@ edition = "2021"
 plastic_core = { path = "../plastic_core" }
 egui = "0.28"
 egui-winit = "0.28"
+directories = "5.0"
 eframe = "0.28"
 rfd = "0.14"
 dynwave = "0.1"

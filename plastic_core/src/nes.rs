@@ -328,221 +328,43 @@ impl NES {
         self.cpu.bus_mut().contoller_mut()
     }
 
-    // fn get_base_save_state_folder(&self) -> Option<PathBuf> {
-    //     if let Some(proj_dirs) = ProjectDirs::from("Amjad50", "Plastic", "Plastic") {
-    //         let base_saved_states_dir = proj_dirs.data_local_dir().join("saved_states");
-    //         // Linux:   /home/../.local/share/plastic/saved_states
-    //         // Windows: C:\Users\..\AppData\Local\Plastic\Plastic\data\saved_states
-    //         // macOS:   /Users/../Library/Application Support/Amjad50.Plastic.Plastic/saved_states
+    pub fn save_state_file_name(&self, slot: u8) -> Option<String> {
+        if self.cartridge.borrow().is_empty() {
+            return None;
+        }
 
-    //         fs::create_dir_all(&base_saved_states_dir).ok()?;
+        let cart = self.cartridge.borrow();
+        let cartridge_path = cart.cartridge_path();
 
-    //         Some(base_saved_states_dir)
-    //     } else {
-    //         None
-    //     }
-    // }
+        Some(format!(
+            "{}_{}.pst",
+            cartridge_path.file_stem().unwrap().to_string_lossy(),
+            slot
+        ))
+    }
 
-    // fn get_save_state_file_path(&self, slot: u8) -> Option<Box<Path>> {
-    //     if self.cartridge.borrow().is_empty() {
-    //         return None;
-    //     }
+    pub fn save_state<W: std::io::Write>(&self, mut writer: W) -> Result<(), SaveError> {
+        self.cartridge.borrow().save(&mut writer)?;
+        self.cpu.save(&mut writer)?;
+        self.ppu.borrow().save(&mut writer)?;
+        self.apu.borrow().save(&mut writer)?;
 
-    //     let cartridge_path = self.cartridge.borrow().cartridge_path().to_path_buf();
+        Ok(())
+    }
 
-    //     self.get_base_save_state_folder()
-    //         .map(|base_saved_states_dir| {
-    //             base_saved_states_dir
-    //                 .join(format!(
-    //                     "{}_{}.pst",
-    //                     cartridge_path.file_stem().unwrap().to_string_lossy(),
-    //                     slot
-    //                 ))
-    //                 .into_boxed_path()
-    //         })
-    // }
+    pub fn load_state<R: std::io::Read>(&mut self, mut reader: R) -> Result<(), SaveError> {
+        self.cartridge.borrow_mut().load(&mut reader)?;
+        self.cpu.load(&mut reader)?;
+        self.ppu.borrow_mut().load(&mut reader)?;
+        self.apu.borrow_mut().load(&mut reader)?;
 
-    // fn get_present_save_states(&self) -> Option<Vec<u8>> {
-    //     if self.cartridge.borrow().is_empty() {
-    //         return None;
-    //     }
+        let mut rest = Vec::new();
+        reader.read_to_end(&mut rest)?;
 
-    //     let cartridge_path = self.cartridge.borrow().cartridge_path().to_path_buf();
+        if !rest.is_empty() {
+            return Err(SaveError::ContainExtraData);
+        }
 
-    //     if let Some(base_saved_states_dir) = self.get_base_save_state_folder() {
-    //         let saved_states_files_regex = Regex::new(&format!(
-    //             r"{}_(\d*).pst",
-    //             regex::escape(&cartridge_path.file_stem().unwrap().to_string_lossy()),
-    //         ))
-    //         .ok()?;
-
-    //         Some(
-    //             fs::read_dir(base_saved_states_dir)
-    //                 .ok()?
-    //                 .filter_map(|path| {
-    //                     if path.as_ref().ok()?.file_type().ok()?.is_file() {
-    //                         Some(path.ok()?.path())
-    //                     } else {
-    //                         None
-    //                     }
-    //                 })
-    //                 .filter_map(|path| {
-    //                     saved_states_files_regex
-    //                         .captures(path.file_name()?.to_str()?)?
-    //                         .get(1)?
-    //                         .as_str()
-    //                         .parse::<u8>()
-    //                         .ok()
-    //                 })
-    //                 .collect::<Vec<u8>>(),
-    //         )
-    //     } else {
-    //         None
-    //     }
-    // }
-
-    // pub fn save_state(&self, slot: u8) -> Result<(), SaveError> {
-    //     if let Some(path) = self.get_save_state_file_path(slot) {
-    //         let mut file = File::create(path)?;
-
-    //         self.cartridge.borrow().save(&mut file)?;
-    //         self.cpu.save(&mut file)?;
-    //         self.ppu.borrow().save(&mut file)?;
-    //         self.apu.borrow().save(&mut file)?;
-
-    //         Ok(())
-    //     } else {
-    //         Err(SaveError::Others)
-    //     }
-    // }
-
-    // pub fn load_state(&mut self, slot: u8) -> Result<(), SaveError> {
-    //     if let Some(path) = self.get_save_state_file_path(slot) {
-    //         if path.exists() {
-    //             let mut file = File::open(path)?;
-
-    //             self.cartridge.borrow_mut().load(&mut file)?;
-    //             self.cpu.load(&mut file)?;
-    //             self.ppu.borrow_mut().load(&mut file)?;
-    //             self.apu.borrow_mut().load(&mut file)?;
-
-    //             let mut rest = Vec::new();
-    //             file.read_to_end(&mut rest)?;
-
-    //             if !rest.is_empty() {
-    //                 return Err(SaveError::Others);
-    //             }
-
-    //             if !self.paused {
-    //                 self.apu.borrow().play();
-    //             }
-
-    //             Ok(())
-    //         } else {
-    //             Err(SaveError::IoError(std::io::Error::new(
-    //                 std::io::ErrorKind::NotFound,
-    //                 "save file not found",
-    //             )))
-    //         }
-    //     } else {
-    //         Err(SaveError::Others)
-    //     }
-    // }
-
-    // calculate a new view based on the window size
-    // pub fn run(&mut self) {
-    //     let image = self.image.clone();
-    //     let ctrl_state = self.ctrl_state.clone();
-    //     let mut frame_limiter = FrameLimiter::new(60);
-
-    //     let (ui_to_nes_sender, ui_to_nes_receiver) = channel::<UiEvent>();
-    //     let (nes_to_ui_sender, nes_to_ui_receiver) = channel::<BackendEvent>();
-
-    //     let mut ui = self.ui.take().unwrap();
-
-    //     let ui_thread_handler = std::thread::spawn(move || {
-    //         ui.run_ui_loop(
-    //             ui_to_nes_sender.clone(),
-    //             nes_to_ui_receiver,
-    //             image,
-    //             ctrl_state,
-    //         );
-    //         ui_to_nes_sender.send(UiEvent::Exit).unwrap();
-    //     });
-
-    //     self.cpu.reset();
-
-    //     const N: usize = 29780; // number of CPU cycles per loop, one full frame
-
-    //     // just a way to duplicate code, its not meant to be efficient way to do it
-    //     // I used this, since `self` cannot be referenced here and anywhere else at
-    //     // the same time.
-    //     macro_rules! handle_apu_after_reset {
-    //         () => {
-    //             if !self.paused {
-    //                 self.apu.borrow().play();
-    //             }
-    //         };
-    //     }
-
-    //     macro_rules! send_present_save_states_to_ui {
-    //         () => {
-    //             if let Some(states) = self.get_present_save_states() {
-    //                 nes_to_ui_sender
-    //                     .send(BackendEvent::PresentStates(states))
-    //                     .unwrap();
-    //             }
-    //         };
-    //     }
-
-    //     // first time
-    //     handle_apu_after_reset!();
-
-    //     send_present_save_states_to_ui!();
-
-    //     // run the emulator loop
-    //     loop {
-    //         // check for events
-    //         if let Ok(event) = ui_to_nes_receiver.try_recv() {
-    //             match event {
-    //                 UiEvent::Exit => break,
-    //                 UiEvent::Reset => {
-    //                     self.reset();
-    //                     handle_apu_after_reset!();
-    //                     send_present_save_states_to_ui!();
-    //                 }
-
-    //                 UiEvent::LoadRom(file_location) => {
-    //                     let cartridge = Cartridge::from_file(file_location);
-    //                     if let Ok(cartridge) = cartridge {
-    //                         self.cartridge.replace(cartridge);
-    //                         self.reset();
-    //                         handle_apu_after_reset!();
-    //                     } else {
-    //                         println!("This game is not supported yet");
-    //                     }
-    //                     send_present_save_states_to_ui!();
-    //                 }
-    //                 UiEvent::SaveState(slot) => {
-    //                     // only if there is a game
-    //                     if !self.cartridge.borrow().is_empty() {
-    //                         if let Err(err) = self.save_state(slot) {
-    //                             eprintln!("Error in saving the state: {}", err);
-    //                         }
-    //                         send_present_save_states_to_ui!();
-    //                     }
-    //                 }
-    //                 UiEvent::LoadState(slot) => {
-    //                     // only if there is a game
-    //                     if !self.cartridge.borrow().is_empty() {
-    //                         if let Err(err) = self.load_state(slot) {
-    //                             eprintln!("Error in loading the state: {}", err);
-    //                         }
-    //                         send_present_save_states_to_ui!();
-    //                     }
-    //                 }
-    //             }
-    //         }
-
-    // }
+        Ok(())
+    }
 }

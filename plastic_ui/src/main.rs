@@ -1,3 +1,6 @@
+use std::{fs, path::PathBuf};
+
+use directories::ProjectDirs;
 use dynwave::AudioPlayer;
 use egui_winit::winit::platform::x11::EventLoopBuilderExtX11 as _;
 use plastic_core::{
@@ -6,6 +9,24 @@ use plastic_core::{
     nes_controller::StandardNESKey,
     nes_display::{TV_HEIGHT, TV_WIDTH},
 };
+
+const MIN_STATE_SLOT: u8 = 0;
+const MAX_STATE_SLOT: u8 = 9;
+
+fn base_save_state_folder() -> Option<PathBuf> {
+    if let Some(proj_dirs) = ProjectDirs::from("Amjad50", "Plastic", "Plastic") {
+        let base_saved_states_dir = proj_dirs.data_local_dir().join("saved_states");
+        // Linux:   /home/../.local/share/plastic/saved_states
+        // Windows: C:\Users\..\AppData\Local\Plastic\Plastic\data\saved_states
+        // macOS:   /Users/../Library/Application Support/Amjad50.Plastic.Plastic/saved_states
+
+        fs::create_dir_all(&base_saved_states_dir).ok()?;
+
+        Some(base_saved_states_dir)
+    } else {
+        None
+    }
+}
 
 struct App {
     nes: NES,
@@ -38,6 +59,52 @@ impl App {
         }
     }
 
+    fn get_present_save_states(&self) -> Option<Vec<(u8, bool)>> {
+        if self.nes.is_empty() {
+            return None;
+        }
+
+        let base_saved_states_dir = base_save_state_folder()?;
+
+        Some(
+            (MIN_STATE_SLOT..=MAX_STATE_SLOT)
+                .map(|i| {
+                    let filename = self.nes.save_state_file_name(i).unwrap();
+
+                    (i, base_saved_states_dir.join(&filename).exists())
+                })
+                .collect(),
+        )
+    }
+
+    fn save_state(&mut self, slot: u8) {
+        if self.nes.is_empty() {
+            return;
+        }
+
+        let base_saved_states_dir = base_save_state_folder().unwrap();
+        let filename = self.nes.save_state_file_name(slot).unwrap();
+        let path = base_saved_states_dir.join(&filename);
+
+        let file = fs::File::create(&path).unwrap();
+
+        self.nes.save_state(&file).unwrap();
+    }
+
+    fn load_state(&mut self, slot: u8) {
+        if self.nes.is_empty() {
+            return;
+        }
+
+        let base_saved_states_dir = base_save_state_folder().unwrap();
+        let filename = self.nes.save_state_file_name(slot).unwrap();
+        let path = base_saved_states_dir.join(&filename);
+
+        let file = fs::File::open(&path).unwrap();
+
+        self.nes.load_state(&file).unwrap();
+    }
+
     fn handle_input(&mut self, ctx: &egui::Context) {
         ctx.input(|i| {
             if !i.raw.dropped_files.is_empty() {
@@ -45,9 +112,7 @@ impl App {
                     .raw
                     .dropped_files
                     .iter()
-                    .filter_map(|f| f.path.as_ref())
-                    .filter(|f| f.extension().map(|e| e == "nes").unwrap_or(false))
-                    .next();
+                    .filter_map(|f| f.path.as_ref()).find(|f| f.extension().map(|e| e == "nes").unwrap_or(false));
 
                 if let Some(file) = file {
                     self.nes = NES::new(file).unwrap();
@@ -105,12 +170,9 @@ impl App {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Open").clicked() {
-                    rfd::FileDialog::new()
+                    if let Some(file) = rfd::FileDialog::new()
                         .add_filter("NES ROM", &["nes"])
-                        .pick_file()
-                        .map(|file| {
-                            self.nes = NES::new(file).unwrap();
-                        });
+                        .pick_file() { self.nes = NES::new(file).unwrap(); }
                 }
                 if ui.button("Reset").clicked() {
                     self.nes.reset();
@@ -129,7 +191,37 @@ impl App {
                     self.nes = NES::new_without_file();
                 }
                 if ui.button("Exit").clicked() {
-                    std::process::exit(0);
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            });
+
+            ui.menu_button("Save State", |ui| {
+                if let Some(slots) = self.get_present_save_states() {
+                    for slot in slots {
+                        if ui
+                            .button(format!(
+                                "Slot {} - {}",
+                                slot.0,
+                                if slot.1 { "Overwrite" } else { "Save" }
+                            ))
+                            .clicked()
+                        {
+                            self.save_state(slot.0);
+                        }
+                    }
+                }
+            });
+            ui.menu_button("Load State", |ui| {
+                if let Some(slots) = self.get_present_save_states() {
+                    for slot in slots {
+                        if ui
+                            .add_enabled(slot.1, egui::Button::new(format!("Slot {}", slot.0)))
+                            .clicked()
+                            && slot.1
+                        {
+                            self.load_state(slot.0);
+                        }
+                    }
                 }
             });
         });
