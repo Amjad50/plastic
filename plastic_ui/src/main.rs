@@ -116,6 +116,8 @@ impl Fps {
     }
 }
 
+const OPEN_SHORTCUT: egui::KeyboardShortcut =
+    egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::O);
 const RESET_SHORTCUT: egui::KeyboardShortcut =
     egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::R);
 const PAUSE_SHORTCUT: egui::KeyboardShortcut =
@@ -221,10 +223,12 @@ impl App {
                 return;
             }
 
+            if i.consume_shortcut(&OPEN_SHORTCUT) {
+                self.open_file();
+            }
             if i.consume_shortcut(&RESET_SHORTCUT) {
                 self.nes.reset();
             }
-
             if i.consume_shortcut(&PAUSE_SHORTCUT) {
                 self.paused = !self.paused;
                 if !self.paused {
@@ -267,24 +271,39 @@ impl App {
 
     fn update_title(&mut self, ctx: &egui::Context) {
         let title = format!(
-            "Plastic ({:.0} FPS) {}",
-            self.fps.fps(),
+            "Plastic {} {}",
+            if self.nes.is_empty() || self.paused {
+                "".to_owned()
+            } else {
+                format!("({:.0} FPS)", self.fps.fps())
+            },
             if self.paused { "- Paused" } else { "" }
         );
 
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
     }
 
+    fn open_file(&mut self) {
+        if let Some(file) = rfd::FileDialog::new()
+            .set_title("Open NES ROM")
+            .add_filter("NES ROM", &["nes"])
+            .pick_file()
+        {
+            self.nes = NES::new(file).unwrap();
+        }
+    }
+
     fn show_menu(&mut self, ui: &mut egui::Ui) {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
-                if ui.button("Open").clicked() {
-                    if let Some(file) = rfd::FileDialog::new()
-                        .add_filter("NES ROM", &["nes"])
-                        .pick_file()
-                    {
-                        self.nes = NES::new(file).unwrap();
-                    }
+                if ui
+                    .add(
+                        egui::Button::new("Open")
+                            .shortcut_text(ui.ctx().format_shortcut(&OPEN_SHORTCUT)),
+                    )
+                    .clicked()
+                {
+                    self.open_file();
                 }
                 if ui
                     .add(
