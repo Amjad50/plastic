@@ -1,5 +1,5 @@
 [package]
-name = "nes_ui_tui"
+name = "plastic_ui_tui"
 version = "0.1.0"
 authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 edition = "2021"
@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 plastic_core = { path = "../plastic_core" }
 
-crossterm = "^0.17"
-tui = { git = "https://github.com/fdehau/tui-rs", default-features = false, features = ['crossterm'] }
+crossterm = "0.28"
 gilrs = "^0.7.4"
+dynwave = "0.1.0"
+ratatui = "0.28.1"

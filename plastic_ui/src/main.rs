@@ -1,13 +1,10 @@
-use std::{
-    fs,
-    path::PathBuf,
-    time::{Duration, Instant},
-};
+use std::{fs, path::PathBuf};
 
 use directories::ProjectDirs;
 use dynwave::AudioPlayer;
 use egui_winit::winit::platform::x11::EventLoopBuilderExtX11 as _;
 use plastic_core::{
+    misc::{process_audio, Fps},
     nes::NES,
     nes_audio::SAMPLE_RATE,
     nes_controller::StandardNESKey,
@@ -32,87 +29,6 @@ fn base_save_state_folder() -> Option<PathBuf> {
         Some(base_saved_states_dir)
     } else {
         None
-    }
-}
-
-struct MovingAverage {
-    values: [f64; 100],
-    current_index: usize,
-    sum: f64,
-}
-
-impl MovingAverage {
-    fn new() -> Self {
-        Self {
-            values: [0.0; 100],
-            current_index: 0,
-            sum: 0.0,
-        }
-    }
-
-    fn add(&mut self, value: f64) {
-        self.sum -= self.values[self.current_index];
-        self.sum += value;
-        self.values[self.current_index] = value;
-        self.current_index = (self.current_index + 1) % self.values.len();
-    }
-
-    fn average(&self) -> f64 {
-        self.sum / self.values.len() as f64
-    }
-}
-
-/// Moving average fps counter
-struct Fps {
-    moving_average: MovingAverage,
-    last_frame: Instant,
-    target_fps: f64,
-}
-
-impl Fps {
-    fn new(target_fps: f64) -> Self {
-        Self {
-            moving_average: MovingAverage::new(),
-            last_frame: Instant::now(),
-            target_fps,
-        }
-    }
-
-    // check if we should start a new frame
-    // return true if we should start a new frame
-    // return false if we should skip this frame
-    fn start_frame(&mut self) -> bool {
-        let duration_per_frame = Duration::from_secs_f64(1.0 / self.target_fps);
-        let elapsed = self.last_frame.elapsed();
-        if elapsed < duration_per_frame {
-            return false;
-        }
-
-        let now = Instant::now();
-        let delta = now.duration_since(self.last_frame).as_secs_f64();
-        self.last_frame = now;
-
-        self.moving_average.add(delta);
-        true
-    }
-
-    fn fps(&self) -> f64 {
-        1.0 / self.moving_average.average()
-    }
-
-    /// Schedule the update so that the frame rate is capped at the target fps
-    fn schedule_update(&mut self, ctx: &egui::Context) {
-        let duration_per_frame = Duration::from_secs_f64(1.0 / self.target_fps);
-
-        let elapsed = self.last_frame.elapsed();
-
-        if elapsed >= duration_per_frame {
-            ctx.request_repaint();
-            return;
-        }
-
-        let remaining = duration_per_frame - elapsed;
-        ctx.request_repaint_after(remaining);
     }
 }
 
@@ -382,32 +298,13 @@ impl App {
         });
     }
 
-    /// Process the audio buffer to make it stereo
-    /// Also add or remove samples to match the current FPS difference from TARGET_FPS
-    fn process_audio(&self, audio_buffer: &[f32]) -> Vec<f32> {
-        let fps_ratio = TARGET_FPS / self.fps.target_fps;
-        let target_len = (audio_buffer.len() as f64 * fps_ratio).ceil() as usize;
-        let mut adjusted_buffer = Vec::with_capacity(target_len * 2);
-
-        for i in 0..target_len {
-            let src_index_f = i as f64 / fps_ratio;
-            let src_index = src_index_f.floor() as usize;
-            let next_index = std::cmp::min(src_index + 1, audio_buffer.len() - 1);
-            let fraction = src_index_f.fract() as f32;
-
-            let sample = if src_index < audio_buffer.len() {
-                let current_sample = audio_buffer[src_index];
-                let next_sample = audio_buffer[next_index];
-                current_sample * (1.0 - fraction) + next_sample * fraction
-            } else {
-                *audio_buffer.last().unwrap_or(&0.0)
-            };
-            // Add the sample twice for left and right channels
-            adjusted_buffer.push(sample);
-            adjusted_buffer.push(sample);
+    /// Schedule the update so that the frame rate is capped at the target fps
+    fn schedule_update(&mut self, ctx: &egui::Context) {
+        if let Some(remaining) = self.fps.remaining() {
+            ctx.request_repaint_after(remaining);
+        } else {
+            ctx.request_repaint();
         }
-
-        adjusted_buffer
     }
 }
 
@@ -420,7 +317,10 @@ impl eframe::App for App {
             if self.fps.start_frame() {
                 self.nes.clock_for_frame();
                 let audio_buffer = self.nes.audio_buffer();
-                self.audio_player.queue(&self.process_audio(&audio_buffer));
+                self.audio_player.queue(&process_audio(
+                    &audio_buffer,
+                    (TARGET_FPS / self.fps.target_fps) as f32,
+                ));
             }
             self.audio_player.play().unwrap();
         } else {
@@ -484,7 +384,7 @@ impl eframe::App for App {
             });
         });
 
-        self.fps.schedule_update(ctx);
+        self.schedule_update(ctx);
     }
 }
 
