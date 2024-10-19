@@ -93,10 +93,10 @@ Simple ui built with [egui]
 1. Very simple and easy to use immediate mode UI.
 
 #### TUI
-[![TUI demo](https://img.youtube.com/vi/KjL5P-7pEoI/0.jpg)](https://www.youtube.com/watch?v=KjL5P-7pEoI)
+[![TUI demo](https://img.youtube.com/vi/3wKILnY0AHU/0.jpg)](https://www.youtube.com/watch?v=3wKILnY0AHU)
 
 This is just for fun, but it is actually working way better than
-I expected. Check the [demo](https://www.youtube.com/watch?v=KjL5P-7pEoI).
+I expected. Check the [demo](https://www.youtube.com/watch?v=3wKILnY0AHU).
 
 If you have one of these terminals mentioned [in this docs](https://docs.rs/crossterm/0.28.1/crossterm/event/struct.PushKeyboardEnhancementFlags.html)
 Then you will have a much better experience, since these terminals support detecting button `Release`, normally other terminals don't have this feature, so
