@@ -2,7 +2,6 @@ use std::{fs, path::PathBuf};
 
 use directories::ProjectDirs;
 use dynwave::AudioPlayer;
-use egui_winit::winit::platform::x11::EventLoopBuilderExtX11 as _;
 use plastic_core::{
     misc::{process_audio, Fps},
     nes::NES,
@@ -398,9 +397,6 @@ pub fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "Plastic",
         eframe::NativeOptions {
-            event_loop_builder: Some(Box::new(|builder| {
-                builder.with_x11();
-            })),
             window_builder: Some(Box::new(|builder| {
                 builder.with_drag_and_drop(true).with_icon(
                     eframe::icon_data::from_png_bytes(include_bytes!("../../images/icon.png"))
