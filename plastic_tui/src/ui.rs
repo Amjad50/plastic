@@ -253,8 +253,10 @@ impl Ui {
             self.nes.clock_for_frame();
             self.display(&mut terminal, &fps);
 
+            // take the buffer in all cases, otherwise the audio will keep accumulating in memory
+            let audio_buffer = self.nes.audio_buffer();
             if let Some(ref mut player) = self.audio_player {
-                let audio_buffer = process_audio(&self.nes.audio_buffer(), 1.0);
+                let audio_buffer = process_audio(&audio_buffer, 1.0);
                 player.queue(&audio_buffer);
             }
 
