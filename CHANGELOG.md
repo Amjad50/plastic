@@ -6,8 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.0] - 2024-10-19
+## [0.3.1] - 2024-10-19
+### Changed
+- There were some issues with the README and crates.io, so fixed that, no change to the code.
 
+## [0.3.0] - 2024-10-19
 ### Changed
 - Major refactor to project structure, the emulation structure and UIs [#6]
 - Used [EGui] instead of all the other UIs, which is cross platform
@@ -112,7 +115,8 @@ between frames.
 ### Fixed
 - This is the first release and has **SO** many rewrites and bug fixes.
 
-[Unreleased]: https://github.com/Amjad50/plastic/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Amjad50/plastic/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/Amjad50/plastic/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Amjad50/plastic/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/Amjad50/plastic/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Amjad50/plastic/compare/v0.2.0...v0.2.1
