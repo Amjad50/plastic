@@ -1,15 +1,15 @@
 [package]
-name = "plastic_ui_tui"
-version = "0.1.0"
+name = "plastic_tui"
+version = "0.3.0"
 authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-plastic_core = { path = "../plastic_core" }
+plastic_core = { path = "../plastic_core", version = "0.3.0" }
 
 crossterm = "0.28"
-gilrs = "^0.7.4"
+gilrs = "0.11"
 dynwave = "0.1.0"
 ratatui = "0.28.1"

@@ -1,13 +1,13 @@
 [package]
-name = "plastic_ui"
-version = "0.1.0"
+name = "plastic"
+version = "0.3.0"
 edition = "2021"
 
 [dependencies]
-plastic_core = { path = "../plastic_core" }
-egui = "0.28"
-egui-winit = "0.28"
+plastic_core = { path = "../plastic_core", version = "0.3.0" }
+egui = "0.29"
+egui-winit = "0.29"
 directories = "5.0"
-eframe = "0.28"
-rfd = "0.14"
+eframe = "0.29"
+rfd = "0.15"
 dynwave = "0.1"

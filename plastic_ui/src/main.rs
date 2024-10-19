@@ -290,7 +290,7 @@ impl App {
                 ui.add(
                     egui::Slider::new(&mut speed, 0.1..=10.0)
                         .text("Emulation Speed")
-                        .clamp_to_range(true),
+                        .clamping(egui::SliderClamping::Always),
                 );
                 self.fps.target_fps = TARGET_FPS * speed;
             });
