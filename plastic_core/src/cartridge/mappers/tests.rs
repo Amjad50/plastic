@@ -8,7 +8,6 @@ mod mappers_tests {
     /// WRAM, PRG ROM, IRQ, and CHR ROM/RAM.
     fn run_holy_mapperel_test(filename: &str, mapper_id: u8) -> Result<(), TestError> {
         let mut nes = NesTester::new(filename)?;
-        nes.reset_cpu();
 
         // cannot use until infinite loop :(
         nes.clock_until_pixel_appears(194, 65, 0x38);

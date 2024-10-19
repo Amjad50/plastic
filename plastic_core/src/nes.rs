@@ -6,7 +6,7 @@ use crate::common::{
     Bus, Device, MirroringProvider,
 };
 use crate::controller::Controller;
-use crate::cpu6502::{CPUBusTrait, CPU6502};
+use crate::cpu6502::{CPUBusTrait, CPURunState, CPU6502};
 use crate::display::TV;
 use crate::ppu2c02::{Palette, VRam, PPU2C02};
 use std::cell::Cell;
@@ -291,6 +291,24 @@ impl NES {
         }
     }
 
+    pub fn clock(&mut self) -> Option<CPURunState> {
+        if self.cartridge.borrow().is_empty() {
+            return None;
+        }
+
+        self.cpu.bus_mut().apu.clock();
+
+        let r = self.cpu.run_next();
+        {
+            let ppu = &mut self.cpu.bus_mut().ppu;
+            ppu.clock();
+            ppu.clock();
+            ppu.clock();
+        }
+
+        Some(r)
+    }
+
     /// Return the pixel buffer as RGB format
     pub fn pixel_buffer(&self) -> &[u8] {
         self.cpu.bus().ppu.tv().display_pixel_buffer()
@@ -346,5 +364,15 @@ impl NES {
         }
 
         Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cpu_bus(&self) -> &impl CPUBusTrait {
+        self.cpu.bus()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn ppu_bus(&self) -> &impl Bus {
+        self.cpu.bus().ppu.ppu_bus()
     }
 }
