@@ -11,6 +11,7 @@ pub trait Savable {
 #[derive(Debug)]
 pub enum SaveError {
     IoError(ioError),
+    ContainExtraData,
     Others,
 }
 
@@ -26,6 +27,9 @@ impl Display for SaveError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SaveError::IoError(err) => write!(f, "IO Error: {}", err),
+            SaveError::ContainExtraData => {
+                write!(f, "Contain Extra Data after the end of the file")
+            }
             SaveError::Others => write!(f, "Others"),
         }
     }

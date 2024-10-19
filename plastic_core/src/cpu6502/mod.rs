@@ -130,11 +130,6 @@ where
         self.bus.reset()
     }
 
-    #[cfg(test)]
-    pub fn bus(&self) -> &T {
-        &self.bus
-    }
-
     pub fn run_next(&mut self) -> CPURunState {
         self.check_and_run_dmc_transfer();
 
@@ -216,6 +211,14 @@ where
             self.cycles_to_wait -= 1;
             CPURunState::Waiting
         }
+    }
+
+    pub fn bus(&self) -> &T {
+        &self.bus
+    }
+
+    pub fn bus_mut(&mut self) -> &mut T {
+        &mut self.bus
     }
 }
 

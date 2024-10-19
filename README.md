@@ -18,9 +18,7 @@ This is a personal project for fun and to experience emulating hardware and conn
   - [Building](#building)
 - [Components](#components)
 - [Interfaces](#interfaces)
-  - [SFML](#sfml)
-  - [GTK](#gtk)
-  - [Native Windows GUI](#native-windows-gui)
+  - [EGui UI](#ui)
   - [TUI](#tui)
 - [Controls](#controls)
   - [Keyboard](#keyboard)
@@ -32,25 +30,15 @@ This is a personal project for fun and to experience emulating hardware and conn
 
 #### Pre-built
 There are pre-built binaries in the [releases](https://github.com/Amjad50/plastic/releases/latest) tab,
-Plastic comes in different *UI*s, some work in Windows and Linux and some are for one of them,
+Plastic comes in different *UI*s, one which is the most used normal UI built with [egui] and another one which is a terminal UI (`TUI`) built with [ratatui].
 check [Interfaces](#interfaces) for more details.
 
 #### Building
 If you want to experience the latest development version, you can build `Plastic` yourself.
-You would need [Rust][Rust] itself and any UI dependency for the UI you want to use if needed.
 For example:
-
-Recommended UI for linux is [GTK](#gtk):
 ```
-cargo run --release -p nes_ui_gtk
+cargo run --release
 ```
-
-Recommended UI for windows is [Native_Windows](#native-windows-gui):
-```
-cargo run --release -p nes_ui_native_windows
-```
-
-> Note: `--release` should be used as running the emulator in `debug` mode would slow it down very much that it would make games unplayable.
 
 ### Components
 - [x] 6502 CPU, all official and unofficial instructions with accurate timing (without BCD mode).
@@ -80,78 +68,29 @@ cargo run --release -p nes_ui_native_windows
   controllable using the keyboard and controller (tested with PS4 controller)
 
 ### Interfaces
-One advantage of this emulator is the great abstraction, for example, adding UI
-handlers for the emulator is very easy and straight forward. All you have to do
-is to write a [`UiProvider`](./plastic_core/src/lib.rs), and simply
-use it with [`NES`](./plastic_core/src/nes.rs) like so:
-```rust
-use plastic_core::nes::NES;
 
-// Provider implement trait `UiProvider`
-let mut nes = NES::new("path/to/rom.nes", Provider {})?;
+The main emulator is at [`plastic_core`](./plastic_core/)
+And its a struct `NES`, where the UI would clock it, and then
+take the resulting audio and pixel buffers to handle them.
 
-nes.run();
-```
+We have 2 UIs, one main and the other just for fun.
 
-For now all UI providers can reset the game through `<CTRL-R>`
-
-Using this design, I have implemented some providers which have
-different purposes:
-
-#### SFML
-[SFML][SFML] is a game development UI library, it has a good and
-easy to use API and is the most performing UI in the list.
+#### EGui UI
+Simple ui built with [egui]
 
 <!-- omit in toc -->
 ##### Advantages
-1. Designed for Canvas and raw drawing, which makes it faster.
-2. Has support for gamepad (only tested with PS4).
-
-#### GTK
-[GTK][GTK] is a casual GUI library that is used to make all kinds
-of applications and not designed for games.
-
-The reason I chose to go with it is for future plans to add a
-debugger, which would be a lot easier to add in this UI compared
-to [SFML](#sfml).
-
-From the screenshot, it looks exactly like SFML, and that's because
-I haven't added anything specific to GTK yet. But it has almost the
-same performance as SFML, so hopefully there will not be much
-different in performance even after adding the debugger.
-
-<!-- omit in toc -->
-##### Advantages
-1. Ability to add buttons and menus which enable easier integration
-   for debuggers and anything similar.
-2. Ability to open a NES file through the menu or by dragging the .NES
-   file into the app.
-3. Can run without specifying a ROM from the command line.
-4. Ability to pause and resume emulation through `<ESC>` key and from the menues.
-<!-- omit in toc -->
-##### Disadvantages
-1. Does not offer gamepad support, but it can be added through
-   other external libraries.
-
-
-#### Native Windows GUI
-Has the same UI and usages as the [GTK](#gtk) version, but is targetted for windows
-as GTK require additional libraries to work for windows.
-
-<!-- omit in toc -->
-##### Advantages (in addition to GTK)
-1. Run on the native windows APIs, which is fast and does not need any additional
-   libraries.
-<!-- omit in toc -->
-##### Disadvantages
-1. Does not offer gamepad support, but it can be added through
-   other external libraries.
+1. Very simple and easy to use immediate mode UI.
 
 #### TUI
 [![TUI demo](https://img.youtube.com/vi/cMO89-Xljr8/0.jpg)](https://www.youtube.com/watch?v=cMO89-Xljr8)
 
 This is just for fun, but it is actually working way better than
 I expected. Check the [demo](https://www.youtube.com/watch?v=cMO89-Xljr8).
+
+If you have one of these terminals mentioned [in this docs](https://docs.rs/crossterm/0.28.1/crossterm/event/struct.PushKeyboardEnhancementFlags.html)
+Then you will have a much better experience, since these terminals support detecting button `Release`, normally other terminals don't have this feature, so
+the input for this UI can be a bit wonky.
 
 I used [gilrs][gilrs] for gamepad support and its working very
 nicely, keyboard on the other hand is not very responsive, so it
@@ -205,6 +144,6 @@ For the CPU(6502), [this](https://www.masswerk.at/6502/6502_instruction_set.html
 
 [NES-wiki]: https://en.wikipedia.org/wiki/Nintendo_Entertainment_System
 [Rust]: https://www.rust-lang.org/
-[SFML]: https://www.sfml-dev.org/
-[GTK]: https://www.gtk.org/
 [gilrs]: https://gitlab.com/gilrs-project/gilrs
+[egui]: https://github.com/emilk/egui
+[ratatui]: https://github.com/ratatui/ratatui

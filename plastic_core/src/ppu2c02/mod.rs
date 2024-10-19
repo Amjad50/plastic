@@ -1139,6 +1139,10 @@ where
         self.dma_request_address = state.dma_request_address;
         self.is_odd_frame = state.is_odd_frame;
     }
+
+    pub fn tv(&self) -> &TV {
+        &self.tv
+    }
 }
 
 impl<T> PPUCPUConnection for PPU2C02<T>

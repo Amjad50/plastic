@@ -2,13 +2,9 @@
 [workspace]
 resolver = "2"
 members = [
-    "nes_ui_sfml", 
-    "nes_ui_gtk",
-    "nes_ui_tui",
-    "nes_ui_native_windows",
-    "plastic_core",
+    "plastic_core", "plastic_ui", "plastic_ui_tui",
 ]
-default-members = ["nes_ui_sfml"]
+default-members = ["plastic_ui"]
 
 [profile.dev]
 opt-level = 2
@@ -16,3 +12,11 @@ opt-level = 2
 [profile.release]
 opt-level = 3
 
+[profile.ci]
+inherits = "dev"
+incremental = false
+opt-level = 1
+codegen-units = 16
+debug = false
+overflow-checks = false
+lto = false

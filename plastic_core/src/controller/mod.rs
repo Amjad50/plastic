@@ -1,7 +1,6 @@
 use crate::common::{Bus, Device};
 use bitflags::bitflags;
 use std::cell::Cell;
-use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StandardNESKey {
@@ -29,17 +28,25 @@ bitflags! {
 }
 
 impl StandardNESControllerState {
-    pub fn press(&mut self, key: StandardNESKey) {
+    fn press(&mut self, key: StandardNESKey) {
         self.insert(StandardNESControllerState::from_bits(key as u8).unwrap());
     }
 
-    pub fn release(&mut self, key: StandardNESKey) {
+    fn release(&mut self, key: StandardNESKey) {
         self.remove(StandardNESControllerState::from_bits(key as u8).unwrap());
+    }
+
+    pub fn set_state(&mut self, key: StandardNESKey, pressed: bool) {
+        if pressed {
+            self.press(key);
+        } else {
+            self.release(key);
+        }
     }
 }
 
 pub struct Controller {
-    primary_state: Arc<Mutex<StandardNESControllerState>>,
+    primary_state: StandardNESControllerState,
     polled_state: Cell<u8>,
 
     polling: bool,
@@ -48,15 +55,15 @@ pub struct Controller {
 impl Controller {
     pub fn new() -> Self {
         Self {
-            primary_state: Arc::new(Mutex::new(StandardNESControllerState::empty())),
+            primary_state: StandardNESControllerState::empty(),
             polled_state: Cell::new(0),
 
             polling: false,
         }
     }
 
-    pub fn get_primary_controller_state(&self) -> Arc<Mutex<StandardNESControllerState>> {
-        self.primary_state.clone()
+    pub fn set_state(&mut self, key: StandardNESKey, pressed: bool) {
+        self.primary_state.set_state(key, pressed);
     }
 }
 
@@ -64,9 +71,7 @@ impl Bus for Controller {
     fn read(&self, _address: u16, _device: Device) -> u8 {
         // refresh polled here
         if self.polling {
-            if let Ok(primary_state) = self.primary_state.lock() {
-                self.polled_state.set(primary_state.bits);
-            }
+            self.polled_state.set(self.primary_state.bits);
         }
         let result = self.polled_state.get() & 1;
 
@@ -80,9 +85,7 @@ impl Bus for Controller {
 
         // if the state changed, then refresh
         if self.polling ^ new_polling {
-            if let Ok(primary_state) = self.primary_state.lock() {
-                self.polled_state.set(primary_state.bits);
-            }
+            self.polled_state.set(self.primary_state.bits);
         }
 
         self.polling = new_polling;

@@ -5,21 +5,15 @@ use crate::common::{
     save_state::{Savable, SaveError},
     Bus, Device, MirroringProvider,
 };
-use crate::controller::{Controller, StandardNESControllerState};
-use crate::cpu6502::{CPUBusTrait, CPU6502};
+use crate::controller::Controller;
+use crate::cpu6502::{CPUBusTrait, CPURunState, CPU6502};
 use crate::display::TV;
 use crate::ppu2c02::{Palette, VRam, PPU2C02};
-use directories_next::ProjectDirs;
-use regex::{self, Regex};
 use std::cell::Cell;
 use std::cell::RefCell;
-use std::fs::{self, File};
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
-use std::sync::{mpsc::channel, Arc, Mutex};
-
-use super::{frame_limiter::FrameLimiter, BackendEvent, UiEvent, UiProvider};
 
 struct PPUBus {
     cartridge: Rc<RefCell<dyn Bus>>,
@@ -80,8 +74,8 @@ impl Savable for PPUBus {
 struct CPUBus {
     ram: [u8; 0x800],
     cartridge: Rc<RefCell<Cartridge>>,
-    ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
-    apu: Rc<RefCell<APU2A03>>,
+    ppu: PPU2C02<PPUBus>,
+    apu: APU2A03,
     contoller: Controller,
     irq_pin_change_requested: Cell<bool>,
 }
@@ -89,8 +83,8 @@ struct CPUBus {
 impl CPUBus {
     pub fn new(
         cartridge: Rc<RefCell<Cartridge>>,
-        ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
-        apu: Rc<RefCell<APU2A03>>,
+        ppu: PPU2C02<PPUBus>,
+        apu: APU2A03,
         contoller: Controller,
     ) -> Self {
         CPUBus {
@@ -102,21 +96,22 @@ impl CPUBus {
             irq_pin_change_requested: Cell::new(false),
         }
     }
+
+    fn contoller_mut(&mut self) -> &mut Controller {
+        &mut self.contoller
+    }
 }
 
 impl CPUBusTrait for CPUBus {
     fn read(&self, address: u16) -> u8 {
         match address {
             0x0000..=0x1FFF => self.ram[(address & 0x7FF) as usize],
-            0x2000..=0x3FFF => self
-                .ppu
-                .borrow()
-                .read(0x2000 | (address & 0x7), Device::Cpu),
-            0x4000..=0x4013 => self.apu.borrow().read(address, Device::Cpu),
-            0x4014 => self.ppu.borrow().read(address, Device::Cpu),
-            0x4015 => self.apu.borrow().read(address, Device::Cpu),
+            0x2000..=0x3FFF => self.ppu.read(0x2000 | (address & 0x7), Device::Cpu),
+            0x4000..=0x4013 => self.apu.read(address, Device::Cpu),
+            0x4014 => self.ppu.read(address, Device::Cpu),
+            0x4015 => self.apu.read(address, Device::Cpu),
             0x4016 => self.contoller.read(address, Device::Cpu),
-            0x4017 => self.apu.borrow().read(address, Device::Cpu),
+            0x4017 => self.apu.read(address, Device::Cpu),
             0x4018..=0x401F => {
                 // unused CPU test mode registers
                 0
@@ -128,16 +123,12 @@ impl CPUBusTrait for CPUBus {
     fn write(&mut self, address: u16, data: u8) {
         match address {
             0x0000..=0x1FFF => self.ram[(address & 0x7FF) as usize] = data,
-            0x2000..=0x3FFF => {
-                self.ppu
-                    .borrow_mut()
-                    .write(0x2000 | (address & 0x7), data, Device::Cpu)
-            }
-            0x4000..=0x4013 => self.apu.borrow_mut().write(address, data, Device::Cpu),
-            0x4014 => self.ppu.borrow_mut().write(address, data, Device::Cpu),
-            0x4015 => self.apu.borrow_mut().write(address, data, Device::Cpu),
+            0x2000..=0x3FFF => self.ppu.write(0x2000 | (address & 0x7), data, Device::Cpu),
+            0x4000..=0x4013 => self.apu.write(address, data, Device::Cpu),
+            0x4014 => self.ppu.write(address, data, Device::Cpu),
+            0x4015 => self.apu.write(address, data, Device::Cpu),
             0x4016 => self.contoller.write(address, data, Device::Cpu),
-            0x4017 => self.apu.borrow_mut().write(address, data, Device::Cpu),
+            0x4017 => self.apu.write(address, data, Device::Cpu),
             0x4018..=0x401F => {
                 // unused CPU test mode registers
             }
@@ -169,51 +160,51 @@ impl Savable for CPUBus {
 
 impl PPUCPUConnection for CPUBus {
     fn is_nmi_pin_set(&self) -> bool {
-        self.ppu.borrow().is_nmi_pin_set()
+        self.ppu.is_nmi_pin_set()
     }
 
     fn clear_nmi_pin(&mut self) {
-        self.ppu.borrow_mut().clear_nmi_pin()
+        self.ppu.clear_nmi_pin()
     }
 
     fn is_dma_request(&self) -> bool {
-        self.ppu.borrow_mut().is_dma_request()
+        self.ppu.is_dma_request()
     }
 
     fn clear_dma_request(&mut self) {
-        self.ppu.borrow_mut().clear_dma_request()
+        self.ppu.clear_dma_request()
     }
 
     fn dma_address(&mut self) -> u8 {
-        self.ppu.borrow_mut().dma_address()
+        self.ppu.dma_address()
     }
 
     fn send_oam_data(&mut self, address: u8, data: u8) {
-        self.ppu.borrow_mut().send_oam_data(address, data)
+        self.ppu.send_oam_data(address, data)
     }
 }
 
 impl APUCPUConnection for CPUBus {
     fn request_dmc_reader_read(&self) -> Option<u16> {
-        self.apu.borrow().request_dmc_reader_read()
+        self.apu.request_dmc_reader_read()
     }
 
     fn submit_dmc_buffer_byte(&mut self, byte: u8) {
-        self.apu.borrow_mut().submit_dmc_buffer_byte(byte)
+        self.apu.submit_dmc_buffer_byte(byte)
     }
 }
 
 impl CPUIrqProvider for CPUBus {
     fn is_irq_change_requested(&self) -> bool {
-        let result = self.apu.borrow().is_irq_change_requested()
-            || self.cartridge.borrow().is_irq_change_requested();
+        let result =
+            self.apu.is_irq_change_requested() || self.cartridge.borrow().is_irq_change_requested();
         self.irq_pin_change_requested.set(result);
         result
     }
 
     fn irq_pin_state(&self) -> bool {
         if self.irq_pin_change_requested.get() {
-            let mut result = self.apu.borrow().irq_pin_state();
+            let mut result = self.apu.irq_pin_state();
             if self.cartridge.borrow().is_irq_change_requested() {
                 result = result || self.cartridge.borrow().irq_pin_state();
             }
@@ -226,69 +217,47 @@ impl CPUIrqProvider for CPUBus {
     fn clear_irq_request_pin(&mut self) {
         *self.irq_pin_change_requested.get_mut() = false;
         self.cartridge.borrow_mut().clear_irq_request_pin();
-        self.apu.borrow_mut().clear_irq_request_pin();
+        self.apu.clear_irq_request_pin();
     }
 }
 
-pub struct NES<P: UiProvider + Send + 'static> {
+pub struct NES {
     cartridge: Rc<RefCell<Cartridge>>,
     cpu: CPU6502<CPUBus>,
-    ppu: Rc<RefCell<PPU2C02<PPUBus>>>,
-    apu: Rc<RefCell<APU2A03>>,
-    image: Arc<Mutex<Vec<u8>>>,
-    ctrl_state: Arc<Mutex<StandardNESControllerState>>,
-
-    ui: Option<P>, // just to hold the UI object (it will be taken in the main loop)
-
-    paused: bool,
 }
 
-impl<P: UiProvider + Send + 'static> NES<P> {
-    pub fn new(filename: &str, ui: P) -> Result<Self, CartridgeError> {
+impl NES {
+    pub fn new<P: AsRef<Path>>(filename: P) -> Result<Self, CartridgeError> {
         let cartridge = Cartridge::from_file(filename)?;
 
-        Ok(Self::create_nes(cartridge, ui))
+        Ok(Self::create_nes(cartridge))
     }
 
-    pub fn new_without_file(ui: P) -> Self {
+    pub fn new_without_file() -> Self {
         let cartridge = Cartridge::new_without_file();
 
-        Self::create_nes(cartridge, ui)
+        Self::create_nes(cartridge)
     }
 
-    fn create_nes(cartridge: Cartridge, ui: P) -> Self {
+    fn create_nes(cartridge: Cartridge) -> Self {
         let cartridge = Rc::new(RefCell::new(cartridge));
         let ppubus = PPUBus::new(cartridge.clone());
 
-        let tv = TV::new(P::get_tv_color_converter());
-        let image = tv.get_image_clone();
+        let tv = TV::new();
 
         let ppu = PPU2C02::new(ppubus, tv);
 
-        let ppu = Rc::new(RefCell::new(ppu));
-
-        let apu = Rc::new(RefCell::new(APU2A03::new()));
+        let apu = APU2A03::new();
 
         let ctrl = Controller::new();
-        let ctrl_state = ctrl.get_primary_controller_state();
 
-        let cpubus = CPUBus::new(cartridge.clone(), ppu.clone(), apu.clone(), ctrl);
+        let cpubus = CPUBus::new(cartridge.clone(), ppu, apu, ctrl);
 
-        let cpu = CPU6502::new(cpubus);
+        let mut cpu = CPU6502::new(cpubus);
 
-        let paused = cartridge.borrow().is_empty();
+        cpu.reset();
 
-        Self {
-            cartridge,
-            cpu,
-            ppu,
-            apu,
-            image,
-            ctrl_state,
-            ui: Some(ui),
-
-            paused,
-        }
+        Self { cartridge, cpu }
     }
 
     pub fn reset(&mut self) {
@@ -297,263 +266,113 @@ impl<P: UiProvider + Send + 'static> NES<P> {
 
         let ppubus = PPUBus::new(self.cartridge.clone());
 
-        self.ppu.borrow_mut().reset(ppubus);
+        self.cpu.bus_mut().ppu.reset(ppubus);
 
-        self.apu.replace(APU2A03::new());
-
-        self.paused = self.cartridge.borrow().is_empty();
+        self.cpu.bus_mut().apu = APU2A03::new();
     }
 
-    fn get_base_save_state_folder(&self) -> Option<PathBuf> {
-        if let Some(proj_dirs) = ProjectDirs::from("Amjad50", "Plastic", "Plastic") {
-            let base_saved_states_dir = proj_dirs.data_local_dir().join("saved_states");
-            // Linux:   /home/../.local/share/plastic/saved_states
-            // Windows: C:\Users\..\AppData\Local\Plastic\Plastic\data\saved_states
-            // macOS:   /Users/../Library/Application Support/Amjad50.Plastic.Plastic/saved_states
-
-            fs::create_dir_all(&base_saved_states_dir).ok()?;
-
-            Some(base_saved_states_dir)
-        } else {
-            None
-        }
-    }
-
-    fn get_save_state_file_path(&self, slot: u8) -> Option<Box<Path>> {
+    pub fn clock_for_frame(&mut self) {
         if self.cartridge.borrow().is_empty() {
-            return None;
+            return;
         }
-
-        let cartridge_path = self.cartridge.borrow().cartridge_path().to_path_buf();
-
-        self.get_base_save_state_folder()
-            .map(|base_saved_states_dir| {
-                base_saved_states_dir
-                    .join(format!(
-                        "{}_{}.pst",
-                        cartridge_path.file_stem().unwrap().to_string_lossy(),
-                        slot
-                    ))
-                    .into_boxed_path()
-            })
-    }
-
-    fn get_present_save_states(&self) -> Option<Vec<u8>> {
-        if self.cartridge.borrow().is_empty() {
-            return None;
-        }
-
-        let cartridge_path = self.cartridge.borrow().cartridge_path().to_path_buf();
-
-        if let Some(base_saved_states_dir) = self.get_base_save_state_folder() {
-            let saved_states_files_regex = Regex::new(&format!(
-                r"{}_(\d*).pst",
-                regex::escape(&cartridge_path.file_stem().unwrap().to_string_lossy()),
-            ))
-            .ok()?;
-
-            Some(
-                fs::read_dir(base_saved_states_dir)
-                    .ok()?
-                    .filter_map(|path| {
-                        if path.as_ref().ok()?.file_type().ok()?.is_file() {
-                            Some(path.ok()?.path())
-                        } else {
-                            None
-                        }
-                    })
-                    .filter_map(|path| {
-                        saved_states_files_regex
-                            .captures(path.file_name()?.to_str()?)?
-                            .get(1)?
-                            .as_str()
-                            .parse::<u8>()
-                            .ok()
-                    })
-                    .collect::<Vec<u8>>(),
-            )
-        } else {
-            None
-        }
-    }
-
-    pub fn save_state(&self, slot: u8) -> Result<(), SaveError> {
-        if let Some(path) = self.get_save_state_file_path(slot) {
-            let mut file = File::create(path)?;
-
-            self.cartridge.borrow().save(&mut file)?;
-            self.cpu.save(&mut file)?;
-            self.ppu.borrow().save(&mut file)?;
-            self.apu.borrow().save(&mut file)?;
-
-            Ok(())
-        } else {
-            Err(SaveError::Others)
-        }
-    }
-
-    pub fn load_state(&mut self, slot: u8) -> Result<(), SaveError> {
-        if let Some(path) = self.get_save_state_file_path(slot) {
-            if path.exists() {
-                let mut file = File::open(path)?;
-
-                self.cartridge.borrow_mut().load(&mut file)?;
-                self.cpu.load(&mut file)?;
-                self.ppu.borrow_mut().load(&mut file)?;
-                self.apu.borrow_mut().load(&mut file)?;
-
-                let mut rest = Vec::new();
-                file.read_to_end(&mut rest)?;
-
-                if !rest.is_empty() {
-                    return Err(SaveError::Others);
-                }
-
-                if !self.paused {
-                    self.apu.borrow().play();
-                }
-
-                Ok(())
-            } else {
-                Err(SaveError::IoError(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "save file not found",
-                )))
-            }
-        } else {
-            Err(SaveError::Others)
-        }
-    }
-
-    /// calculate a new view based on the window size
-    pub fn run(&mut self) {
-        let image = self.image.clone();
-        let ctrl_state = self.ctrl_state.clone();
-        let mut frame_limiter = FrameLimiter::new(60);
-
-        let (ui_to_nes_sender, ui_to_nes_receiver) = channel::<UiEvent>();
-        let (nes_to_ui_sender, nes_to_ui_receiver) = channel::<BackendEvent>();
-
-        let mut ui = self.ui.take().unwrap();
-
-        let ui_thread_handler = std::thread::spawn(move || {
-            ui.run_ui_loop(
-                ui_to_nes_sender.clone(),
-                nes_to_ui_receiver,
-                image,
-                ctrl_state,
-            );
-            ui_to_nes_sender.send(UiEvent::Exit).unwrap();
-        });
-
-        self.cpu.reset();
 
         const N: usize = 29780; // number of CPU cycles per loop, one full frame
 
-        // just a way to duplicate code, its not meant to be efficient way to do it
-        // I used this, since `self` cannot be referenced here and anywhere else at
-        // the same time.
-        macro_rules! handle_apu_after_reset {
-            () => {
-                if !self.paused {
-                    self.apu.borrow().play();
-                }
-            };
-        }
+        for _ in 0..N {
+            self.cpu.bus_mut().apu.clock();
 
-        macro_rules! send_present_save_states_to_ui {
-            () => {
-                if let Some(states) = self.get_present_save_states() {
-                    nes_to_ui_sender
-                        .send(BackendEvent::PresentStates(states))
-                        .unwrap();
-                }
-            };
-        }
-
-        // first time
-        handle_apu_after_reset!();
-
-        send_present_save_states_to_ui!();
-
-        // run the emulator loop
-        loop {
-            // check for events
-            if let Ok(event) = ui_to_nes_receiver.try_recv() {
-                match event {
-                    UiEvent::Exit => break,
-                    UiEvent::Reset => {
-                        self.reset();
-                        handle_apu_after_reset!();
-                        send_present_save_states_to_ui!();
-                    }
-
-                    UiEvent::LoadRom(file_location) => {
-                        let cartridge = Cartridge::from_file(file_location);
-                        if let Ok(cartridge) = cartridge {
-                            self.cartridge.replace(cartridge);
-                            self.reset();
-                            handle_apu_after_reset!();
-                        } else {
-                            println!("This game is not supported yet");
-                        }
-                        send_present_save_states_to_ui!();
-                    }
-                    UiEvent::Pause => {
-                        self.paused = true;
-                        self.apu.borrow_mut().pause();
-                    }
-                    UiEvent::Resume => {
-                        // only resume if we can
-                        if !self.cartridge.borrow().is_empty() {
-                            self.paused = false;
-                            self.apu.borrow_mut().play();
-                            self.apu.borrow_mut().empty_queue();
-                        }
-                    }
-                    UiEvent::SaveState(slot) => {
-                        // only if there is a game
-                        if !self.cartridge.borrow().is_empty() {
-                            if let Err(err) = self.save_state(slot) {
-                                eprintln!("Error in saving the state: {}", err);
-                            }
-                            send_present_save_states_to_ui!();
-                        }
-                    }
-                    UiEvent::LoadState(slot) => {
-                        // only if there is a game
-                        if !self.cartridge.borrow().is_empty() {
-                            if let Err(err) = self.load_state(slot) {
-                                eprintln!("Error in loading the state: {}", err);
-                            }
-                            send_present_save_states_to_ui!();
-                        }
-                    }
-                }
-            }
-
-            if self.paused {
-                std::thread::sleep(std::time::Duration::from_millis(50));
-                continue;
-            }
-
-            if frame_limiter.begin() {
-                for _ in 0..N {
-                    self.apu.borrow_mut().clock();
-
-                    self.cpu.run_next();
-                    {
-                        let mut ppu = self.ppu.borrow_mut();
-                        ppu.clock();
-                        ppu.clock();
-                        ppu.clock();
-                    }
-                }
-
-                frame_limiter.end();
+            self.cpu.run_next();
+            {
+                let ppu = &mut self.cpu.bus_mut().ppu;
+                ppu.clock();
+                ppu.clock();
+                ppu.clock();
             }
         }
+    }
 
-        ui_thread_handler.join().unwrap();
+    pub fn clock(&mut self) -> Option<CPURunState> {
+        if self.cartridge.borrow().is_empty() {
+            return None;
+        }
+
+        self.cpu.bus_mut().apu.clock();
+
+        let r = self.cpu.run_next();
+        {
+            let ppu = &mut self.cpu.bus_mut().ppu;
+            ppu.clock();
+            ppu.clock();
+            ppu.clock();
+        }
+
+        Some(r)
+    }
+
+    /// Return the pixel buffer as RGB format
+    pub fn pixel_buffer(&self) -> &[u8] {
+        self.cpu.bus().ppu.tv().display_pixel_buffer()
+    }
+
+    pub fn audio_buffer(&mut self) -> Vec<f32> {
+        self.cpu.bus().apu.take_audio_buffer()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.cartridge.borrow().is_empty()
+    }
+
+    pub fn controller(&mut self) -> &mut Controller {
+        self.cpu.bus_mut().contoller_mut()
+    }
+
+    pub fn save_state_file_name(&self, slot: u8) -> Option<String> {
+        if self.cartridge.borrow().is_empty() {
+            return None;
+        }
+
+        let cart = self.cartridge.borrow();
+        let cartridge_path = cart.cartridge_path();
+
+        Some(format!(
+            "{}_{}.pst",
+            cartridge_path.file_stem().unwrap().to_string_lossy(),
+            slot
+        ))
+    }
+
+    pub fn save_state<W: std::io::Write>(&self, mut writer: W) -> Result<(), SaveError> {
+        self.cartridge.borrow().save(&mut writer)?;
+        self.cpu.save(&mut writer)?;
+        self.cpu.bus().ppu.save(&mut writer)?;
+        self.cpu.bus().apu.save(&mut writer)?;
+
+        Ok(())
+    }
+
+    pub fn load_state<R: std::io::Read>(&mut self, mut reader: R) -> Result<(), SaveError> {
+        self.cartridge.borrow_mut().load(&mut reader)?;
+        self.cpu.load(&mut reader)?;
+        self.cpu.bus_mut().ppu.load(&mut reader)?;
+        self.cpu.bus_mut().apu.load(&mut reader)?;
+
+        let mut rest = Vec::new();
+        reader.read_to_end(&mut rest)?;
+
+        if !rest.is_empty() {
+            return Err(SaveError::ContainExtraData);
+        }
+
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cpu_bus(&self) -> &impl CPUBusTrait {
+        self.cpu.bus()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn ppu_bus(&self) -> &impl Bus {
+        self.cpu.bus().ppu.ppu_bus()
     }
 }

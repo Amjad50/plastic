@@ -6,7 +6,6 @@ fn run_sprite_hit_test(filename: &str) -> Result<(), TestError> {
     let result_memory_address = 0x00F8;
 
     let mut nes = NesTester::new(filename)?;
-    nes.reset_cpu();
 
     // this is the top-left pixel of the word "PASSED" or "FAILED"
     nes.clock_until_pixel_appears(17, 48, 0x30);
@@ -22,7 +21,6 @@ fn run_sprite_hit_test(filename: &str) -> Result<(), TestError> {
 
 fn run_blargg_test_00f0(filename: &str) -> Result<(), TestError> {
     let mut nes = NesTester::new(filename)?;
-    nes.reset_cpu();
 
     nes.clock_until_infinite_loop();
 
@@ -39,7 +37,6 @@ fn run_blargg_test_6000_80(filename: &str) -> Result<(), TestError> {
     let result_memory_address = 0x6000;
 
     let mut nes = NesTester::new(filename)?;
-    nes.reset_cpu();
 
     // first loop until an infnite loop (this infinite loop might be the
     // end or not), then loop until the value of `0x6000` is not `0x80`
@@ -96,7 +93,6 @@ mod ppu {
         let result_memory_address = 0x00f0;
 
         let mut nes = NesTester::new(filename)?;
-        nes.reset_cpu();
 
         // 2 NMIs should occure
         nes.clock_until_nmi();
