@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Major refactor to project structure, the emulation structure and UIs [#6]
 - Used [EGui] instead of all the other UIs, which is cross platform
+- Changed `SaveError::Other` to `SaveError::SerializationError`
+- Removed unused `CartridgeError::Other` 
 
 ### Fixed
 - Bugfix when Ui resumes while there is no cartridge
@@ -19,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moving to edition 2021
 - Fixed module inception error in clippy
 - In CI, added `rust-audit` to check for security vulnerabilities
+- Improved public API, and documentation
 
 ### Testing
 - Moved all blargg tests into `tests/blargg_tests.rs`
