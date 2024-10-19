@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added `TUI under 0.3.2`
+- Menu bar similar to the [EGui] UI to select files and save/load state, etc...
+- File explorer in the terminal to open files and select games
+
 ## [0.3.1] - 2024-10-19
 ### Changed
 - There were some issues with the README and crates.io, so fixed that, no change to the code.
