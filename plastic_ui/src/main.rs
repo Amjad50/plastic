@@ -390,7 +390,7 @@ pub fn main() -> Result<(), eframe::Error> {
         eframe::NativeOptions {
             window_builder: Some(Box::new(|builder| {
                 builder.with_drag_and_drop(true).with_icon(
-                    eframe::icon_data::from_png_bytes(include_bytes!("../../images/icon.png"))
+                    eframe::icon_data::from_png_bytes(include_bytes!("../images/icon.png"))
                         .unwrap(),
                 )
             })),

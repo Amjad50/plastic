@@ -1,5 +1,6 @@
 <p align="center">
-  <a href="https://github.com/Amjad50/plastic"><img alt="plastic" src="images/logo.svg" width="60%"></a>
+  <!-- Really ugly workaround, but the image isn't working in crates.io without this -->
+  <a href="https://github.com/Amjad50/plastic"><img alt="plastic" src="https://raw.githubusercontent.com/Amjad50/plastic/refs/heads/master/images/logo.svg" width="60%"></a>
   <p align="center">NES emulator in <em>Rust</em></p>
 </p>
 
@@ -8,6 +9,13 @@
 [![codecov](https://codecov.io/gh/Amjad50/plastic/branch/master/graph/badge.svg)](https://codecov.io/gh/Amjad50/plastic)
 [![dependency status](https://deps.rs/repo/github/Amjad50/plastic/status.svg)](https://deps.rs/repo/github/Amjad50/plastic)
 [![license](https://img.shields.io/github/license/Amjad50/plastic)](./LICENSE)
+<br>
+[![Crates.io Version](https://img.shields.io/crates/v/plastic_core?label=plastic_core)](https://crates.io/crates/plastic_core)
+[![docs.rs](https://img.shields.io/docsrs/plastic_core)](https://docs.rs/plastic_core/latest/plastic_core/)
+<br>
+[![Crates.io Version](https://img.shields.io/crates/v/plastic?label=plastic)](https://crates.io/crates/plastic)
+[![Crates.io Version](https://img.shields.io/crates/v/plastic_tui?label=plastic_tui)](https://crates.io/crates/plastic_tui)
+
 
 **plastic** is a [NES][NES-wiki] emulator built from scratch using [Rust][Rust].
 

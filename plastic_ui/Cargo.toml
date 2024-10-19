@@ -1,6 +1,6 @@
 [package]
 name = "plastic"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 edition = "2021"
 description = "An accurate NES emulator. Front-end for plastic-core"
@@ -11,7 +11,7 @@ keywords = ["nes", "nintendo", "emulator"]
 categories = ["emulators"]
 
 [dependencies]
-plastic_core = { path = "../plastic_core", version = "0.3.0", features = ["frontend_misc"] }
+plastic_core = { path = "../plastic_core", version = "0.3", features = ["frontend_misc"] }
 
 egui = "0.29"
 egui-winit = "0.29"

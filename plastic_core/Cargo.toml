@@ -1,6 +1,6 @@
 [package]
 name = "plastic_core"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 edition = "2021"
 description = "An accurate NES emulator. The backend emulation for plastic and plastic-tui"
