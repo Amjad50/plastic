@@ -2,15 +2,24 @@ use crate::common::{Bus, Device};
 use bitflags::bitflags;
 use std::cell::Cell;
 
+/// Represents the keys on an NES controller.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum StandardNESKey {
+pub enum NESKey {
+    /// The 'A' button.
     A = 1 << 0,
+    /// The 'B' button.
     B = 1 << 1,
+    /// The 'Select' button.
     Select = 1 << 2,
+    /// The 'Start' button.
     Start = 1 << 3,
+    /// The 'Up' directional button.
     Up = 1 << 4,
+    /// The 'Down' directional button.
     Down = 1 << 5,
+    /// The 'Left' directional button.
     Left = 1 << 6,
+    /// The 'Right' directional button.
     Right = 1 << 7,
 }
 
@@ -28,15 +37,15 @@ bitflags! {
 }
 
 impl StandardNESControllerState {
-    fn press(&mut self, key: StandardNESKey) {
+    fn press(&mut self, key: NESKey) {
         self.insert(StandardNESControllerState::from_bits(key as u8).unwrap());
     }
 
-    fn release(&mut self, key: StandardNESKey) {
+    fn release(&mut self, key: NESKey) {
         self.remove(StandardNESControllerState::from_bits(key as u8).unwrap());
     }
 
-    pub fn set_state(&mut self, key: StandardNESKey, pressed: bool) {
+    pub fn set_controller_state(&mut self, key: NESKey, pressed: bool) {
         if pressed {
             self.press(key);
         } else {
@@ -53,7 +62,7 @@ pub struct Controller {
 }
 
 impl Controller {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             primary_state: StandardNESControllerState::empty(),
             polled_state: Cell::new(0),
@@ -62,8 +71,8 @@ impl Controller {
         }
     }
 
-    pub fn set_state(&mut self, key: StandardNESKey, pressed: bool) {
-        self.primary_state.set_state(key, pressed);
+    pub fn set_controller_state(&mut self, key: NESKey, pressed: bool) {
+        self.primary_state.set_controller_state(key, pressed);
     }
 }
 

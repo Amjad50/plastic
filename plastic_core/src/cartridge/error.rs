@@ -6,13 +6,24 @@ use std::{
     io::{Error as ioError, ErrorKind},
 };
 
+/// Error happening when loading a NES cartridge.
 pub enum CartridgeError {
+    /// Error with file input/output.
+    /// Contains an [`io::Error`][ioError] which provides more details about the error.
     FileError(ioError),
+
+    /// The cartridge header is invalid or corrupted.
     HeaderError,
+
+    /// The file size is too large.
+    /// Contains the size of the file in bytes.
     TooLargeFile(u64),
+
+    /// The file extension is not recognized or supported.
     ExtensionError,
+
+    /// The mapper type is not implemented.
     MapperNotImplemented(u16),
-    Others,
 }
 
 impl CartridgeError {
@@ -20,9 +31,6 @@ impl CartridgeError {
         match self {
             Self::FileError(err) => format!("FileError: {}", err),
             Self::HeaderError => "This is not a valid iNES file".to_owned(),
-            Self::Others => {
-                "An unknown error occurred while decoding/reading the cartridge".to_owned()
-            }
             Self::TooLargeFile(size) => format!(
                 "The cartridge reader read all the data needed, but the file \
                 still has some data at the end with size {}-bytes",
@@ -51,12 +59,6 @@ impl Debug for CartridgeError {
 impl From<ioError> for CartridgeError {
     fn from(from: ioError) -> Self {
         Self::FileError(from)
-    }
-}
-
-impl Default for CartridgeError {
-    fn default() -> Self {
-        Self::Others
     }
 }
 

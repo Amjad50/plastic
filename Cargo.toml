@@ -2,7 +2,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "plastic_core", "plastic_ui", "plastic_ui_tui",
+    "plastic_core", "plastic_ui", "plastic_tui",
 ]
 default-members = ["plastic_ui"]
 
@@ -20,3 +20,4 @@ codegen-units = 16
 debug = false
 overflow-checks = false
 lto = false
+

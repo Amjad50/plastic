@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2024-10-19
+
+### Changed
+- Major refactor to project structure, the emulation structure and UIs [#6]
+- Used [EGui] instead of all the other UIs, which is cross platform
+- Changed `SaveError::Other` to `SaveError::SerializationError`
+- Removed unused `CartridgeError::Other` 
+
+### Fixed
+- Bugfix when Ui resumes while there is no cartridge
+
+### Misc
+- Moving to edition 2021
+- Fixed module inception error in clippy
+- In CI, added `rust-audit` to check for security vulnerabilities
+- Improved public API, and documentation
+
+### Testing
+- Moved all blargg tests into `tests/blargg_tests.rs`
+- Removed all sources from test roms files
+- Added `save_load_test` to test save/load state feature
+
 ## [0.2.2] - 2020-11-07
 ### Added
 - A new `plastic` logo. ([984590c]) and ([3c1b2fe]) 
@@ -90,7 +112,8 @@ between frames.
 ### Fixed
 - This is the first release and has **SO** many rewrites and bug fixes.
 
-[Unreleased]: https://github.com/Amjad50/plastic/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/Amjad50/plastic/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Amjad50/plastic/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/Amjad50/plastic/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Amjad50/plastic/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Amjad50/plastic/compare/v0.1.0...v0.2.0
@@ -135,3 +158,4 @@ between frames.
 [SFML]: https://www.sfml-dev.org/
 [GTK]: https://www.gtk.org/
 [Gilrs]: https://gitlab.com/gilrs-project/gilrs
+[EGui]: https://github.com/emilk/egui
