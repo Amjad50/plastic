@@ -1,10 +1,9 @@
 use dynwave::AudioPlayer;
 use plastic_core::{
     misc::{process_audio, Fps},
-    nes::NES,
     nes_audio::SAMPLE_RATE,
-    nes_controller::StandardNESKey,
     nes_display::{TV_HEIGHT, TV_WIDTH},
+    NESKey, NES,
 };
 use ratatui::{
     prelude::*,
@@ -60,7 +59,7 @@ pub struct Ui {
 
     /// For terminals without support for `Release` key event, we keep the button pressed for some
     /// time
-    keyboard_event_counter: HashMap<StandardNESKey, u32>,
+    keyboard_event_counter: HashMap<NESKey, u32>,
 }
 
 impl Ui {
@@ -139,20 +138,20 @@ impl Ui {
                             self.nes.reset();
                             None
                         }
-                        KeyCode::Char('J') | KeyCode::Char('j') => Some(StandardNESKey::B),
-                        KeyCode::Char('K') | KeyCode::Char('k') => Some(StandardNESKey::A),
-                        KeyCode::Char('U') | KeyCode::Char('u') => Some(StandardNESKey::Select),
-                        KeyCode::Char('I') | KeyCode::Char('i') => Some(StandardNESKey::Start),
-                        KeyCode::Char('W') | KeyCode::Char('w') => Some(StandardNESKey::Up),
-                        KeyCode::Char('S') | KeyCode::Char('s') => Some(StandardNESKey::Down),
-                        KeyCode::Char('A') | KeyCode::Char('a') => Some(StandardNESKey::Left),
-                        KeyCode::Char('D') | KeyCode::Char('d') => Some(StandardNESKey::Right),
+                        KeyCode::Char('J') | KeyCode::Char('j') => Some(NESKey::B),
+                        KeyCode::Char('K') | KeyCode::Char('k') => Some(NESKey::A),
+                        KeyCode::Char('U') | KeyCode::Char('u') => Some(NESKey::Select),
+                        KeyCode::Char('I') | KeyCode::Char('i') => Some(NESKey::Start),
+                        KeyCode::Char('W') | KeyCode::Char('w') => Some(NESKey::Up),
+                        KeyCode::Char('S') | KeyCode::Char('s') => Some(NESKey::Down),
+                        KeyCode::Char('A') | KeyCode::Char('a') => Some(NESKey::Left),
+                        KeyCode::Char('D') | KeyCode::Char('d') => Some(NESKey::Right),
                         _ => None,
                     };
                     if let Some(button) = possible_button {
                         match input.kind {
                             KeyEventKind::Press | KeyEventKind::Repeat => {
-                                self.nes.controller().set_state(button, true);
+                                self.nes.set_controller_state(button, true);
                                 if !has_keyboard_enhancement {
                                     // 20 frames
                                     // TODO: very arbitrary, but it works on some of the games
@@ -161,7 +160,7 @@ impl Ui {
                                 }
                             }
                             KeyEventKind::Release => {
-                                self.nes.controller().set_state(button, false);
+                                self.nes.set_controller_state(button, false);
                             }
                         }
                     }
@@ -180,7 +179,7 @@ impl Ui {
 
             self.keyboard_event_counter.retain(|key, counter| {
                 if *counter == 0 {
-                    self.nes.controller().set_state(*key, false);
+                    self.nes.set_controller_state(*key, false);
                     false
                 } else {
                     true
@@ -202,19 +201,19 @@ impl Ui {
 
         if let Some(gamepad) = self.active_gamepad.map(|id| self.gilrs.gamepad(id)) {
             for (controller_button, nes_button) in &[
-                (Button::South, StandardNESKey::B),
-                (Button::East, StandardNESKey::A),
-                (Button::Select, StandardNESKey::Select),
-                (Button::Start, StandardNESKey::Start),
-                (Button::DPadUp, StandardNESKey::Up),
-                (Button::DPadDown, StandardNESKey::Down),
-                (Button::DPadRight, StandardNESKey::Right),
-                (Button::DPadLeft, StandardNESKey::Left),
+                (Button::South, NESKey::B),
+                (Button::East, NESKey::A),
+                (Button::Select, NESKey::Select),
+                (Button::Start, NESKey::Start),
+                (Button::DPadUp, NESKey::Up),
+                (Button::DPadDown, NESKey::Down),
+                (Button::DPadRight, NESKey::Right),
+                (Button::DPadLeft, NESKey::Left),
             ] {
                 if gamepad.is_pressed(*controller_button) {
-                    self.nes.controller().set_state(*nes_button, true);
+                    self.nes.set_controller_state(*nes_button, true);
                 } else {
-                    self.nes.controller().set_state(*nes_button, false);
+                    self.nes.set_controller_state(*nes_button, false);
                 }
             }
         }

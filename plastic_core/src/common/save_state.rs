@@ -8,11 +8,16 @@ pub trait Savable {
     fn load<R: Read>(&mut self, reader: &mut R) -> Result<(), SaveError>;
 }
 
+/// Error happening when saving/loading a state
 #[derive(Debug)]
 pub enum SaveError {
+    /// Error with file input/output.
+    /// Contains an [`io::Error`][ioError] which provides more details about the error.
     IoError(ioError),
+    /// Contain Extra Data after the end of the file
     ContainExtraData,
-    Others,
+    /// Error happened during serialization/deserialization, faulty data
+    SerializationError,
 }
 
 impl From<ioError> for SaveError {
@@ -30,7 +35,7 @@ impl Display for SaveError {
             SaveError::ContainExtraData => {
                 write!(f, "Contain Extra Data after the end of the file")
             }
-            SaveError::Others => write!(f, "Others"),
+            SaveError::SerializationError => write!(f, "Serialization Error"),
         }
     }
 }

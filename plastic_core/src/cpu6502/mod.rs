@@ -20,12 +20,18 @@ const NMI_VECTOR_ADDRESS: u16 = 0xFFFA;
 const RESET_VECTOR_ADDRESS: u16 = 0xFFFC;
 const IRQ_VECTOR_ADDRESS: u16 = 0xFFFE;
 
-#[derive(PartialEq)]
+/// The state of the CPU after one clock cycle
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CPURunState {
-    DmaTransfere,
+    /// Currently running a DMA transfer, i.e. not instructions
+    DmaTransfer,
+    /// Waiting for the correct number of cycles to pass before executing the next instruction
     Waiting,
+    /// The CPU is in an infinite loop, the u16 is the address of the loop
     InfiniteLoop(u16),
+    /// The CPU is starting an interrupt, next cycle it will jump to the interrupt vector
     StartingInterrupt,
+    /// The CPU is executing a normal instruction (most common)
     NormalInstructionExecution,
 }
 
@@ -149,7 +155,7 @@ where
 
                 // since it should read in one cycle and write in the other cycle
                 self.cycles_to_wait = 1;
-                CPURunState::DmaTransfere
+                CPURunState::DmaTransfer
             } else if self.nmi_pin_status
                 || (self.irq_pin_status
                     && self.reg_status & StatusFlag::InterruptDisable as u8 == 0)
@@ -1450,7 +1456,7 @@ where
     fn save<W: Write>(&self, writer: &mut W) -> Result<(), SaveError> {
         let state = SavableCPUState::from_cpu(self);
 
-        let data = bincode::serialize(&state).map_err(|_| SaveError::Others)?;
+        let data = bincode::serialize(&state).map_err(|_| SaveError::SerializationError)?;
         writer.write_all(data.as_slice())?;
 
         self.bus.save(writer)?;
@@ -1465,7 +1471,7 @@ where
             let state: SavableCPUState =
                 bincode::deserialize_from(outer_reader).map_err(|err| match *err {
                     bincode::ErrorKind::Io(err) => SaveError::IoError(err),
-                    _ => SaveError::Others,
+                    _ => SaveError::SerializationError,
                 })?;
 
             self.load_serialized_state(state);

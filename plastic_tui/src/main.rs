@@ -1,5 +1,5 @@
 mod ui;
-use plastic_core::nes::NES;
+use plastic_core::NES;
 use std::env::args;
 
 fn main() {

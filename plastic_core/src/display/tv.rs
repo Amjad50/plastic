@@ -1,8 +1,12 @@
 use super::color::Color;
 
+/// The width of the rendering buffer in pixels
 pub const TV_WIDTH: usize = 256;
+/// The height of the rendering buffer in pixels
 pub const TV_HEIGHT: usize = 240;
-const COLOR_BYTES_LEN: usize = 3;
+/// The number of bytes in a single pixel
+pub const COLOR_BYTES_LEN: usize = 3;
+/// The size of the rendering buffer in bytes ([`TV_WIDTH`]* [`TV_HEIGHT`] * [`COLOR_BYTES_LEN`])
 pub const TV_BUFFER_SIZE: usize = TV_WIDTH * TV_HEIGHT * COLOR_BYTES_LEN;
 
 pub struct TV {

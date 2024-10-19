@@ -1266,7 +1266,7 @@ impl<T: Bus + Savable> Savable for PPU2C02<T> {
 
         bincode::serialize_into(writer, &state).map_err(|err| match *err {
             bincode::ErrorKind::Io(err) => SaveError::IoError(err),
-            _ => SaveError::Others,
+            _ => SaveError::SerializationError,
         })?;
 
         Ok(())
@@ -1278,7 +1278,7 @@ impl<T: Bus + Savable> Savable for PPU2C02<T> {
         let state: SavablePPUState =
             bincode::deserialize_from(reader).map_err(|err| match *err {
                 bincode::ErrorKind::Io(err) => SaveError::IoError(err),
-                _ => SaveError::Others,
+                _ => SaveError::SerializationError,
             })?;
 
         self.load_serialized_state(state);

@@ -20,6 +20,8 @@ use std::sync::{Arc, Mutex};
 use tone_source::{APUChannel, BufferedChannel, TimedAPUChannel};
 
 // for performance
+/// The sample rate expected to get from [`NES::audio_buffer`](crate::NES::audio_buffer)
+/// Do note that the audio is mono, i.e. 1 channel
 pub const SAMPLE_RATE: u32 = 44100;
 
 // after how many apu clocks a sample should be recorded
@@ -574,7 +576,7 @@ impl Savable for APU2A03 {
     fn save<W: std::io::Write>(&self, writer: &mut W) -> Result<(), SaveError> {
         bincode::serialize_into(writer, self).map_err(|err| match *err {
             bincode::ErrorKind::Io(err) => SaveError::IoError(err),
-            _ => SaveError::Others,
+            _ => SaveError::SerializationError,
         })?;
 
         Ok(())
@@ -583,7 +585,7 @@ impl Savable for APU2A03 {
     fn load<R: std::io::Read>(&mut self, reader: &mut R) -> Result<(), SaveError> {
         let state: APU2A03 = bincode::deserialize_from(reader).map_err(|err| match *err {
             bincode::ErrorKind::Io(err) => SaveError::IoError(err),
-            _ => SaveError::Others,
+            _ => SaveError::SerializationError,
         })?;
 
         let _ = std::mem::replace(self, state);

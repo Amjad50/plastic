@@ -4,10 +4,9 @@ use directories::ProjectDirs;
 use dynwave::AudioPlayer;
 use plastic_core::{
     misc::{process_audio, Fps},
-    nes::NES,
     nes_audio::SAMPLE_RATE,
-    nes_controller::StandardNESKey,
     nes_display::{TV_HEIGHT, TV_WIDTH},
+    NESKey, NES,
 };
 
 // 60 FPS gives audio glitches
@@ -157,29 +156,21 @@ impl App {
 
             if !self.nes.is_empty() {
                 self.nes
-                    .controller()
-                    .set_state(StandardNESKey::B, i.key_down(egui::Key::J));
+                    .set_controller_state(NESKey::B, i.key_down(egui::Key::J));
                 self.nes
-                    .controller()
-                    .set_state(StandardNESKey::A, i.key_down(egui::Key::K));
+                    .set_controller_state(NESKey::A, i.key_down(egui::Key::K));
                 self.nes
-                    .controller()
-                    .set_state(StandardNESKey::Select, i.key_down(egui::Key::U));
+                    .set_controller_state(NESKey::Select, i.key_down(egui::Key::U));
                 self.nes
-                    .controller()
-                    .set_state(StandardNESKey::Start, i.key_down(egui::Key::I));
+                    .set_controller_state(NESKey::Start, i.key_down(egui::Key::I));
                 self.nes
-                    .controller()
-                    .set_state(StandardNESKey::Up, i.key_down(egui::Key::W));
+                    .set_controller_state(NESKey::Up, i.key_down(egui::Key::W));
                 self.nes
-                    .controller()
-                    .set_state(StandardNESKey::Down, i.key_down(egui::Key::S));
+                    .set_controller_state(NESKey::Down, i.key_down(egui::Key::S));
                 self.nes
-                    .controller()
-                    .set_state(StandardNESKey::Left, i.key_down(egui::Key::A));
+                    .set_controller_state(NESKey::Left, i.key_down(egui::Key::A));
                 self.nes
-                    .controller()
-                    .set_state(StandardNESKey::Right, i.key_down(egui::Key::D));
+                    .set_controller_state(NESKey::Right, i.key_down(egui::Key::D));
             }
         });
     }

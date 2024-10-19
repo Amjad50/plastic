@@ -9,6 +9,7 @@ use crate::controller::Controller;
 use crate::cpu6502::{CPUBusTrait, CPURunState, CPU6502};
 use crate::display::TV;
 use crate::ppu2c02::{Palette, VRam, PPU2C02};
+use crate::NESKey;
 use std::cell::Cell;
 use std::cell::RefCell;
 use std::io::Read;
@@ -221,21 +222,50 @@ impl CPUIrqProvider for CPUBus {
     }
 }
 
+/// The main `NES` emulator struct, containing all components and what is actually doing the emulation.
+///
+/// # Example
+/// ```no_run
+/// use plastic_core::NES;
+/// # fn display(_: &[u8]) {}
+/// # fn play_audio(_: &[f32]) {}
+///
+/// fn main() {
+///    let mut nes = NES::new("path/to/rom-file.nes").unwrap();
+///    
+///    loop {
+///        nes.clock_for_frame();
+///
+///        let pixel_buffer = nes.pixel_buffer();
+///        display(&pixel_buffer);
+///
+///        let audio_buffer = nes.audio_buffer();
+///        play_audio(&audio_buffer);
+///    }
+/// }
+/// ```
 pub struct NES {
+    /// The cartridge containing the ROM/CHR data
     cartridge: Rc<RefCell<Cartridge>>,
+
+    /// CPU and containing all components through the `CPUBus`.
     cpu: CPU6502<CPUBus>,
 }
 
 impl NES {
+    /// Creates a new NES instance from a given file path.
     pub fn new<P: AsRef<Path>>(filename: P) -> Result<Self, CartridgeError> {
         let cartridge = Cartridge::from_file(filename)?;
-
         Ok(Self::create_nes(cartridge))
     }
 
+    /// Creates a new NES instance without loading a cartridge from a file.
+    ///
+    /// Returns a new NES instance with an empty cartridge.
+    ///
+    /// Do note that running [`NES::clock_for_frame`] or [`NES::clock`] will not do anything if the cartridge is empty.
     pub fn new_without_file() -> Self {
         let cartridge = Cartridge::new_without_file();
-
         Self::create_nes(cartridge)
     }
 
@@ -260,6 +290,7 @@ impl NES {
         Self { cartridge, cpu }
     }
 
+    /// Reset the NES emulator using the same cartridge loaded already.
     pub fn reset(&mut self) {
         self.cpu.reset();
         self.cpu.reset_bus();
@@ -271,6 +302,9 @@ impl NES {
         self.cpu.bus_mut().apu = APU2A03::new();
     }
 
+    /// Run the NES emulator for one video frame, which is equal to `29780` CPU cycles.
+    ///
+    /// This is the main function to run the emulator, call this once, and then render and play audio.
     pub fn clock_for_frame(&mut self) {
         if self.cartridge.borrow().is_empty() {
             return;
@@ -291,6 +325,9 @@ impl NES {
         }
     }
 
+    /// Run the NES emulator for one CPU cycle.
+    ///
+    /// This is useful for debugging and testing purposes.
     pub fn clock(&mut self) -> Option<CPURunState> {
         if self.cartridge.borrow().is_empty() {
             return None;
@@ -310,22 +347,41 @@ impl NES {
     }
 
     /// Return the pixel buffer as RGB format
+    ///
+    /// The size of the buffer will be [`TV_BUFFER_SIZE`][crate::nes_display::TV_BUFFER_SIZE]
     pub fn pixel_buffer(&self) -> &[u8] {
         self.cpu.bus().ppu.tv().display_pixel_buffer()
     }
 
+    /// Take and return the audio buffer as f32 format
+    ///
+    /// **Take** here means that if you call the function again, it will return an empty buffer
+    /// until the emulator runs again.
+    ///
+    /// The emulator keeps accumulating audio samples until this function is called,
+    /// so its better to call this function even if audio isn't needed in order to free up space.
     pub fn audio_buffer(&mut self) -> Vec<f32> {
         self.cpu.bus().apu.take_audio_buffer()
     }
 
+    /// Check if there is no cartridge loaded in the emulator.
     pub fn is_empty(&self) -> bool {
         self.cartridge.borrow().is_empty()
     }
 
-    pub fn controller(&mut self) -> &mut Controller {
-        self.cpu.bus_mut().contoller_mut()
+    /// Set the state of a controller key. `pressed` or `released`.
+    pub fn set_controller_state(&mut self, key: NESKey, pressed: bool) {
+        self.cpu
+            .bus_mut()
+            .contoller_mut()
+            .set_controller_state(key, pressed);
     }
 
+    /// Get the name of the save state file that can be associated with the current cartridge.
+    ///
+    /// This is just a helper function, and the emulator implementation at [`save_state`] doesn't use it.
+    ///
+    /// Just a convenience.
     pub fn save_state_file_name(&self, slot: u8) -> Option<String> {
         if self.cartridge.borrow().is_empty() {
             return None;
@@ -341,6 +397,7 @@ impl NES {
         ))
     }
 
+    /// Save the current state of the emulator to a writer.
     pub fn save_state<W: std::io::Write>(&self, mut writer: W) -> Result<(), SaveError> {
         self.cartridge.borrow().save(&mut writer)?;
         self.cpu.save(&mut writer)?;
@@ -350,6 +407,7 @@ impl NES {
         Ok(())
     }
 
+    /// Load the state of the emulator from a reader.
     pub fn load_state<R: std::io::Read>(&mut self, mut reader: R) -> Result<(), SaveError> {
         self.cartridge.borrow_mut().load(&mut reader)?;
         self.cpu.load(&mut reader)?;
