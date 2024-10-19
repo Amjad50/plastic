@@ -10,6 +10,7 @@ use std::{
 };
 
 mod blargg_tests;
+mod save_state;
 
 pub enum TestError {
     CartridgeError(CartridgeError),
@@ -120,5 +121,9 @@ impl NesTester {
                 break;
             }
         }
+    }
+
+    pub fn clock_for_frame(&mut self) {
+        self.nes.clock_for_frame()
     }
 }
