@@ -5,6 +5,7 @@ mod cartridge;
 mod controller;
 mod cpu6502;
 mod display;
+#[cfg(feature = "frontend_misc")]
 pub mod misc;
 mod ppu2c02;
 

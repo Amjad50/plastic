@@ -11,7 +11,7 @@ keywords = ["nes", "nintendo", "tui", "emulator"]
 categories = ["emulators"]
 
 [dependencies]
-plastic_core = { path = "../plastic_core", version = "0.3.0" }
+plastic_core = { path = "../plastic_core", version = "0.3.0", features = ["frontend_misc"] }
 
 crossterm = "0.28"
 gilrs = "0.11"
