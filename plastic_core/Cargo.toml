@@ -3,8 +3,12 @@ name = "plastic_core"
 version = "0.3.0"
 authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "An accurate NES emulator. The backend emulation for plastic and plastic-tui"
+readme = "../README.md"
+repository = "https://github.com/Amjad50/plastic"
+license = "MIT"
+keywords = ["nes", "nintendo", "emulator"]
+categories = ["emulators"]
 
 [dependencies]
 bitflags = "^1.2.1"

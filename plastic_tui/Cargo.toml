@@ -3,8 +3,12 @@ name = "plastic_tui"
 version = "0.3.0"
 authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "An accurate NES emulator. Front-end terminal interface (TUI) for plastic-core"
+readme = "../README.md"
+repository = "https://github.com/Amjad50/plastic"
+license = "MIT"
+keywords = ["nes", "nintendo", "tui", "emulator"]
+categories = ["emulators"]
 
 [dependencies]
 plastic_core = { path = "../plastic_core", version = "0.3.0" }
@@ -13,3 +17,4 @@ crossterm = "0.28"
 gilrs = "0.11"
 dynwave = "0.1.0"
 ratatui = "0.28.1"
+
