@@ -969,6 +969,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c87e182de0887fd5361989c677c4e8f5000cd9491d6d563161a8f3a5519fc7f"
 
 [[package]]
+name = "derivative"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2580,10 +2591,13 @@ name = "plastic_tui"
 version = "0.3.1"
 dependencies = [
  "crossterm",
+ "directories",
  "dynwave",
  "gilrs",
  "plastic_core",
  "ratatui",
+ "ratatui-explorer",
+ "tui-menu",
 ]
 
 [[package]]
@@ -2745,6 +2759,17 @@ dependencies = [
  "unicode-segmentation",
  "unicode-truncate",
  "unicode-width",
+]
+
+[[package]]
+name = "ratatui-explorer"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bde42516edac6d3f0b92bacc47644adda0d1c6cd0aefc4ac1f4ffb80c094999e"
+dependencies = [
+ "crossterm",
+ "derivative",
+ "ratatui",
 ]
 
 [[package]]
@@ -3318,6 +3343,15 @@ name = "ttf-parser"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5902c5d130972a0000f60860bfbf46f7ca3db5391eddfedd1b8728bd9dc96c0e"
+
+[[package]]
+name = "tui-menu"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6891512c027359f83904cf84fc7071303167e3e9718e454c3bd4d69eae62022"
+dependencies = [
+ "ratatui",
+]
 
 [[package]]
 name = "type-map"
