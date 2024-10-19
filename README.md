@@ -22,7 +22,7 @@
 This is a personal project for fun and to experience emulating hardware and connecting them together.
 
 - [Building and installation](#building-and-installation)
-  - [Pre-built](#pre-built)
+  - [Installing](#installing)
   - [Building](#building)
 - [Components](#components)
 - [Interfaces](#interfaces)
@@ -36,10 +36,12 @@ This is a personal project for fun and to experience emulating hardware and conn
 
 ### Building and installation
 
-#### Pre-built
-There are pre-built binaries in the [releases](https://github.com/Amjad50/plastic/releases/latest) tab,
-Plastic comes in different *UI*s, one which is the most used normal UI built with [egui] and another one which is a terminal UI (`TUI`) built with [ratatui].
-check [Interfaces](#interfaces) for more details.
+#### Installing
+You can install the latest version of [plastic](https://crates.io/crates/plastic) or [plastic_tui](https://crates.io/crates/plastic_tui) using cargo:
+```
+cargo install plastic
+cargo install plastic_tui
+```
 
 #### Building
 If you want to experience the latest development version, you can build `Plastic` yourself.
