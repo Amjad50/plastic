@@ -315,6 +315,8 @@ impl Ui {
             if let Event::Key(input) = event {
                 let modifiers = input.modifiers;
                 let code = input.code;
+                let is_press =
+                    input.kind == KeyEventKind::Press || input.kind == KeyEventKind::Repeat;
                 let possible_button = match code {
                     KeyCode::Char('q') | KeyCode::Char('Q') => return true,
                     KeyCode::Char('C') | KeyCode::Char('c')
@@ -323,7 +325,7 @@ impl Ui {
                         return true
                     }
                     KeyCode::Char('R') | KeyCode::Char('r')
-                        if modifiers.intersects(KeyModifiers::CONTROL) =>
+                        if modifiers.intersects(KeyModifiers::CONTROL) && is_press =>
                     {
                         self.nes.reset();
                         None
@@ -336,11 +338,11 @@ impl Ui {
                     KeyCode::Char('S') | KeyCode::Char('s') => Some(NESKey::Down),
                     KeyCode::Char('A') | KeyCode::Char('a') => Some(NESKey::Left),
                     KeyCode::Char('D') | KeyCode::Char('d') => Some(NESKey::Right),
-                    KeyCode::Char('P') | KeyCode::Char('p') => {
+                    KeyCode::Char('P') | KeyCode::Char('p') if is_press => {
                         self.paused = !self.paused;
                         None
                     }
-                    KeyCode::Enter => {
+                    KeyCode::Enter if is_press => {
                         if self.is_file_explorer_open {
                             let file = self.file_explorer.current();
                             if !file.is_dir() {
@@ -366,43 +368,40 @@ impl Ui {
                         }
                         None
                     }
-                    KeyCode::Esc => {
+                    KeyCode::Esc if is_press => {
                         self.is_file_explorer_open = false;
                         self.reset_menu();
                         None
                     }
-                    KeyCode::Left if !self.is_file_explorer_open => {
+                    KeyCode::Left if !self.is_file_explorer_open && is_press => {
                         self.menu.left();
                         None
                     }
-                    KeyCode::Right if !self.is_file_explorer_open => {
+                    KeyCode::Right if !self.is_file_explorer_open && is_press => {
                         self.menu.right();
                         None
                     }
-                    KeyCode::Up if !self.is_file_explorer_open => {
+                    KeyCode::Up if !self.is_file_explorer_open && is_press => {
                         self.menu.up();
                         None
                     }
-                    KeyCode::Down if !self.is_file_explorer_open => {
+                    KeyCode::Down if !self.is_file_explorer_open && is_press => {
                         self.menu.down();
                         None
                     }
                     _ => None,
                 };
                 if let Some(button) = possible_button {
-                    match input.kind {
-                        KeyEventKind::Press | KeyEventKind::Repeat => {
-                            self.nes.set_controller_state(button, true);
-                            if !has_keyboard_enhancement {
-                                // 20 frames
-                                // TODO: very arbitrary, but it works on some of the games
-                                // tested
-                                self.keyboard_event_counter.insert(button, 20);
-                            }
+                    if is_press {
+                        self.nes.set_controller_state(button, true);
+                        if !has_keyboard_enhancement {
+                            // 20 frames
+                            // TODO: very arbitrary, but it works on some of the games
+                            // tested
+                            self.keyboard_event_counter.insert(button, 20);
                         }
-                        KeyEventKind::Release => {
-                            self.nes.set_controller_state(button, false);
-                        }
+                    } else {
+                        self.nes.set_controller_state(button, false);
                     }
                 }
             }
