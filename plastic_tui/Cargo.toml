@@ -1,6 +1,6 @@
 [package]
 name = "plastic_tui"
-version = "0.3.2"
+version = "0.3.3"
 authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 edition = "2021"
 description = "An accurate NES emulator. Front-end terminal interface (TUI) for plastic-core"
