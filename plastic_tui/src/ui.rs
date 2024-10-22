@@ -161,32 +161,29 @@ impl Ui {
     }
 
     fn save_state(&mut self, slot: u8) {
-        if self.nes.is_empty() {
-            return;
+        if let Some(path) = self.get_save_state_path(slot) {
+            let file = fs::File::create(&path).unwrap();
+            self.nes.save_state(&file).unwrap();
         }
-
-        let base_saved_states_dir = base_save_state_folder().unwrap();
-        let filename = self.nes.save_state_file_name(slot).unwrap();
-        let path = base_saved_states_dir.join(&filename);
-
-        let file = fs::File::create(&path).unwrap();
-
-        self.nes.save_state(&file).unwrap();
     }
 
     fn load_state(&mut self, slot: u8) {
+        if let Some(path) = self.get_save_state_path(slot) {
+            let file = fs::File::open(&path).unwrap();
+            self.nes.load_state(&file).unwrap();
+        }
+    }
+
+    fn get_save_state_path(&self, slot: u8) -> Option<std::path::PathBuf> {
         if self.nes.is_empty() {
-            return;
+            return None;
         }
 
-        let base_saved_states_dir = base_save_state_folder().unwrap();
-        let filename = self.nes.save_state_file_name(slot).unwrap();
-        let path = base_saved_states_dir.join(&filename);
-
-        let file = fs::File::open(&path).unwrap();
-
-        self.nes.load_state(&file).unwrap();
+        let base_saved_states_dir = base_save_state_folder().ok()?;
+        let filename = self.nes.save_state_file_name(slot).ok()?;
+        Some(base_saved_states_dir.join(&filename))
     }
+
 
     fn reset_menu(&mut self) {
         let mut save_state_items = Vec::with_capacity(10);
@@ -542,7 +539,27 @@ impl Ui {
             io::stdout(),
             Show,
             LeaveAlternateScreen,
+                       if let Some(ref mut player) = self.audio_player {
+                let audio_buffer = process_audio(&audio_buffer, 1.0);
+                player.queue(&audio_buffer);
+            }
+
+            if let Some(remaining) = fps.remaining() {
+                thread::sleep(remaining);
+            }
+        }
+
+        disable_raw_mode().unwrap();
+        execute!(
+            io::stdout(),
+            Show,
+            LeaveAlternateScreen,
             PopKeyboardEnhancementFlags,
+        )
+        .unwrap();
+    }
+}
+ PopKeyboardEnhancementFlags,
         )
         .unwrap();
     }
