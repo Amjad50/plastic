@@ -65,9 +65,8 @@ impl Sprite {
 
     /// for 8x8:
     /// use the byte normally as index into the pattern table
-
+    ///
     /// for 8x16:
-
     /// 76543210
     /// ||||||||
     /// |||||||+- Bank ($0000 or $1000) of tiles
