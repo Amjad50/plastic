@@ -43,6 +43,13 @@ cargo install plastic
 cargo install plastic_tui
 ```
 
+If you are using Arch Linux, `plastic` is available in the [official repositories](https://archlinux.org/packages/extra/x86_64/plastic/):
+
+```
+pacman -S plastic
+pacman -S plastic_tui
+```
+
 #### Building
 If you want to experience the latest development version, you can build `Plastic` yourself.
 For example:
