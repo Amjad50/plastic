@@ -161,31 +161,28 @@ impl Ui {
     }
 
     fn save_state(&mut self, slot: u8) {
-        if self.nes.is_empty() {
-            return;
+        if let Some(path) = self.get_save_state_path(slot) {
+            let file = fs::File::create(&path).unwrap();
+            self.nes.save_state(&file).unwrap();
         }
-
-        let base_saved_states_dir = base_save_state_folder().unwrap();
-        let filename = self.nes.save_state_file_name(slot).unwrap();
-        let path = base_saved_states_dir.join(&filename);
-
-        let file = fs::File::create(&path).unwrap();
-
-        self.nes.save_state(&file).unwrap();
     }
 
     fn load_state(&mut self, slot: u8) {
+        if let Some(path) = self.get_save_state_path(slot) {
+            let file = fs::File::open(&path).unwrap();
+            self.nes.load_state(&file).unwrap();
+        }
+    }
+
+    fn get_save_state_path(&self, slot: u8) -> Option<std::path::PathBuf> {
         if self.nes.is_empty() {
-            return;
+            return None;
         }
 
-        let base_saved_states_dir = base_save_state_folder().unwrap();
-        let filename = self.nes.save_state_file_name(slot).unwrap();
-        let path = base_saved_states_dir.join(&filename);
+        let base_saved_states_dir = base_save_state_folder()?;
+        let filename = self.nes.save_state_file_name(slot)?;
 
-        let file = fs::File::open(&path).unwrap();
-
-        self.nes.load_state(&file).unwrap();
+        Some(base_saved_states_dir.join(filename))
     }
 
     fn reset_menu(&mut self) {
@@ -536,7 +533,6 @@ impl Ui {
                 thread::sleep(remaining);
             }
         }
-
         disable_raw_mode().unwrap();
         execute!(
             io::stdout(),
