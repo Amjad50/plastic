@@ -534,5 +534,13 @@ impl Ui {
                 thread::sleep(remaining);
             }
         }
+        disable_raw_mode().unwrap();
+            execute!(
+                io::stdout(),
+                Show,
+                LeaveAlternateScreen,
+                PopKeyboardEnhancementFlags,
+            )
+        .unwrap();
     }
 }
