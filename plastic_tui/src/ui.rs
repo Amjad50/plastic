@@ -533,34 +533,5 @@ impl Ui {
                 thread::sleep(remaining);
             }
         }
-
-        disable_raw_mode().unwrap();
-        execute!(
-            io::stdout(),
-            Show,
-            LeaveAlternateScreen,
-                       if let Some(ref mut player) = self.audio_player {
-                let audio_buffer = process_audio(&audio_buffer, 1.0);
-                player.queue(&audio_buffer);
-            }
-
-            if let Some(remaining) = fps.remaining() {
-                thread::sleep(remaining);
-            }
-        }
-
-        disable_raw_mode().unwrap();
-        execute!(
-            io::stdout(),
-            Show,
-            LeaveAlternateScreen,
-            PopKeyboardEnhancementFlags,
-        )
-        .unwrap();
-    }
-}
- PopKeyboardEnhancementFlags,
-        )
-        .unwrap();
     }
 }
