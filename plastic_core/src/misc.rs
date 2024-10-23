@@ -8,6 +8,12 @@ pub struct MovingAverage {
     sum: f64,
 }
 
+impl Default for MovingAverage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MovingAverage {
     pub fn new() -> Self {
         Self {

@@ -65,10 +65,6 @@ pub struct Mapper10 {
     ///         +- Nametable mirroring (0: vertical; 1: horizontal)
     mirroring_vertical: bool,
 
-    /// ($C000-$DFFE, even)
-    /// the value to reload `irq_counter` when it reaches zero or when asked
-    /// to be reloaded from `($C001-$DFFF, odd)`
-
     /// is using CHR RAM?
     is_chr_ram: bool,
 

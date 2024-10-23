@@ -1443,7 +1443,7 @@ struct WrapperReader<'a, R: Read> {
     pub inner: &'a mut R,
 }
 
-impl<'a, R: Read> Read for WrapperReader<'a, R> {
+impl<R: Read> Read for WrapperReader<'_, R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.inner.read(buf)
     }
