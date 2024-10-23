@@ -179,9 +179,10 @@ impl Ui {
             return None;
         }
 
-    let base_saved_states_dir = base_save_state_folder()?;
-    let filename = self.nes.save_state_file_name(slot)?;
-    Some(base_saved_states_dir.join(filename))
+        let base_saved_states_dir = base_save_state_folder()?;
+        let filename = self.nes.save_state_file_name(slot)?;
+        
+        Some(base_saved_states_dir.join(filename))
 }
 
 
@@ -535,12 +536,12 @@ impl Ui {
             }
         }
         disable_raw_mode().unwrap();
-            execute!(
-                io::stdout(),
-                Show,
-                LeaveAlternateScreen,
-                PopKeyboardEnhancementFlags,
-            )
+        execute!(
+            io::stdout(),
+            Show,
+            LeaveAlternateScreen,
+            PopKeyboardEnhancementFlags,
+        )
         .unwrap();
     }
 }
