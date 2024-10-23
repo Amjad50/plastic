@@ -93,7 +93,7 @@ Simple ui built with [egui]
 1. Very simple and easy to use immediate mode UI.
 
 #### TUI
-[![TUI demo](https://img.youtube.com/vi/3wKILnY0AHU/0.jpg)](https://www.youtube.com/watch?v=3wKILnY0AHU)
+[![TUI demo](images/tui.gif)](https://www.youtube.com/watch?v=3wKILnY0AHU)
 
 This is just for fun, but it is actually working way better than
 I expected. Check the [demo](https://www.youtube.com/watch?v=3wKILnY0AHU).
