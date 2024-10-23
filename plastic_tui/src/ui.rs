@@ -175,9 +175,9 @@ impl Ui {
     }
 
     fn get_save_state_path(&self, slot: u8) -> Option<std::path::PathBuf> {
-    if self.nes.is_empty() {
-        return None;
-    }
+        if self.nes.is_empty() {
+            return None;
+        }
 
     let base_saved_states_dir = base_save_state_folder()?;
     let filename = self.nes.save_state_file_name(slot)?;
