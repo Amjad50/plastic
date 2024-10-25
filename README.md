@@ -41,9 +41,9 @@ This is a personal project for fun and to experience emulating hardware and conn
 
 For linux, this project depends on `alsa` and `libudev`, you can install them using:
 ```sh
-# ubuntu/debian
+# Debian/Ubuntu
 sudo apt install libasound2-dev libudev-dev
-# arch
+# Arch
 sudo pacman -S alsa-lib systemd-libs
 ```
 
