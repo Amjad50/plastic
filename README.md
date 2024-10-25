@@ -22,6 +22,7 @@
 This is a personal project for fun and to experience emulating hardware and connecting them together.
 
 - [Building and installation](#building-and-installation)
+  - [Dependencies](#dependencies)
   - [Installing](#installing)
   - [Building](#building)
 - [Components](#components)
@@ -35,6 +36,16 @@ This is a personal project for fun and to experience emulating hardware and conn
 - [References](#references)
 
 ### Building and installation
+
+#### Dependencies
+
+For linux, this project depends on `alsa` and `libudev`, you can install them using:
+```sh
+# ubuntu/debian
+sudo apt install libasound2-dev libudev-dev
+# arch
+sudo pacman -S alsa-lib systemd-libs
+```
 
 #### Installing
 You can install the latest version of [plastic](https://crates.io/crates/plastic) or [plastic_tui](https://crates.io/crates/plastic_tui) using cargo:
