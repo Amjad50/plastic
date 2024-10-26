@@ -1,0 +1,9 @@
+Package: plastic
+Version: 0.3.1
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: libasound2-dev, libudev-dev
+Maintainer: Hadi Chokr <hadichokr@icloud.com>
+Description: A NES emulator with GUI and TUI
+
