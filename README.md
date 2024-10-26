@@ -54,6 +54,7 @@ cargo install plastic
 cargo install plastic_tui
 ```
 
+
 Installation for Debian, Ubuntu, and Other Debian-Based Distributions
 
 Downloading and Installing the .deb Package
@@ -62,13 +63,18 @@ To install plastic from the .deb package:
 
 1. Download the .deb package:
 
+```
  curl -L -o plastic.deb https://github.com/silverhadch/plastic-debian-build/raw/master/plastic.deb
+```
 
 2. Install the package using dpkg:
 
+```
 sudo dpkg -i plastic.deb
+```
 
 This will install plastic along with any required dependencies on Debian-based systems.
+
 
 
 If you are using Arch Linux, `plastic` is available in the [official repositories](https://archlinux.org/packages/extra/x86_64/plastic/):
