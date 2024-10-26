@@ -55,7 +55,7 @@ cargo install plastic_tui
 ```
 
 
-
+<br>
 Installation for Debian, Ubuntu, and Other Debian-Based Distributions
 
 Downloading and Installing the .deb Package
@@ -75,7 +75,7 @@ sudo dpkg -i plastic.deb
 ```
 
 This will install plastic along with any required dependencies on Debian-based systems.
-
+<br>
 
 
 
