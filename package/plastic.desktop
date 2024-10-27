@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Plastic - NES
+Comment=Plastic - NES Emulator
+Icon=/usr/share/icons/plastic-icon.png
+Exec=/usr/bin/plastic
+Terminal=false
+Categories=Game;
+
