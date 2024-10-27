@@ -1,0 +1,11 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Version=1.1
+Type=Application
+Name=Plastic - NES
+Comment=Plastic - NES Emulator
+# Icon path (for the icon in images/icon.png)
+Icon=/usr/share/icons/plastic-icon.png
+# Executable path for Plastic GUI
+Exec=/usr/bin/plastic
+Categories=Game;
