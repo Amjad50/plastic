@@ -2,37 +2,37 @@ PLASTIC(1)      General Commands Manual      PLASTIC(1)
 
 NAME
 
-    plastic - NES emulator with both graphical (GUI) and terminal (TUI) interfaces.
+    plastic - NES emulator with graphical (GUI) and terminal (TUI) interfaces.
 
 SYNOPSIS
 
-    plastic 
+    plastic [rom-file]
     plastic_tui [rom-file] [-a]
 
 DESCRIPTION
 
-    plastic is a NES emulator written in Rust, designed to run NES games through two different interfaces: a graphical (GUI) interface and a terminal-based (TUI) interface.
+    plastic is an NES emulator written in Rust, designed to run NES games with both a graphical (GUI) and a terminal-based (TUI) interface.
 
-    The graphical interface (plastic) does not require any arguments and launches the emulator with a simple, user-friendly graphical interface.
+    The graphical interface (plastic) can be launched without any arguments (though it can be started from the terminal with a ROM file) and provides a user-friendly graphical experience.
 
-    The terminal-based interface (plastic_tui) allows users to run the emulator in the terminal with optional flags.
+    The terminal-based interface (plastic_tui) allows users to run the emulator in the terminal with optional flags for additional control.
 
-    Saved states are stored in the following path: 
+    Saved states are stored at the following path:
     ~/.local/share/plastic/saved_states
 
 OPTIONS
 
     plastic
-        Launches the graphical interface of the emulator. This mode does not take any arguments.
+        Launches the emulator with the graphical interface. This mode does not require arguments but can accept them if needed.
 
     plastic_tui [rom-file] [-a]
-        Launches the terminal-based interface. The following options are supported:
+        Launches the emulator with the terminal-based interface. The following options are available:
         - rom-file: Specifies the NES ROM file to load.
-        - -a: Disables audio output while running the emulator in TUI mode.
+        - -a: Disables audio output while running in TUI mode.
 
 INSTALLATION
 
-    The latest version of plastic and plastic_tui can be installed using Cargo:
+    The latest versions of plastic and plastic_tui can be installed using Cargo:
 
         cargo install plastic
         cargo install plastic_tui
@@ -69,6 +69,8 @@ EXAMPLES
     Run plastic with the GUI interface:
 
         plastic
+
+        plastic path/to/rom.nes
 
     Run plastic_tui with a specific ROM file:
 
