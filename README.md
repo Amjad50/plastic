@@ -49,14 +49,20 @@ sudo pacman -S alsa-lib systemd-libs
 
 #### Installing
 You can install the latest version of [plastic](https://crates.io/crates/plastic) or [plastic_tui](https://crates.io/crates/plastic_tui) using cargo:
-```
+```sh
 cargo install plastic
 cargo install plastic_tui
 ```
 
+If you are using Debian/Ubuntu, you can directly install the `.deb` package from [here](https://nightly.link/Amjad50/plastic/workflows/rust/master/plastic.deb.zip)
+```sh
+unzip plastic.deb.zip
+sudo dpkg -i plastic_*.deb # will have the version in the name
+```
+
 If you are using Arch Linux, `plastic` is available in the [official repositories](https://archlinux.org/packages/extra/x86_64/plastic/):
 
-```
+```sh
 pacman -S plastic
 pacman -S plastic_tui
 ```
