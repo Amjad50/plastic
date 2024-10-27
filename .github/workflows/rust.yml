@@ -28,6 +28,11 @@ jobs:
     - name: Install cargo-llvm-cov
       uses: taiki-e/install-action@cargo-llvm-cov
 
+    - uses: cargo-bins/cargo-binstall@main
+
+    - name: Install cargo-deb
+      run: cargo binstall cargo-deb -y
+
     - name: Use sccache-cache
       uses: mozilla-actions/sccache-action@v0.0.6
 
@@ -62,6 +67,32 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: lcov.info
         fail_ci_if_error: true
+
+    - name: Create Debian package
+      run: cargo deb
+      env:
+        SCCACHE_GHA_ENABLED: "true"
+        RUSTC_WRAPPER: "sccache"
+
+    - name: Upload debian package artifact
+      if: github.ref == 'refs/heads/master'
+      uses: actions/upload-artifact@v4
+      with:
+        name: plastic.deb
+        path: target/debian/*.deb
+        overwrite: true
+
+    - name: Release
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        name: Release ${{ github.ref_name }}
+        body: |
+          Release ${{ github.ref_name }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+        files: |
+          target/debian/*.deb
+          LICENSE
 
   windows:
     runs-on: windows-latest

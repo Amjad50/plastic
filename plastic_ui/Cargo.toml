@@ -3,7 +3,7 @@ name = "plastic"
 version = "0.3.1"
 authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 edition = "2021"
-description = "An accurate NES emulator. Front-end for plastic-core"
+description = "A NES emulator with GUI and TUI"
 readme = "../README.md"
 repository = "https://github.com/Amjad50/plastic"
 license = "MIT"
@@ -19,4 +19,23 @@ directories = "5.0"
 eframe = "0.29"
 rfd = "0.15"
 dynwave = "0.1"
+
+[package.metadata.deb]
+name = "plastic"
+maintainer = "Plastic Maintainers <Amjad Alsharafi <amjadsharafi@gmail.com>, Hadi Chokr <hadichokr@icloud.com>>"
+extended-description = "" # to block usage of README.md
+license-file = ["LICENSE", "0"]
+depends = ["libasound2-dev", "libudev-dev"]
+copyright = "2020, Amjad Alsharafi <amjadsharafi10@gmail.com>"
+priority = "optional"
+section = "games"
+assets = [
+    ["target/release/plastic", "usr/bin/", "755"],
+    ["target/release/plastic_tui", "usr/bin/", "755"],
+    ["../LICENSE", "usr/share/licenses/plastic/", "644"],
+    ["../README.md", "usr/share/doc/plastic/", "644"],
+    ["../docs/man/plastic.1", "usr/share/man/man1/", "644"],
+    ["../package/plastic.desktop", "usr/share/applications/", "644"],
+    ["../images/icon.png", "usr/share/icons/plastic-icon.png", "644"],
+]
 
