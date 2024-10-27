@@ -1,0 +1,91 @@
+PLASTIC(1)      General Commands Manual      PLASTIC(1)
+
+NAME
+
+    plastic - NES emulator with graphical (GUI) and terminal (TUI) interfaces.
+
+SYNOPSIS
+
+    plastic [rom-file]
+    plastic_tui [rom-file] [-a]
+
+DESCRIPTION
+
+    plastic is an NES emulator written in Rust, designed to run NES games with both a graphical (GUI) and a terminal-based (TUI) interface.
+
+    The graphical interface (plastic) can be launched without any arguments (though it can be started from the terminal with a ROM file) and provides a user-friendly graphical experience.
+
+    The terminal-based interface (plastic_tui) allows users to run the emulator in the terminal with optional flags for additional control.
+
+    Saved states are stored at the following path:
+    ~/.local/share/plastic/saved_states
+
+OPTIONS
+
+    plastic [rom-file] 
+        Launches the emulator with the graphical interface. While arguments are optional, specifying a ROM file as an argument is recommended for immediate gameplay.
+
+
+    plastic_tui [rom-file] [-a]
+        Launches the emulator with the terminal-based interface. The following options are available:
+        - rom-file: Specifies the NES ROM file to load.
+        - -a: Disables audio output while running in TUI mode.
+
+INSTALLATION
+
+    The latest versions of plastic and plastic_tui can be installed using Cargo:
+
+        cargo install plastic
+        cargo install plastic_tui
+
+KEYBOARD CONTROLS
+
+    Key         NES Button
+    ----------- --------------
+    J           B
+    K           A
+    U           Select
+    I           Start
+    W           Up
+    S           Down
+    A           Left
+    D           Right
+    CTRL-R      Reset
+
+GAMEPAD CONTROLS (PS4)
+
+    Gamepad Button  NES Button
+    --------------  --------------
+    X               B
+    O               A
+    Select          Select
+    Start           Start
+    D-pad Up        Up
+    D-pad Down      Down
+    D-pad Left      Left
+    D-pad Right     Right
+
+EXAMPLES
+
+    Run plastic with the GUI interface:
+
+        plastic
+
+        plastic path/to/rom.nes
+
+    Run plastic_tui with a specific ROM file:
+
+        plastic_tui path/to/rom.nes
+
+    Run plastic_tui without audio:
+
+        plastic_tui path/to/rom.nes -a
+
+LICENSE
+
+    This project is licensed under the MIT License.
+
+CREDITS
+
+    plastic emulator is a project by Amjad Alsharafi.
+    This man page was written by Hadi Chokr.
