@@ -455,7 +455,6 @@ impl Ui {
             return;
         }
         
-
         while let Some(GilrsEvent { id, event, .. }) = self.gilrs.as_mut().unwrap().next_event() {
             self.active_gamepad = Some(id);
             if event == EventType::Disconnected {
@@ -463,7 +462,10 @@ impl Ui {
             }
         }
 
-        if let Some(gamepad) = self.active_gamepad.map(|id| self.gilrs.as_mut().unwrap().gamepad(id)) {
+        if let Some(gamepad) = self
+            .active_gamepad
+            .map(|id| self.gilrs.as_mut().unwrap().gamepad(id))
+        {
             for (controller_button, nes_button) in &[
                 (Button::South, NESKey::B),
                 (Button::East, NESKey::A),
