@@ -91,7 +91,7 @@ pub struct Ui {
 
     menu: MenuState<MenuEvent>,
     audio_player: Option<AudioPlayer<f32>>,
-    gilrs: Gilrs,
+    gilrs: Option<Gilrs>,
     active_gamepad: Option<gilrs::GamepadId>,
 
     /// For terminals without support for `Release` key event, we keep the button pressed for some
@@ -134,7 +134,7 @@ impl Ui {
             } else {
                 None
             },
-            gilrs: Gilrs::new().unwrap(),
+            gilrs: Gilrs::new().ok(),
             keyboard_event_counter: HashMap::new(),
             active_gamepad: None,
         }
@@ -451,14 +451,18 @@ impl Ui {
 
     fn handle_gamepad(&mut self) {
         // set events in the cache and check if gamepad is still active
-        while let Some(GilrsEvent { id, event, .. }) = self.gilrs.next_event() {
+        let Some(gilrs_obj) = self.gilrs.as_mut() else {
+            return;
+        };
+
+        while let Some(GilrsEvent { id, event, .. }) = gilrs_obj.next_event() {
             self.active_gamepad = Some(id);
             if event == EventType::Disconnected {
                 self.active_gamepad = None;
             }
         }
 
-        if let Some(gamepad) = self.active_gamepad.map(|id| self.gilrs.gamepad(id)) {
+        if let Some(gamepad) = self.active_gamepad.map(|id| gilrs_obj.gamepad(id)) {
             for (controller_button, nes_button) in &[
                 (Button::South, NESKey::B),
                 (Button::East, NESKey::A),
