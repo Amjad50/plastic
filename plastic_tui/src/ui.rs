@@ -451,21 +451,18 @@ impl Ui {
 
     fn handle_gamepad(&mut self) {
         // set events in the cache and check if gamepad is still active
-        if self.gilrs.is_none() {
+        let Some(gilrs_obj) = self.gilrs.as_mut() else {
             return;
-        }
+        };
 
-        while let Some(GilrsEvent { id, event, .. }) = self.gilrs.as_mut().unwrap().next_event() {
+        while let Some(GilrsEvent { id, event, .. }) = gilrs_obj.next_event() {
             self.active_gamepad = Some(id);
             if event == EventType::Disconnected {
                 self.active_gamepad = None;
             }
         }
 
-        if let Some(gamepad) = self
-            .active_gamepad
-            .map(|id| self.gilrs.as_mut().unwrap().gamepad(id))
-        {
+        if let Some(gamepad) = self.active_gamepad.map(|id| gilrs_obj.gamepad(id)) {
             for (controller_button, nes_button) in &[
                 (Button::South, NESKey::B),
                 (Button::East, NESKey::A),
