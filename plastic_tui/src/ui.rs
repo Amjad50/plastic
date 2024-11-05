@@ -454,7 +454,7 @@ impl Ui {
         if self.gilrs.is_none() {
             return;
         }
-        
+
         while let Some(GilrsEvent { id, event, .. }) = self.gilrs.as_mut().unwrap().next_event() {
             self.active_gamepad = Some(id);
             if event == EventType::Disconnected {
