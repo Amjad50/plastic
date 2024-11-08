@@ -92,7 +92,7 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         files: |
           LICENSE
-          package/plastic.dekstop
+          package/plastic.desktop
           target/debian/*.deb
 
   windows:
