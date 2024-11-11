@@ -92,6 +92,7 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         files: |
           LICENSE
+          docs/man/plastic.1
           package/plastic.desktop
           target/debian/*.deb
 
