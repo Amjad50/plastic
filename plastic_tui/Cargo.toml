@@ -1,6 +1,6 @@
 [package]
 name = "plastic_tui"
-version = "0.3.3"
+version = "0.3.4"
 authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 edition = "2021"
 description = "A NES emulator with terminal interface (TUI)"
@@ -15,8 +15,8 @@ plastic_core = { path = "../plastic_core", version = "0.3", features = ["fronten
 
 crossterm = "0.28"
 gilrs = "0.11"
-dynwave = "0.1.0"
-ratatui = "0.28.1"
+dynwave = "0.2"
+ratatui = "0.28"
 tui-menu = "0.2.4"
 directories = "5.0"
 ratatui-explorer = "0.1.2"

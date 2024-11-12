@@ -1,6 +1,6 @@
 [package]
 name = "plastic"
-version = "0.3.1"
+version = "0.3.4"
 authors = ["Amjad Alsharafi <amjadsharafi10@gmail.com>"]
 edition = "2021"
 description = "A NES emulator with GUI and TUI"
@@ -18,7 +18,7 @@ egui-winit = "0.29"
 directories = "5.0"
 eframe = "0.29"
 rfd = "0.15"
-dynwave = "0.1"
+dynwave = "0.2"
 
 [package.metadata.deb]
 name = "plastic"
