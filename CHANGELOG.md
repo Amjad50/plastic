@@ -6,10 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed `TUI under 0.3.3`
-- Some bugs with keyboard controls on some terminals
+### Added
+- Debian package for `plastic`.
+- `.desktop` file and `man` page for `plastic`.
+- More checks in CI.
+- Gamepad support for the Egui UI.
 
-### Added `TUI under 0.3.2`
+### Changed
+- Updated dependancies to latest versions.
+
+### Fixed
+- Some machines having issues with initializing audio (https://github.com/Amjad50/dynwave/issues/2).
+#### TUI
+- Some bugs with keyboard controls on some terminals.
 - Menu bar similar to the [EGui] UI to select files and save/load state, etc...
 - File explorer in the terminal to open files and select games
 
