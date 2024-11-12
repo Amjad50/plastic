@@ -2,6 +2,7 @@ use std::{fs, path::PathBuf};
 
 use directories::ProjectDirs;
 use dynwave::AudioPlayer;
+use gilrs::{Button, Event as GilrsEvent, EventType, Gilrs};
 use plastic_core::{
     misc::{process_audio, Fps},
     nes_audio::SAMPLE_RATE,
@@ -42,7 +43,9 @@ const CLOSE_SHORTCUT: egui::KeyboardShortcut =
 struct App {
     fps: Fps,
     nes: NES,
-    audio_player: AudioPlayer<f32>,
+    audio_player: Option<AudioPlayer<f32>>,
+    gilrs: Option<Gilrs>,
+    active_gamepad: Option<gilrs::GamepadId>,
     image_texture: egui::TextureHandle,
     paused: bool,
 }
@@ -52,8 +55,9 @@ impl App {
         Self {
             fps: Fps::new(TARGET_FPS),
             nes,
-            audio_player: AudioPlayer::new(SAMPLE_RATE, dynwave::BufferSize::QuarterSecond)
-                .unwrap(),
+            audio_player: AudioPlayer::new(SAMPLE_RATE, dynwave::BufferSize::QuarterSecond).ok(),
+            gilrs: Gilrs::new().ok(),
+            active_gamepad: None,
             paused: false,
             image_texture: ctx.load_texture(
                 "nes-image",
@@ -113,6 +117,38 @@ impl App {
         Some(base_saved_states_dir.join(filename))
     }
 
+    fn handle_gamepad(&mut self) {
+        let Some(gilrs_obj) = self.gilrs.as_mut() else {
+            return;
+        };
+
+        while let Some(GilrsEvent { id, event, .. }) = gilrs_obj.next_event() {
+            self.active_gamepad = Some(id);
+            if event == EventType::Disconnected {
+                self.active_gamepad = None;
+            }
+        }
+
+        if let Some(gamepad) = self.active_gamepad.map(|id| gilrs_obj.gamepad(id)) {
+            for (controller_button, nes_button) in &[
+                (Button::South, NESKey::B),
+                (Button::East, NESKey::A),
+                (Button::Select, NESKey::Select),
+                (Button::Start, NESKey::Start),
+                (Button::DPadUp, NESKey::Up),
+                (Button::DPadDown, NESKey::Down),
+                (Button::DPadRight, NESKey::Right),
+                (Button::DPadLeft, NESKey::Left),
+            ] {
+                if gamepad.is_pressed(*controller_button) {
+                    self.nes.set_controller_state(*nes_button, true);
+                } else {
+                    self.nes.set_controller_state(*nes_button, false);
+                }
+            }
+        }
+    }
+
     fn handle_input(&mut self, ctx: &egui::Context) {
         ctx.input_mut(|i| {
             if !i.raw.dropped_files.is_empty() {
@@ -170,6 +206,8 @@ impl App {
                     .set_controller_state(NESKey::Right, i.key_down(egui::Key::D));
             }
         });
+
+        self.handle_gamepad();
     }
 
     fn update_title(&mut self, ctx: &egui::Context) {
@@ -304,14 +342,16 @@ impl eframe::App for App {
             if self.fps.start_frame() {
                 self.nes.clock_for_frame();
                 let audio_buffer = self.nes.audio_buffer();
-                self.audio_player.queue(&process_audio(
-                    &audio_buffer,
-                    (TARGET_FPS / self.fps.target_fps) as f32,
-                ));
+                if let Some(audio_player) = &mut self.audio_player {
+                    audio_player.queue(&process_audio(
+                        &audio_buffer,
+                        (TARGET_FPS / self.fps.target_fps) as f32,
+                    ));
+                    audio_player.play().unwrap();
+                }
             }
-            self.audio_player.play().unwrap();
-        } else {
-            self.audio_player.pause().unwrap();
+        } else if let Some(audio_player) = &mut self.audio_player {
+            audio_player.pause().unwrap();
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
