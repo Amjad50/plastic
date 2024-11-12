@@ -132,6 +132,8 @@ is advised to use gamepad. Also since this uses one character for
 each pixel, it is advised to use the smallest font size your
 terminal emulator supports. Have fun.
 
+The gamepad support is for both UIs.
+
 ### Controls
 In all the UI providers I followed the same controlling scheme,
 as well as the ability to reset through `<CTRL-R>`:

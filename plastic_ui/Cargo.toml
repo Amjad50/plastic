@@ -19,6 +19,7 @@ directories = "5.0"
 eframe = "0.29"
 rfd = "0.15"
 dynwave = "0.2"
+gilrs = "0.11"
 
 [package.metadata.deb]
 name = "plastic"
