@@ -361,7 +361,7 @@ impl NES {
     /// The emulator keeps accumulating audio samples until this function is called,
     /// so its better to call this function even if audio isn't needed in order to free up space.
     pub fn audio_buffer(&mut self) -> Vec<f32> {
-        self.cpu.bus().apu.take_audio_buffer()
+        self.cpu.bus_mut().apu.take_audio_buffer()
     }
 
     /// Check if there is no cartridge loaded in the emulator.

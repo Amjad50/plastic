@@ -16,7 +16,6 @@ use envelope::EnvelopedChannel;
 use length_counter::LengthCountedChannel;
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
-use std::sync::{Arc, Mutex};
 use tone_source::{APUChannel, BufferedChannel, TimedAPUChannel};
 
 // for performance
@@ -28,33 +27,6 @@ pub const SAMPLE_RATE: u32 = 44100;
 // APU, is clocked on every CPU clock
 const SAMPLES_EVERY_N_APU_CLOCK: f64 = CPU_FREQ / (SAMPLE_RATE as f64);
 
-mod buffered_channel_serde {
-    use super::BufferedChannel;
-    use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
-    use std::sync::{Arc, Mutex};
-
-    pub fn serialize<S>(
-        value: &Arc<Mutex<BufferedChannel>>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        if let Ok(value) = value.lock() {
-            value.serialize(serializer)
-        } else {
-            Err(S::Error::custom(""))
-        }
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Arc<Mutex<BufferedChannel>>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        BufferedChannel::deserialize(deserializer).map(|channel| Arc::new(Mutex::new(channel)))
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct APU2A03 {
     square_pulse_1: LengthCountedChannel<SquarePulse>,
@@ -63,8 +35,7 @@ pub struct APU2A03 {
     noise: LengthCountedChannel<NoiseWave>,
     dmc: Dmc,
 
-    #[serde(with = "buffered_channel_serde")]
-    buffered_channel: Arc<Mutex<BufferedChannel>>,
+    buffered_channel: BufferedChannel,
 
     is_4_step_squence_mode_hold_value: bool,
     is_4_step_squence_mode: bool,
@@ -84,7 +55,7 @@ pub struct APU2A03 {
 
 impl APU2A03 {
     pub fn new() -> Self {
-        let buffered_channel = Arc::new(Mutex::new(BufferedChannel::new()));
+        let buffered_channel = BufferedChannel::new();
 
         Self {
             square_pulse_1: LengthCountedChannel::new(SquarePulse::new(true)),
@@ -96,7 +67,7 @@ impl APU2A03 {
 
             dmc: Dmc::new(),
 
-            buffered_channel: buffered_channel.clone(),
+            buffered_channel,
 
             is_4_step_squence_mode_hold_value: false,
             is_4_step_squence_mode: false,
@@ -461,21 +432,19 @@ impl APU2A03 {
         if self.sample_counter >= samples_every_n_apu_clock {
             let output = self.get_mixer_output();
 
-            if let Ok(mut buffered_channel) = self.buffered_channel.lock() {
-                buffered_channel.recored_sample(output);
+            self.buffered_channel.recored_sample(output);
 
-                // check for needed change in offset
-                let change = if buffered_channel.get_is_overusing() {
-                    -0.001
-                } else if buffered_channel.get_is_underusing() {
-                    0.001
-                } else {
-                    0.
-                };
+            // check for needed change in offset
+            let change = if self.buffered_channel.get_is_overusing() {
+                -0.001
+            } else if self.buffered_channel.get_is_underusing() {
+                0.001
+            } else {
+                0.
+            };
 
-                self.offset += change;
-                buffered_channel.clear_using_flags();
-            }
+            self.offset += change;
+            self.buffered_channel.clear_using_flags();
 
             self.sample_counter -= samples_every_n_apu_clock;
         }
@@ -531,8 +500,8 @@ impl APU2A03 {
         }
     }
 
-    pub fn take_audio_buffer(&self) -> Vec<f32> {
-        self.buffered_channel.lock().unwrap().take_buffer()
+    pub fn take_audio_buffer(&mut self) -> Vec<f32> {
+        self.buffered_channel.take_buffer()
     }
 }
 
