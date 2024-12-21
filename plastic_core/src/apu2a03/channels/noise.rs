@@ -1,5 +1,5 @@
+use super::super::channel::{APUChannel, TimedAPUChannel};
 use super::super::envelope::{EnvelopeGenerator, EnvelopedChannel};
-use super::super::tone_source::{APUChannel, TimedAPUChannel};
 use serde::{Deserialize, Serialize};
 
 /// Table for NTSC only

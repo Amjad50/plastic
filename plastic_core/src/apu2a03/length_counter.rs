@@ -1,5 +1,5 @@
+use super::channel::{APUChannel, TimedAPUChannel};
 use super::envelope::{EnvelopeGenerator, EnvelopedChannel};
-use super::tone_source::{APUChannel, TimedAPUChannel};
 use serde::{Deserialize, Serialize};
 
 const LEGNTH_COUNTER_TABLE: [u8; 0x20] = [
@@ -67,6 +67,7 @@ impl LengthCounter {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(bound = "C: APUChannel")]
 pub struct LengthCountedChannel<C>
 where
     C: APUChannel,

@@ -1,4 +1,4 @@
-use super::super::tone_source::{APUChannel, TimedAPUChannel};
+use super::super::channel::{APUChannel, TimedAPUChannel};
 use serde::{Deserialize, Serialize};
 
 const DMC_PERIOD_RATES_NTSC: [u16; 0x10] = [
