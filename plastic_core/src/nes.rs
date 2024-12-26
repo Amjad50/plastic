@@ -250,6 +250,8 @@ pub struct NES {
 
     /// CPU and containing all components through the `CPUBus`.
     cpu: CPU6502<CPUBus>,
+
+    frame_counter: f32,
 }
 
 impl NES {
@@ -287,7 +289,11 @@ impl NES {
 
         cpu.reset();
 
-        Self { cartridge, cpu }
+        Self {
+            cartridge,
+            cpu,
+            frame_counter: 0.,
+        }
     }
 
     /// Reset the NES emulator using the same cartridge loaded already.
@@ -310,12 +316,14 @@ impl NES {
             return;
         }
 
-        const N: usize = 29780; // number of CPU cycles per loop, one full frame
+        const CPU_CYCLES_PER_FRAME: f32 = 29780.5; // number of CPU cycles per loop, one full frame
 
-        for _ in 0..N {
-            self.cpu.bus_mut().apu.clock();
+        self.frame_counter += CPU_CYCLES_PER_FRAME;
 
+        while self.frame_counter >= 0. {
+            self.frame_counter -= 1.;
             self.cpu.run_next();
+            self.cpu.bus_mut().apu.clock();
             {
                 let ppu = &mut self.cpu.bus_mut().ppu;
                 ppu.clock();
