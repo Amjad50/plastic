@@ -11,7 +11,7 @@ use crate::common::{
     CPU_FREQ,
 };
 use apu2a03_registers::Register;
-use channel::{APUChannel, BufferedChannel, Dac, TimedAPUChannel};
+use channel::{BufferedChannel, Dac, TimedAPUChannel};
 use channels::{Dmc, NoiseWave, SquarePulse, TriangleWave};
 use envelope::EnvelopedChannel;
 use length_counter::LengthCountedChannel;
@@ -485,6 +485,7 @@ impl APU2A03 {
         }
     }
 
+    /// Take and return the audio buffer as f32 format stereo (2 channels)
     pub fn take_audio_buffer(&mut self) -> Vec<f32> {
         self.buffered_channel.take_buffer()
     }

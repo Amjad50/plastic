@@ -92,7 +92,7 @@ impl Fps {
 /// `speed_modifier == 1.0` means normal speed
 pub fn process_audio(audio_buffer: &[f32], speed_modifier: f32) -> Vec<f32> {
     let target_len = (audio_buffer.len() as f32 * speed_modifier).ceil() as usize;
-    let mut adjusted_buffer = Vec::with_capacity(target_len * 2);
+    let mut adjusted_buffer = Vec::with_capacity(target_len);
 
     for i in 0..target_len {
         let src_index_f = i as f32 / speed_modifier;
@@ -107,8 +107,6 @@ pub fn process_audio(audio_buffer: &[f32], speed_modifier: f32) -> Vec<f32> {
         } else {
             *audio_buffer.last().unwrap_or(&0.0)
         };
-        // Add the sample twice for left and right channels
-        adjusted_buffer.push(sample);
         adjusted_buffer.push(sample);
     }
 

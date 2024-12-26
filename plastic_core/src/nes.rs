@@ -353,7 +353,7 @@ impl NES {
         self.cpu.bus().ppu.tv().display_pixel_buffer()
     }
 
-    /// Take and return the audio buffer as f32 format
+    /// Take and return the audio buffer as f32 format stereo (2 channels)
     ///
     /// **Take** here means that if you call the function again, it will return an empty buffer
     /// until the emulator runs again.

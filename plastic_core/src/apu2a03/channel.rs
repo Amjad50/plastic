@@ -26,6 +26,7 @@ impl BufferedChannel {
 
     pub fn recored_sample(&mut self, sample: f32) {
         self.buffer.push_back(sample);
+        self.buffer.push_back(sample);
     }
 
     pub fn take_buffer(&mut self) -> Vec<f32> {
