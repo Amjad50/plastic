@@ -1,9 +1,9 @@
 mod apu2a03_registers;
+mod channel;
 mod channels;
 mod envelope;
 mod length_counter;
 mod sequencer;
-mod tone_source;
 
 use crate::common::{
     interconnection::{APUCPUConnection, CPUIrqProvider},
@@ -11,13 +11,12 @@ use crate::common::{
     CPU_FREQ,
 };
 use apu2a03_registers::Register;
+use channel::{BufferedChannel, Dac, TimedAPUChannel};
 use channels::{Dmc, NoiseWave, SquarePulse, TriangleWave};
 use envelope::EnvelopedChannel;
 use length_counter::LengthCountedChannel;
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
-use std::sync::{Arc, Mutex};
-use tone_source::{APUChannel, BufferedChannel, TimedAPUChannel};
 
 // for performance
 /// The sample rate expected to get from [`NES::audio_buffer`](crate::NES::audio_buffer)
@@ -28,43 +27,15 @@ pub const SAMPLE_RATE: u32 = 44100;
 // APU, is clocked on every CPU clock
 const SAMPLES_EVERY_N_APU_CLOCK: f64 = CPU_FREQ / (SAMPLE_RATE as f64);
 
-mod buffered_channel_serde {
-    use super::BufferedChannel;
-    use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
-    use std::sync::{Arc, Mutex};
-
-    pub fn serialize<S>(
-        value: &Arc<Mutex<BufferedChannel>>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        if let Ok(value) = value.lock() {
-            value.serialize(serializer)
-        } else {
-            Err(S::Error::custom(""))
-        }
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Arc<Mutex<BufferedChannel>>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        BufferedChannel::deserialize(deserializer).map(|channel| Arc::new(Mutex::new(channel)))
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct APU2A03 {
-    square_pulse_1: LengthCountedChannel<SquarePulse>,
-    square_pulse_2: LengthCountedChannel<SquarePulse>,
-    triangle: LengthCountedChannel<TriangleWave>,
-    noise: LengthCountedChannel<NoiseWave>,
-    dmc: Dmc,
+    square_pulse_1: Dac<LengthCountedChannel<SquarePulse>>,
+    square_pulse_2: Dac<LengthCountedChannel<SquarePulse>>,
+    triangle: Dac<LengthCountedChannel<TriangleWave>>,
+    noise: Dac<LengthCountedChannel<NoiseWave>>,
+    dmc: Dac<Dmc>,
 
-    #[serde(with = "buffered_channel_serde")]
-    buffered_channel: Arc<Mutex<BufferedChannel>>,
+    buffered_channel: BufferedChannel,
 
     is_4_step_squence_mode_hold_value: bool,
     is_4_step_squence_mode: bool,
@@ -84,19 +55,19 @@ pub struct APU2A03 {
 
 impl APU2A03 {
     pub fn new() -> Self {
-        let buffered_channel = Arc::new(Mutex::new(BufferedChannel::new()));
+        let buffered_channel = BufferedChannel::new();
 
         Self {
-            square_pulse_1: LengthCountedChannel::new(SquarePulse::new(true)),
-            square_pulse_2: LengthCountedChannel::new(SquarePulse::new(false)),
+            square_pulse_1: Dac::new(LengthCountedChannel::new(SquarePulse::new(true))),
+            square_pulse_2: Dac::new(LengthCountedChannel::new(SquarePulse::new(false))),
 
-            triangle: LengthCountedChannel::new(TriangleWave::new()),
+            triangle: Dac::new(LengthCountedChannel::new(TriangleWave::new())),
 
-            noise: LengthCountedChannel::new(NoiseWave::new()),
+            noise: Dac::new(LengthCountedChannel::new(NoiseWave::new())),
 
-            dmc: Dmc::new(),
+            dmc: Dac::new(Dmc::new()),
 
-            buffered_channel: buffered_channel.clone(),
+            buffered_channel,
 
             is_4_step_squence_mode_hold_value: false,
             is_4_step_squence_mode: false,
@@ -414,11 +385,11 @@ impl APU2A03 {
     }
 
     fn get_mixer_output(&mut self) -> f32 {
-        let square_pulse_1 = self.square_pulse_1.get_output();
-        let square_pulse_2 = self.square_pulse_2.get_output();
-        let triangle = self.triangle.get_output();
-        let noise = self.noise.get_output();
-        let dmc = self.dmc.get_output();
+        let square_pulse_1 = self.square_pulse_1.dac_output();
+        let square_pulse_2 = self.square_pulse_2.dac_output();
+        let triangle = self.triangle.dac_output();
+        let noise = self.noise.dac_output();
+        let dmc = self.dmc.dac_output();
 
         let pulse_out = if square_pulse_1 == 0. && square_pulse_2 == 0. {
             0.
@@ -454,30 +425,13 @@ impl APU2A03 {
             std::cmp::Ordering::Greater => self.wait_reset -= 1,
         }
 
-        // after how many apu clocks a sample should be recorded
-        let samples_every_n_apu_clock = SAMPLES_EVERY_N_APU_CLOCK + self.offset;
-
         self.sample_counter += 1.;
-        if self.sample_counter >= samples_every_n_apu_clock {
+        if self.sample_counter >= SAMPLES_EVERY_N_APU_CLOCK {
             let output = self.get_mixer_output();
 
-            if let Ok(mut buffered_channel) = self.buffered_channel.lock() {
-                buffered_channel.recored_sample(output);
+            self.buffered_channel.recored_sample(output);
 
-                // check for needed change in offset
-                let change = if buffered_channel.get_is_overusing() {
-                    -0.001
-                } else if buffered_channel.get_is_underusing() {
-                    0.001
-                } else {
-                    0.
-                };
-
-                self.offset += change;
-                buffered_channel.clear_using_flags();
-            }
-
-            self.sample_counter -= samples_every_n_apu_clock;
+            self.sample_counter -= SAMPLES_EVERY_N_APU_CLOCK;
         }
 
         // clocked on every CPU cycle
@@ -494,7 +448,7 @@ impl APU2A03 {
 
         // this is clocked in every CPU cycle, so the numbers are multiplied by 2
         match self.cycle {
-            7455 => {
+            7457 => {
                 self.generate_quarter_frame_clock();
             }
             14913 => {
@@ -531,8 +485,9 @@ impl APU2A03 {
         }
     }
 
-    pub fn take_audio_buffer(&self) -> Vec<f32> {
-        self.buffered_channel.lock().unwrap().take_buffer()
+    /// Take and return the audio buffer as f32 format stereo (2 channels)
+    pub fn take_audio_buffer(&mut self) -> Vec<f32> {
+        self.buffered_channel.take_buffer()
     }
 }
 

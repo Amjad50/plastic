@@ -1,6 +1,6 @@
+use super::super::channel::{APUChannel, TimedAPUChannel};
 use super::super::envelope::{EnvelopeGenerator, EnvelopedChannel};
 use super::super::sequencer::Sequencer;
-use super::super::tone_source::{APUChannel, TimedAPUChannel};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]

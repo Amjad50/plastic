@@ -1,4 +1,4 @@
-use super::tone_source::APUChannel;
+use super::channel::APUChannel;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
