@@ -16,7 +16,7 @@ plastic_core = { path = "../plastic_core", version = "0.3", features = ["fronten
 crossterm = "0.28"
 gilrs = "0.11"
 dynwave = "0.2"
-ratatui = "0.28"
+ratatui = "0.29"
 tui-menu = "0.2.4"
 directories = "5.0"
 ratatui-explorer = "0.1.2"
