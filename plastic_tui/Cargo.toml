@@ -19,5 +19,5 @@ dynwave = "0.2"
 ratatui = "0.28"
 tui-menu = "0.2.4"
 directories = "5.0"
-ratatui-explorer = "0.1.2"
+ratatui-explorer = "0.2.1"
 
