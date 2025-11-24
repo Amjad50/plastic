@@ -14,7 +14,7 @@ categories = ["emulators"]
 plastic_core = { path = "../plastic_core", version = "0.3", features = ["frontend_misc"] }
 
 egui = "0.29"
-egui-winit = "0.29"
+egui-winit = "0.30"
 directories = "5.0"
 eframe = "0.29"
 rfd = "0.15"
