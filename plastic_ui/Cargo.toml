@@ -16,7 +16,7 @@ plastic_core = { path = "../plastic_core", version = "0.3", features = ["fronten
 egui = "0.29"
 egui-winit = "0.29"
 directories = "5.0"
-eframe = "0.29"
+eframe = "0.30"
 rfd = "0.15"
 dynwave = "0.2"
 gilrs = "0.11"
