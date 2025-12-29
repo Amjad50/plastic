@@ -17,7 +17,7 @@ plastic_core = { path = "../plastic_core", version = "0.3", features = [
 
 gilrs = "0.11"
 dynwave = "0.2"
-ratatui = "0.29"
+ratatui = "0.30"
 tui-menu = "0.3"
 directories = "6.0"
 ratatui-explorer = "0.2"
