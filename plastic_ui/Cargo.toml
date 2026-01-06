@@ -19,7 +19,7 @@ egui = "0.33"
 egui-winit = "0.33"
 directories = "6.0"
 eframe = "0.33"
-rfd = "0.16"
+rfd = "0.17"
 dynwave = "0.2"
 gilrs = "0.11"
 
