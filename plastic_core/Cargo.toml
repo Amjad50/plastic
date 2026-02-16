@@ -11,7 +11,7 @@ keywords = ["nes", "nintendo", "emulator"]
 categories = ["emulators"]
 
 [dependencies]
-bitflags = { version = "2.10", features = ["serde"] }
+bitflags = { version = "2.11", features = ["serde"] }
 
 serde = { version = "1.0", features = ["derive"] }
 bincode = "1.3"
